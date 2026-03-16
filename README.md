@@ -22,8 +22,10 @@ Web app per la gestione dei turni di reperibilità dei dipendenti. Permette ai d
 turnify/
 ├── README.md                        ← questo file
 ├── CLAUDE.md                        ← istruzioni per gli agenti AI
-├── AGENTS.md                        ← ruoli e regole degli agenti
-├── SHEET_SCHEMA.md                  ← schema database Supabase
+│
+├── docs/                            ← documentazione agenti e schema DB
+│   ├── AGENTS.md                    ← ruoli e regole degli agenti
+│   └── SHEET_SCHEMA.md              ← schema database Supabase
 │
 ├── app/                             ← Next.js App Router
 │   ├── page.tsx                     ← redirect a /login
@@ -33,14 +35,27 @@ turnify/
 │   │   └── page.tsx                 ← pagina login
 │   ├── user/
 │   │   └── page.tsx                 ← dashboard dipendente
-│   └── admin/
-│       ├── page.tsx                 ← dashboard admin (panoramica)
-│       ├── disponibilita/page.tsx   ← calendario globale + assegnazione
-│       ├── turni/page.tsx           ← lista turni assegnati
-│       ├── statistiche/page.tsx     ← grafici equità
-│       ├── export/page.tsx          ← scarica Excel/CSV
-│       ├── utenti/page.tsx          ← gestione dipendenti
-│       └── impostazioni/page.tsx    ← email e configurazioni
+│   ├── admin/
+│   │   ├── page.tsx                 ← dashboard admin (panoramica)
+│   │   ├── disponibilita/page.tsx   ← calendario globale + assegnazione
+│   │   ├── turni/page.tsx           ← lista turni assegnati
+│   │   ├── statistiche/page.tsx     ← grafici equità
+│   │   ├── export/page.tsx          ← scarica Excel/CSV
+│   │   ├── utenti/page.tsx          ← gestione dipendenti
+│   │   └── impostazioni/page.tsx    ← email e configurazioni
+│   └── api/                         ← backend server-side (API routes)
+│       ├── shifts/
+│       │   ├── route.ts             ← GET lista turni, POST assegna turno
+│       │   └── [id]/route.ts        ← DELETE rimuovi turno
+│       ├── availability/
+│       │   └── route.ts             ← GET/POST disponibilità dipendente
+│       ├── month/
+│       │   └── route.ts             ← GET/POST stato mese (lock, approve)
+│       ├── email-settings/
+│       │   ├── route.ts             ← GET lista email, POST aggiungi
+│       │   └── [id]/route.ts        ← DELETE rimuovi email
+│       └── users/
+│           └── [id]/route.ts        ← PATCH aggiorna utente (attivo/ruolo)
 │
 ├── components/
 │   ├── user/
@@ -137,6 +152,8 @@ Vedi `SHEET_SCHEMA.md` per lo schema completo con tipi, RLS e constraint.
 - Solo gli admin possono scrivere su `shifts`, `month_status`, `email_settings`
 - Le chiavi `NEXT_PUBLIC_*` sono visibili al browser — la sicurezza è garantita da RLS
 - La `SUPABASE_SERVICE_ROLE_KEY` è usata **solo server-side** e non è mai esposta al client
+- Tutte le operazioni di scrittura passano per API routes server-side in `app/api/`
+- `userId` e `adminId` non transitano mai dal browser — vengono letti dalla sessione server-side
 
 ---
 

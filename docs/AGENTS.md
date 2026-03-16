@@ -21,11 +21,9 @@ L'Orchestrator coordina il flusso senza toccare file direttamente.
 
 ## CODE AGENT
 **File di competenza:**
-- `backend/*.ts`
-- `app/api/**/*.ts` (API routes Next.js)
-- `lib/supabase.ts`
-- `lib/stats.ts`
-- `lib/export.ts`
+- `app/api/**/*.ts` — API routes server-side Next.js
+- `lib/utils/*.ts` — utility condivise (date, calcoli, helpers)
+- `lib/supabase/server.ts` — client Supabase server-side
 
 **Responsabilità:**
 - Logica server-side (availability, shifts, stats, export)
@@ -48,9 +46,9 @@ Priorità → score più basso
 
 ## UI AGENT
 **File di competenza:**
-- `frontend/app/**/*.tsx`
-- `frontend/components/**/*.tsx`
-- `frontend/styles/**/*.css`
+- `app/**/*.tsx` — pagine Next.js (login, user, admin)
+- `components/**/*.tsx` — componenti riutilizzabili
+- `app/globals.css` — stili globali
 
 **Responsabilità:**
 - Pagina login
@@ -86,8 +84,8 @@ Priorità → score più basso
 
 ## SCHEMA AGENT
 **File di competenza:**
-- `SHEET_SCHEMA.md`
-- Struttura tabelle Supabase (documentata in SHEET_SCHEMA.md)
+- `docs/SHEET_SCHEMA.md`
+- Struttura tabelle Supabase (documentata in docs/SHEET_SCHEMA.md)
 
 **Responsabilità:**
 - Aggiunta/modifica colonne e tabelle
@@ -95,7 +93,7 @@ Priorità → score più basso
 - Documentazione di ogni cambio schema
 
 **Regole:**
-- Ogni modifica allo schema deve essere documentata in `SHEET_SCHEMA.md`
+- Ogni modifica allo schema deve essere documentata in `docs/SHEET_SCHEMA.md`
 - Se una modifica schema rompe query esistenti, avvisa CODE AGENT prima di procedere
 
 ---
@@ -103,13 +101,15 @@ Priorità → score più basso
 ## DOCS AGENT
 **File di competenza:**
 - `CLAUDE.md`
-- `AGENTS.md`
-- `SHEET_SCHEMA.md`
+- `README.md`
+- `docs/AGENTS.md`
+- `docs/SHEET_SCHEMA.md`
 
 **Responsabilità:**
 - Aggiornare la documentazione dopo ogni modifica rilevante
-- Mantenere `SHEET_SCHEMA.md` allineato con le modifiche di SCHEMA AGENT
+- Mantenere `docs/SHEET_SCHEMA.md` allineato con le modifiche di SCHEMA AGENT
 - Aggiornare `CLAUDE.md` con nuove convenzioni emerse durante lo sviluppo
+- Mantenere `README.md` aggiornato con la struttura attuale del progetto
 
 **Viene chiamato SEMPRE come ultimo step.**
 

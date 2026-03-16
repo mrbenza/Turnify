@@ -19,21 +19,26 @@ con export Excel del mese confermato.
 ```
 turnify/
 ├── CLAUDE.md                  ← questo file
-├── SHEET_SCHEMA.md            ← schema DB Supabase
-├── AGENTS.md                  ← ruoli e regole degli agenti
-├── frontend/                  ← Next.js app (Vercel)
-│   ├── app/
-│   │   ├── login/
-│   │   ├── user/              ← dashboard dipendente
-│   │   └── admin/             ← dashboard admin
-│   ├── components/
-│   └── lib/
-│       └── supabase.ts
-└── backend/                   ← logica server (API routes Next.js o edge functions)
-    ├── availability.ts
-    ├── shifts.ts
-    ├── stats.ts
-    └── export.ts
+├── README.md
+├── docs/
+│   ├── AGENTS.md              ← ruoli e regole degli agenti
+│   └── SHEET_SCHEMA.md        ← schema DB Supabase
+├── app/
+│   ├── api/                   ← backend server-side
+│   │   ├── shifts/
+│   │   ├── availability/
+│   │   ├── month/
+│   │   ├── email-settings/
+│   │   └── users/
+│   ├── admin/
+│   ├── user/
+│   └── login/
+├── components/
+├── lib/
+│   ├── supabase/
+│   └── utils/
+└── supabase/
+    └── migrations/
 ```
 
 ## Agenti
@@ -42,11 +47,11 @@ Vedi `docs/AGENTS.md` per i ruoli dettagliati.
 | Agente | File di competenza |
 |--------|-------------------|
 | ORCHESTRATOR | coordina tutti |
-| CODE AGENT | `backend/*.ts`, API routes, logica server |
-| UI AGENT | `frontend/**/*.tsx`, componenti, pagine |
+| CODE AGENT | `app/api/**/*.ts`, `lib/utils/*.ts`, logica server |
+| UI AGENT | `app/**/*.tsx`, `components/**/*.tsx`, pagine |
 | TEST AGENT | `**/*.test.ts` |
 | SCHEMA AGENT | `docs/SHEET_SCHEMA.md`, tabelle Supabase |
-| DOCS AGENT | `CLAUDE.md`, `docs/AGENTS.md`, `docs/SHEET_SCHEMA.md` |
+| DOCS AGENT | `CLAUDE.md`, `README.md`, `docs/AGENTS.md`, `docs/SHEET_SCHEMA.md` |
 
 ## Regole generali
 1. Ogni agente tocca SOLO i propri file.
