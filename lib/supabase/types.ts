@@ -30,6 +30,8 @@ export interface MonthStatus {
   status: MonthStatusValue
   locked_by: string | null
   locked_at: string | null
+  email_inviata: boolean
+  email_inviata_at: string | null
 }
 
 export interface Availability {
@@ -60,6 +62,14 @@ export interface EquityScore {
   score: number
 }
 
+export interface EmailSetting {
+  id: string
+  email: string
+  descrizione: string | null
+  attivo: boolean
+  created_at: string
+}
+
 // Tipo Database completo per il client Supabase tipizzato
 export type Database = {
   public: {
@@ -88,6 +98,11 @@ export type Database = {
         Row: Shift
         Insert: Omit<Shift, 'id' | 'created_at'>
         Update: Partial<Omit<Shift, 'id' | 'created_at'>>
+      }
+      email_settings: {
+        Row: EmailSetting
+        Insert: Omit<EmailSetting, 'id' | 'created_at'>
+        Update: Partial<Omit<EmailSetting, 'id' | 'created_at'>>
       }
     }
     Functions: {

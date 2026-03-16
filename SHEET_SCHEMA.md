@@ -146,8 +146,51 @@ ORDER BY score ASC;  -- score basso = priorità alta
 
 ---
 
+---
+
+## Tabella: `email_settings`
+Indirizzi email aggiuntivi che ricevono la notifica "mese confermato".
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| email | text | unique |
+| descrizione | text | nullable, es. "Lista distribuzione" |
+| attivo | boolean | default true |
+| created_at | timestamptz | default now() |
+
+**RLS:** tutti leggono; solo admin scrive.
+
+---
+
+## Colonne aggiuntive su `month_status`
+Aggiunte con migration 002:
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| email_inviata | boolean | default false — true dopo invio notifica |
+| email_inviata_at | timestamptz | nullable — timestamp invio |
+
+> Quando `email_inviata = true` il rollback del mese non è più possibile.
+
+---
+
+## Funzione RPC: `get_equity_scores`
+Calcola lo score di equità per ogni dipendente attivo.
+
+**Firma:** `get_equity_scores(p_month integer, p_year integer)`
+- `p_month = 0` → score su tutti i tempi
+- `p_month > 0` → score filtrato per mese/anno specificato
+
+**Formula score:** `turni_totali + (festivi × 2) + (fest_comandate × 3)`
+Score più basso = priorità più alta nel prossimo turno.
+
+---
+
 ## Changelog schema
 
-| Data | Modifica | Agente |
-|------|---------|--------|
-| 2026-03-15 | Schema iniziale creato | SCHEMA AGENT |
+| Data | Modifica | File migration |
+|------|---------|----------------|
+| 2026-03-16 | Schema iniziale | 001_initial_schema.sql |
+| 2026-03-16 | Fix RLS month_status (policy INSERT separata) | 002_fix_month_status_rls.sql |
+| 2026-03-16 | Fix get_equity_scores (filtro mese), aggiunta email_settings e colonne month_status | 003_fix_equity_scores.sql |
