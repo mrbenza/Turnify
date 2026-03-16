@@ -90,32 +90,27 @@ export default function ExportForm({ users }: ExportFormProps) {
     setPreview(null)
   }
 
-  /* ---- Export CSV using xlsx ---- */
+  /* ---- Export XLSX dal template aziendale ---- */
   async function handleExport() {
-    if (!preview) return
     setExporting(true)
     setErrorMsg(null)
     try {
-      const XLSX = await import('xlsx')
-
-      const wsData = [
-        ['Data', 'Dipendente', 'Tipo turno'],
-        ...preview.rows.map((r) => [r.date, r.userName, r.shiftType]),
-      ]
-
-      const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.aoa_to_sheet(wsData)
-
-      // Column widths
-      ws['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 18 }]
-
-      XLSX.utils.book_append_sheet(wb, ws, `Turni ${MONTH_NAMES[filterMonth]} ${filterYear}`)
-
-      const fileName = `turni_${filterYear}_${String(filterMonth + 1).padStart(2, '0')}.csv`
-      XLSX.writeFile(wb, fileName, { bookType: 'csv' })
+      // month API è 1-based
+      const res = await fetch(`/api/export?month=${filterMonth + 1}&year=${filterYear}`)
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? `Errore HTTP ${res.status}`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `turni_${MONTH_NAMES[filterMonth]}_${filterYear}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Errore export:', err)
-      setErrorMsg('Errore durante la generazione del file.')
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante la generazione del file.')
     } finally {
       setExporting(false)
     }
@@ -249,34 +244,31 @@ export default function ExportForm({ users }: ExportFormProps) {
       )}
 
       {/* Step 3: Download */}
-      {preview && preview.rows.length > 0 && (
-        <section aria-labelledby="step3-heading">
-          <h2 id="step3-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">3</span>
-            Scarica file
-          </h2>
+      <section aria-labelledby="step3-heading">
+        <h2 id="step3-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">3</span>
+          Scarica file
+        </h2>
 
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
-            <p className="text-sm text-blue-700">
-              Il file CSV conterrà: <strong>Data</strong>, <strong>Dipendente</strong>, <strong>Tipo turno</strong>.
-              Il template Excel personalizzato verrà aggiunto in una versione successiva.
-            </p>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
-              aria-label={`Scarica CSV turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
-            >
-              {exporting ? <Spinner /> : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-              )}
-              {exporting ? 'Generazione...' : 'Scarica CSV'}
-            </button>
-          </div>
-        </section>
-      )}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+          <p className="text-sm text-blue-700">
+            Il file generato segue il <strong>template aziendale</strong> con formattazione, colori e struttura originali.
+          </p>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-label={`Scarica Excel turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
+          >
+            {exporting ? <Spinner /> : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            )}
+            {exporting ? 'Generazione...' : 'Scarica Excel'}
+          </button>
+        </div>
+      </section>
     </div>
   )
 }

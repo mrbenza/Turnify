@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# template aziendali (caricati su Supabase Storage)
+/public/templates/
+/docs/*.xlsx
+/docs/*.xlsx:Zone.Identifier
