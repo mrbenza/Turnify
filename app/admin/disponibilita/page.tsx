@@ -70,7 +70,6 @@ export default async function DisponibilitaPage() {
               initialMonth={month}
               initialYear={year}
               initialLocked={isLocked}
-              adminId={authUser.id}
             />
           </section>
         </main>

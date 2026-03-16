@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { Availability, Holiday, Shift } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
@@ -127,56 +126,55 @@ export default function CalendarioDisponibilita({
       }
 
       setSavingDate(dateStr)
-      // Cast to any to bypass the strict Database generic which requires Relationships fields
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
       const existing = availabilityByDate[dateStr]
+      const newAvailable = existing ? !existing.available : true
+
+      // Optimistic update
+      if (!existing) {
+        const tempAvail: Availability = {
+          id: `temp-${dateStr}`,
+          user_id: userId,
+          date: dateStr,
+          available: true,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+        startTransition(() => setLocalAvailability((prev) => [...prev, tempAvail]))
+      } else {
+        startTransition(() =>
+          setLocalAvailability((prev) =>
+            prev.map((a) => (a.date === dateStr ? { ...a, available: newAvailable } : a))
+          )
+        )
+      }
 
       try {
+        // user_id is read server-side from session — only date and available are sent
+        const res = await fetch('/api/availability', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: dateStr, available: newAvailable }),
+        })
+
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          throw new Error(json.error ?? 'Errore sconosciuto')
+        }
+
+        const data = await res.json() as Availability
+
         if (!existing) {
-          // Optimistic insert
-          const tempAvail: Availability = {
-            id: `temp-${dateStr}`,
-            user_id: userId,
-            date: dateStr,
-            available: true,
-            status: 'pending',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }
-          startTransition(() => setLocalAvailability((prev) => [...prev, tempAvail]))
-
-          const { data, error } = await supabase
-            .from('availability')
-            .insert({ user_id: userId, date: dateStr, available: true, status: 'pending' })
-            .select()
-            .single()
-
-          if (error) throw error
+          // Replace temp record with real data from server
           startTransition(() =>
             setLocalAvailability((prev) =>
-              prev.map((a) => (a.id === `temp-${dateStr}` ? (data as Availability) : a))
+              prev.map((a) => (a.id === `temp-${dateStr}` ? data : a))
             )
           )
-        } else {
-          // Toggle available
-          const newValue = !existing.available
-          startTransition(() =>
-            setLocalAvailability((prev) =>
-              prev.map((a) => (a.date === dateStr ? { ...a, available: newValue } : a))
-            )
-          )
-
-          const { error } = await supabase
-            .from('availability')
-            .update({ available: newValue })
-            .eq('id', existing.id)
-
-          if (error) throw error
         }
       } catch (err) {
         console.error('Errore salvataggio disponibilità:', err)
-        // Rollback
+        // Rollback on error
         startTransition(() => setLocalAvailability(availabilityList))
       } finally {
         setSavingDate(null)

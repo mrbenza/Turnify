@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useId } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -185,20 +184,17 @@ function AddForm({ onAdd, onCancel }: AddFormProps) {
     setSaving(true)
     setError(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const { data, error: dbError } = await supabase
-        .from('email_settings')
-        .insert({
-          email: trimmedEmail,
-          descrizione: descrizione.trim() || null,
-          attivo: true,
-        })
-        .select()
-        .single()
-
-      if (dbError) throw dbError
-      onAdd(data as EmailSetting)
+      const res = await fetch('/api/email-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail, descrizione: descrizione.trim() || undefined }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
+      const data = await res.json() as EmailSetting
+      onAdd(data)
     } catch (err) {
       console.error('Errore inserimento email:', err)
       setError("Errore durante il salvataggio. Verifica che l'indirizzo non sia già presente.")
@@ -297,14 +293,15 @@ export default function GestioneEmail({ initialSettings }: GestioneEmailProps) {
     setToggling(id)
     setErrorMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const { error } = await supabase
-        .from('email_settings')
-        .update({ attivo: !currentValue })
-        .eq('id', id)
-
-      if (error) throw error
+      const res = await fetch(`/api/email-settings/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attivo: !currentValue }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
       setSettings((prev) =>
         prev.map((s) => (s.id === id ? { ...s, attivo: !currentValue } : s))
       )
@@ -321,14 +318,11 @@ export default function GestioneEmail({ initialSettings }: GestioneEmailProps) {
     setDeleting(id)
     setErrorMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const { error } = await supabase
-        .from('email_settings')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      const res = await fetch(`/api/email-settings/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
       setSettings((prev) => prev.filter((s) => s.id !== id))
     } catch (err) {
       console.error('Errore eliminazione email:', err)

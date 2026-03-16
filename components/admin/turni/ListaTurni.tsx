@@ -125,10 +125,11 @@ export default function ListaTurni({
     setRemoving(shiftId)
     setErrorMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const { error } = await supabase.from('shifts').delete().eq('id', shiftId)
-      if (error) throw error
+      const res = await fetch(`/api/shifts/${shiftId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
       setShifts((prev) => prev.filter((s) => s.id !== shiftId))
     } catch (err) {
       console.error('Errore rimozione turno:', err)

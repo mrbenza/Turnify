@@ -37,15 +37,16 @@ export default function ListaUtenti({ initialUsers }: ListaUtentiProps) {
     setToggling(user.id)
     setErrorMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
       const newValue = !user.attivo
-      const { error } = await supabase
-        .from('users')
-        .update({ attivo: newValue })
-        .eq('id', user.id)
-
-      if (error) throw error
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attivo: newValue }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
       setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, attivo: newValue } : u))
     } catch (err) {
       console.error('Errore toggle utente:', err)

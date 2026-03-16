@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { User, Availability, Shift, Holiday, ShiftType } from '@/lib/supabase/types'
+import type { User, Availability, Shift, Holiday } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -27,7 +27,6 @@ interface CalendarioGlobaleProps {
   initialMonth: number   // 0-indexed
   initialYear: number
   initialLocked: boolean
-  adminId: string
 }
 
 /** Selected day for the side drawer */
@@ -102,7 +101,6 @@ export default function CalendarioGlobale({
   initialMonth,
   initialYear,
   initialLocked,
-  adminId,
 }: CalendarioGlobaleProps) {
   /* ---- Core state ---- */
   const [viewMonth, setViewMonth] = useState(initialMonth)
@@ -243,21 +241,15 @@ export default function CalendarioGlobale({
 
     setLockingMonth(true)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const { error } = await supabase
-        .from('month_status')
-        .upsert(
-          {
-            month: viewMonth + 1,
-            year: viewYear,
-            status: 'locked',
-            locked_by: adminId,
-            locked_at: new Date().toISOString(),
-          },
-          { onConflict: 'month,year' }
-        )
-      if (error) throw error
+      const res = await fetch('/api/month', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: viewMonth + 1, year: viewYear, action: 'lock' }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
       setLocked(true)
     } catch (err) {
       console.error('Errore conferma mese:', err)
@@ -273,21 +265,15 @@ export default function CalendarioGlobale({
     setUnlockingMonth(true)
     setErrorMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const { error } = await supabase
-        .from('month_status')
-        .upsert(
-          {
-            month: viewMonth + 1,
-            year: viewYear,
-            status: 'open',
-            locked_by: null,
-            locked_at: null,
-          },
-          { onConflict: 'month,year' }
-        )
-      if (error) throw error
+      const res = await fetch('/api/month', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: viewMonth + 1, year: viewYear, action: 'unlock' }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
       setLocked(false)
     } catch (err) {
       console.error('Errore annulla conferma:', err)
@@ -307,28 +293,24 @@ export default function CalendarioGlobale({
     setErrorMsg(null)
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const [year, month, day] = dateStr.split('-').map(Number)
-      const isHol = holidayMap.has(dateStr)
-      const isWknd = isWeekendDay(year, month - 1, day)
-      const shiftType: ShiftType = isHol ? 'festivo' : isWknd ? 'weekend' : 'reperibilita'
-
-      const { data, error } = await supabase
-        .from('shifts')
-        .insert({ date: dateStr, user_id: userId, shift_type: shiftType, created_by: adminId })
-        .select()
-        .single()
-
-      if (error) throw error
-      setShifts((prev) => [...prev, data as Shift])
+      const res = await fetch('/api/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateStr, user_id: userId }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
+      const data = await res.json() as Shift
+      setShifts((prev) => [...prev, data])
     } catch (err) {
       console.error('Errore assegnazione turno:', err)
       setErrorMsg('Errore durante l\'assegnazione del turno.')
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingAction, holidayMap, adminId])
+  }, [pendingAction])
 
   /* ---- Remove shift ---- */
   const handleRemove = useCallback(async () => {
@@ -340,13 +322,14 @@ export default function CalendarioGlobale({
     setErrorMsg(null)
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
       const shift = shiftMap.get(`${userId}-${dateStr}`)
       if (!shift) return
 
-      const { error } = await supabase.from('shifts').delete().eq('id', shift.id)
-      if (error) throw error
+      const res = await fetch(`/api/shifts/${shift.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
       setShifts((prev) => prev.filter((s) => s.id !== shift.id))
     } catch (err) {
       console.error('Errore rimozione turno:', err)

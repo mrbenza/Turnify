@@ -37,7 +37,7 @@ turnify/
 ```
 
 ## Agenti
-Vedi `AGENTS.md` per i ruoli dettagliati.
+Vedi `docs/AGENTS.md` per i ruoli dettagliati.
 
 | Agente | File di competenza |
 |--------|-------------------|
@@ -45,8 +45,8 @@ Vedi `AGENTS.md` per i ruoli dettagliati.
 | CODE AGENT | `backend/*.ts`, API routes, logica server |
 | UI AGENT | `frontend/**/*.tsx`, componenti, pagine |
 | TEST AGENT | `**/*.test.ts` |
-| SCHEMA AGENT | `SHEET_SCHEMA.md`, tabelle Supabase |
-| DOCS AGENT | `CLAUDE.md`, `AGENTS.md`, `SHEET_SCHEMA.md` |
+| SCHEMA AGENT | `docs/SHEET_SCHEMA.md`, tabelle Supabase |
+| DOCS AGENT | `CLAUDE.md`, `docs/AGENTS.md`, `docs/SHEET_SCHEMA.md` |
 
 ## Regole generali
 1. Ogni agente tocca SOLO i propri file.
