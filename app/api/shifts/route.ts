@@ -62,6 +62,34 @@ export async function POST(request: Request) {
 
   const shiftType: ShiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'
 
+  // Regola: max 1 weekend (coppia Sab+Dom) per dipendente per mese
+  if (shiftType === 'weekend') {
+    const dow = new Date(year, month - 1, day).getDay() // 0=Sun, 6=Sat
+    const satDay = dow === 6 ? day : day - 1
+    const satStr = `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
+    const sunStr = `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+
+    const { data: conflict } = await supabase
+      .from('shifts')
+      .select('date')
+      .eq('user_id', user_id)
+      .eq('shift_type', 'weekend')
+      .gte('date', monthStart)
+      .lte('date', monthEnd)
+      .neq('date', satStr)
+      .neq('date', sunStr)
+      .limit(1)
+
+    if (conflict && conflict.length > 0) {
+      return NextResponse.json(
+        { error: 'Dipendente già assegnato a un altro weekend questo mese.' },
+        { status: 409 }
+      )
+    }
+  }
+
   // Insert shift — adminId comes from session, not from client
   const { data, error } = await supabase
     .from('shifts')

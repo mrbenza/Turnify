@@ -306,7 +306,7 @@ export default function CalendarioGlobale({
       setShifts((prev) => [...prev, data])
     } catch (err) {
       console.error('Errore assegnazione turno:', err)
-      setErrorMsg('Errore durante l\'assegnazione del turno.')
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'assegnazione del turno.')
     } finally {
       setLoadingAction(null)
     }
@@ -338,6 +338,26 @@ export default function CalendarioGlobale({
       setLoadingAction(null)
     }
   }, [pendingAction, shiftMap])
+
+  /* ---- Weekend conflict check ---- */
+  // Restituisce true se l'utente ha già un turno weekend in un ALTRO weekend dello stesso mese
+  function isWeekendBlocked(userId: string, dateStr: string): boolean {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay() // 0=Sun, 6=Sat
+    if (dow !== 0 && dow !== 6) return false // giorno feriale → nessun blocco
+    const satDay = dow === 6 ? d : d - 1
+    const satStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
+    const sunStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+    const monthPrefix = `${y}-${String(m).padStart(2, '0')}`
+    return shifts.some(
+      (s) =>
+        s.user_id === userId &&
+        s.shift_type === 'weekend' &&
+        s.date.startsWith(monthPrefix) &&
+        s.date !== satStr &&
+        s.date !== sunStr
+    )
+  }
 
   /* ---- User chip status for a given date ---- */
   function getUserChipStatus(userId: string, dateStr: string): 'shift' | 'available' | 'unavailable' {
@@ -710,6 +730,7 @@ export default function CalendarioGlobale({
                 {users.map((user) => {
                   const chipStatus = getUserChipStatus(user.id, selectedDay.dateStr)
                   const isLoadingThis = loadingAction === `${user.id}-${selectedDay.dateStr}`
+                  const blocked = chipStatus !== 'shift' && isWeekendBlocked(user.id, selectedDay.dateStr)
 
                   return (
                     <li
@@ -720,9 +741,13 @@ export default function CalendarioGlobale({
                       <div className="flex items-center gap-2 min-w-0">
                         <StatusDot status={chipStatus} />
                         <span className="text-sm font-medium text-gray-800 truncate">{user.nome}</span>
-                        <span className={`text-xs shrink-0 ${chipStatus === 'shift' ? 'text-red-600' : chipStatus === 'available' ? 'text-green-600' : 'text-gray-400'}`}>
-                          {chipStatus === 'shift' ? 'Turno' : chipStatus === 'available' ? 'Disponibile' : 'Non disp.'}
-                        </span>
+                        {blocked ? (
+                          <span className="text-xs shrink-0 text-amber-600 font-medium">già in turno</span>
+                        ) : (
+                          <span className={`text-xs shrink-0 ${chipStatus === 'shift' ? 'text-red-600' : chipStatus === 'available' ? 'text-green-600' : 'text-gray-400'}`}>
+                            {chipStatus === 'shift' ? 'Turno' : chipStatus === 'available' ? 'Disponibile' : 'Non disp.'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Action button */}
@@ -738,7 +763,7 @@ export default function CalendarioGlobale({
                             >
                               Rimuovi
                             </button>
-                          ) : chipStatus === 'available' ? (
+                          ) : chipStatus === 'available' && !blocked ? (
                             <button
                               onClick={() => setPendingAction({ userId: user.id, dateStr: selectedDay.dateStr, userName: user.nome, action: 'assign' })}
                               className="text-xs px-2.5 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400"
