@@ -461,28 +461,34 @@ export default function CalendarioGlobale({
         {/* User chips — only for interactive days */}
         {interactive && (
           <div className="mt-1 flex flex-wrap gap-0.5">
-            {users.slice(0, 4).map((u) => {
+            {users.slice(0, 8).map((u) => {
               const chipStatus = getUserChipStatus(u.id, dateStr)
               const chipColor =
                 chipStatus === 'shift'
-                  ? 'bg-red-400 text-white'
+                  ? 'bg-red-500 text-white'
                   : chipStatus === 'available'
-                  ? 'bg-green-400 text-white'
-                  : 'bg-gray-200 text-gray-500'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-200 text-gray-400'
+              const initials = u.nome
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((w: string) => w[0].toUpperCase())
+                .join('')
               return (
                 <span
                   key={u.id}
-                  className={`inline-block rounded px-1 py-0.5 text-[8px] leading-none font-medium truncate max-w-[36px] ${chipColor}`}
+                  className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] font-bold ${chipColor}`}
                   title={`${u.nome}: ${chipStatus === 'shift' ? 'Turno' : chipStatus === 'available' ? 'Disponibile' : 'Non disp.'}`}
                   aria-hidden="true"
                 >
-                  {u.nome.split(' ')[0]}
+                  {initials}
                 </span>
               )
             })}
-            {users.length > 4 && (
-              <span className="inline-block rounded px-1 py-0.5 text-[8px] leading-none bg-gray-100 text-gray-400" aria-hidden="true">
-                +{users.length - 4}
+            {users.length > 8 && (
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] bg-gray-100 text-gray-400 font-medium" aria-hidden="true">
+                +{users.length - 8}
               </span>
             )}
           </div>
