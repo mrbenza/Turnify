@@ -47,7 +47,7 @@ export default async function DisponibilitaPage() {
     <div className="min-h-screen bg-gray-50">
       <NavbarAdmin nomeAdmin={profile?.nome} />
 
-      <div className="lg:pl-56">
+      <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-full px-4 py-6 space-y-6">
 
           <div>

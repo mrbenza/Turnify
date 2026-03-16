@@ -97,8 +97,8 @@ export default async function AdminDashboardPage() {
     <div className="min-h-screen bg-gray-50">
       <NavbarAdmin nomeAdmin={profile?.nome} />
 
-      {/* Main content offset for sidebar on desktop */}
-      <div className="lg:pl-56">
+      {/* Main content offset for sidebar on desktop; pb-16 reserves space for mobile bottom nav */}
+      <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-5xl mx-auto px-4 py-6 space-y-8">
 
           {/* Welcome header */}

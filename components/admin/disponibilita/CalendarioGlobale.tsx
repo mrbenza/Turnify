@@ -488,14 +488,14 @@ export default function CalendarioGlobale({
     <div className="relative">
 
       {/* ---- Header: navigation + lock controls ---- */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+      <div className="flex flex-col gap-3 mb-5">
 
-        {/* Month navigation */}
-        <div className="flex items-center gap-3">
+        {/* Month navigation — centered on all sizes */}
+        <div className="flex items-center justify-center gap-3">
           <button
             onClick={() => navigate('prev')}
             disabled={loadingMonth}
-            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="p-2.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Mese precedente"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
@@ -503,7 +503,7 @@ export default function CalendarioGlobale({
             </svg>
           </button>
 
-          <h2 className="text-base font-semibold text-gray-900 min-w-[170px] text-center select-none">
+          <h2 className="text-base font-semibold text-gray-900 min-w-[160px] text-center select-none">
             {loadingMonth ? (
               <span className="text-gray-400 text-sm">Caricamento...</span>
             ) : (
@@ -514,7 +514,7 @@ export default function CalendarioGlobale({
           <button
             onClick={() => navigate('next')}
             disabled={loadingMonth}
-            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="p-2.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Mese successivo"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
@@ -523,11 +523,11 @@ export default function CalendarioGlobale({
           </button>
         </div>
 
-        {/* Lock / unlock controls */}
-        <div className="flex items-center gap-2">
+        {/* Lock / unlock controls — full-width on mobile, auto on sm+ */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
           {locked ? (
             <>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 text-sm font-medium select-none">
+              <span className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-full bg-gray-100 text-gray-600 text-sm font-medium select-none">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
@@ -536,7 +536,7 @@ export default function CalendarioGlobale({
               <button
                 onClick={() => setShowUnlockDialog(true)}
                 disabled={unlockingMonth}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-1.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
                 aria-label="Annulla conferma del mese"
               >
                 {unlockingMonth ? <Spinner small /> : null}
@@ -547,7 +547,7 @@ export default function CalendarioGlobale({
             <button
               onClick={handleLockMonth}
               disabled={lockingMonth || loadingMonth}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Conferma e blocca il mese corrente"
             >
               {lockingMonth ? (
@@ -670,9 +670,7 @@ export default function CalendarioGlobale({
             aria-label={`Dettaglio ${formatFullDate(selectedDay.day, viewMonth, viewYear)}`}
             className={`
               fixed z-50 bg-white shadow-2xl flex flex-col
-              /* Mobile: bottom sheet */
-              bottom-0 left-0 right-0 rounded-t-2xl max-h-[85vh]
-              /* Desktop: right drawer */
+              bottom-16 left-0 right-0 rounded-t-2xl max-h-[80vh]
               sm:bottom-0 sm:top-0 sm:left-auto sm:right-0 sm:w-80 sm:rounded-none sm:max-h-none sm:h-full
             `}
           >

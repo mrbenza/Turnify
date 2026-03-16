@@ -197,7 +197,7 @@ export default function CalendarioDisponibilita({
   /* ---- Cell styles ---- */
   function cellClasses(state: DayState, isPast: boolean, clickable: boolean): string {
     const base =
-      'relative flex flex-col items-center justify-center rounded-lg text-sm font-medium transition-all duration-150 h-10 sm:h-12 select-none'
+      'relative flex flex-col items-center justify-center rounded-lg text-sm font-medium transition-all duration-150 min-h-[44px] sm:min-h-[52px] select-none'
     const opacityClass = isPast ? 'opacity-40' : ''
 
     const map: Record<DayState, string> = {
@@ -217,26 +217,30 @@ export default function CalendarioDisponibilita({
   return (
     <section aria-label="Calendario disponibilità">
       {/* Month navigation header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-center gap-4 mb-4">
         <button
           onClick={goToPrev}
           disabled={!canGoPrev}
-          className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="p-2.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Mese precedente"
         >
-          ←
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
 
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 text-center min-w-[160px]">
           {MONTH_NAMES[viewMonth]} {viewYear}
         </h2>
 
         <button
           onClick={goToNext}
-          className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="p-2.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Mese successivo"
         >
-          →
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
         </button>
       </div>
 
@@ -330,9 +334,12 @@ export default function CalendarioDisponibilita({
         })}
       </div>
 
-      {/* Legend */}
-      <div className="mt-5 flex flex-wrap gap-3 text-xs text-gray-600" aria-label="Legenda colori calendario">
-        <LegendItem color="bg-gray-100" label="Feriale (non cliccabile)" />
+      {/* Legend — 2-column grid on mobile, wrapping flex on sm+ */}
+      <div
+        className="mt-5 grid grid-cols-2 sm:flex sm:flex-wrap gap-3 text-xs text-gray-600"
+        aria-label="Legenda colori calendario"
+      >
+        <LegendItem color="bg-gray-100" label="Feriale" />
         <LegendItem color="bg-white border-2 border-gray-200" label="Sab / Dom / Festività" />
         <LegendItem color="bg-green-100 border-2 border-green-400" label="Disponibile" />
         <LegendItem color="bg-yellow-100 border-2 border-yellow-400" label="Visto dall'admin" />

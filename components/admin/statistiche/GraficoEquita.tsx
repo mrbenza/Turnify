@@ -141,19 +141,81 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
         <p className="text-sm text-gray-500 py-8 text-center">Nessun dato disponibile per il periodo selezionato.</p>
       )}
 
-      {/* Table */}
+      {/* Mobile cards (< sm) */}
       {sorted.length > 0 && (
-        <div className="overflow-x-auto -mx-4 sm:mx-0">
+        <div className="sm:hidden space-y-3" aria-label="Statistiche equità turni">
+          {sorted.map((s, idx) => {
+            const isPriority = idx === 0
+            const barWidth = maxTurni > 0 ? Math.round((s.turni_totali / maxTurni) * 100) : 0
+
+            return (
+              <div
+                key={s.user_id}
+                className={`rounded-xl border p-4 ${isPriority ? 'bg-green-50/60 border-green-200' : 'bg-white border-gray-100'}`}
+              >
+                {/* Header row */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 font-medium w-5 text-center">{idx + 1}</span>
+                    <span className="text-sm font-semibold text-gray-800">{s.nome}</span>
+                    {isPriority && (
+                      <span className="text-xs font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
+                        Priorità
+                      </span>
+                    )}
+                  </div>
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    isPriority ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {s.score.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Stats row */}
+                <div className="flex items-center gap-4 mb-3 text-sm">
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Turni tot.</p>
+                    <p className="font-semibold text-gray-700">{s.turni_totali}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Festivi</p>
+                    <p className="font-semibold text-gray-700">{s.festivi}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Fest. cmd.</p>
+                    <p className="font-semibold text-gray-700">{s.fest_comandate}</p>
+                  </div>
+                </div>
+
+                {/* Distribution bar */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden" aria-hidden="true">
+                    <div
+                      className={`h-full rounded-full transition-all ${isPriority ? 'bg-green-500' : 'bg-blue-400'}`}
+                      style={{ width: `${barWidth}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-400 w-8 text-right">{barWidth}%</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Desktop table (sm+) */}
+      {sorted.length > 0 && (
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm" aria-label="Tabella equità turni">
             <thead>
               <tr className="border-b border-gray-100">
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-0 font-semibold text-gray-500 text-xs uppercase tracking-wide">#</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Nome</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Turni tot.</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Festivi</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Fest. cmd.</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Score</th>
-                <th scope="col" className="py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide text-left">Distribuzione</th>
+                <th scope="col" className="text-left py-2.5 px-0 font-semibold text-gray-500 text-xs uppercase tracking-wide">#</th>
+                <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Nome</th>
+                <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Turni tot.</th>
+                <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Festivi</th>
+                <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Fest. cmd.</th>
+                <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Score</th>
+                <th scope="col" className="py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide text-left">Distribuzione</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -166,8 +228,8 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
                     key={s.user_id}
                     className={`transition-colors ${isPriority ? 'bg-green-50/60 hover:bg-green-50' : 'hover:bg-gray-50'}`}
                   >
-                    <td className="py-3 px-4 sm:px-0 text-gray-400 font-medium text-xs">{idx + 1}</td>
-                    <td className="py-3 px-4 sm:px-2 font-medium text-gray-800">
+                    <td className="py-3 px-0 text-gray-400 font-medium text-xs">{idx + 1}</td>
+                    <td className="py-3 px-2 font-medium text-gray-800">
                       <span className="flex items-center gap-1.5">
                         {s.nome}
                         {isPriority && (
@@ -177,17 +239,17 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
                         )}
                       </span>
                     </td>
-                    <td className="py-3 px-4 sm:px-2 text-gray-700 font-semibold">{s.turni_totali}</td>
-                    <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell">{s.festivi}</td>
-                    <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell">{s.fest_comandate}</td>
-                    <td className="py-3 px-4 sm:px-2">
+                    <td className="py-3 px-2 text-gray-700 font-semibold">{s.turni_totali}</td>
+                    <td className="py-3 px-2 text-gray-500">{s.festivi}</td>
+                    <td className="py-3 px-2 text-gray-500">{s.fest_comandate}</td>
+                    <td className="py-3 px-2">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
                         isPriority ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
                       }`}>
                         {s.score.toFixed(2)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 sm:px-2 min-w-[120px]">
+                    <td className="py-3 px-2 min-w-[120px]">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden" aria-hidden="true">
                           <div
