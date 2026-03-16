@@ -1,4 +1,3 @@
-// Middleware Next.js — gestisce sessioni Supabase e protezione route
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -27,41 +26,16 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   const { pathname } = request.nextUrl
 
-  // Route pubbliche (solo login)
-  if (pathname === '/login' || pathname === '/') {
-    if (user) {
-      // Utente già loggato → redirect alla dashboard
-      const { data: profile } = await supabase
-        .from('users')
-        .select('ruolo')
-        .eq('id', user.id)
-        .single()
-
-      const dest = profile?.ruolo === 'admin' ? '/admin' : '/user'
-      return NextResponse.redirect(new URL(dest, request.url))
-    }
-    return supabaseResponse
-  }
-
-  // Route protette — richiede login
-  if (!user) {
+  // Non loggato → redirect login (eccetto /login stesso)
+  if (!user && pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Route /admin — richiede ruolo admin
-  if (pathname.startsWith('/admin')) {
-    const { data: profile } = await supabase
-      .from('users')
-      .select('ruolo')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.ruolo !== 'admin') {
-      return NextResponse.redirect(new URL('/user', request.url))
-    }
+  // Già loggato → non mostrare il login
+  if (user && pathname === '/login') {
+    return NextResponse.redirect(new URL('/user', request.url))
   }
 
   return supabaseResponse
