@@ -94,7 +94,7 @@ export default function ListaTurni({
 
       const [shiftsRes, statusRes] = await Promise.all([
         supabase.from('shifts').select('*').gte('date', from).lte('date', to).order('date', { ascending: true }),
-        supabase.from('month_status').select('status').eq('month', month + 1).eq('year', year).single(),
+        supabase.from('month_status').select('status').eq('month', month + 1).eq('year', year).maybeSingle(),
       ])
 
       const rawShifts = (shiftsRes.data ?? []) as Shift[]
