@@ -56,7 +56,7 @@ export default async function AdminDashboardPage() {
     supabase.from('users').select('*').eq('ruolo', 'user').eq('attivo', true),
     supabase.from('holidays').select('*').gte('date', from).lte('date', to).eq('mandatory', true),
     supabase.from('month_status').select('*').eq('month', month + 1).eq('year', year).single<MonthStatus>(),
-    supabaseAny.rpc('get_equity_scores', { p_month: month + 1, p_year: year }),
+    supabaseAny.rpc('get_equity_scores', { p_month: 0, p_year: year }),
   ])
 
   const shifts = (shiftsRes.data ?? []) as Shift[]
@@ -70,16 +70,9 @@ export default async function AdminDashboardPage() {
   /* ---- Compute stats ---- */
   const userMap = new Map<string, string>(activeUsers.map((u) => [u.id, u.nome]))
 
-  // Count shifts per user (for mini ranking)
-  const shiftCountByUser = new Map<string, number>()
-  shifts.forEach((s) => {
-    shiftCountByUser.set(s.user_id, (shiftCountByUser.get(s.user_id) ?? 0) + 1)
-  })
-
-  // Sort users by shift count
-  const ranking = activeUsers
-    .map((u) => ({ id: u.id, nome: u.nome, count: shiftCountByUser.get(u.id) ?? 0 }))
-    .sort((a, b) => b.count - a.count)
+  // Ranking annuale basato su equity scores (turni_totali dell'anno)
+  const ranking = [...equityScores]
+    .sort((a, b) => b.turni_totali - a.turni_totali)
 
   // Who covered mandatory holidays
   const holidayCoverage: { holiday: Holiday; workers: string[] }[] = mandatoryHolidays.map((h) => {
@@ -175,21 +168,21 @@ export default async function AdminDashboardPage() {
               className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"
             >
               <h2 id="ranking-heading" className="text-base font-semibold text-gray-900 mb-4">
-                Classifica turni — {MONTH_NAMES[month]}
+                Classifica turni — {year}
               </h2>
 
               {ranking.length === 0 ? (
                 <p className="text-sm text-gray-400">Nessun dipendente attivo.</p>
               ) : (
-                <ol className="space-y-2.5" aria-label="Classifica turni questo mese">
+                <ol className="space-y-2.5" aria-label="Classifica turni anno corrente">
                   {ranking.map((u, idx) => {
-                    const maxCount = ranking[0].count || 1
-                    const barWidth = Math.round((u.count / maxCount) * 100)
-                    const isTop = idx === 0 && u.count > 0
+                    const maxCount = Number(ranking[0].turni_totali) || 1
+                    const barWidth = Math.round((Number(u.turni_totali) / maxCount) * 100)
+                    const isTop = idx === 0 && Number(u.turni_totali) > 0
                     const isBottom = idx === ranking.length - 1 && ranking.length > 1
 
                     return (
-                      <li key={u.id} className="flex items-center gap-3">
+                      <li key={u.user_id} className="flex items-center gap-3">
                         <span className="text-xs text-gray-400 font-medium w-5 text-center shrink-0">
                           {idx + 1}
                         </span>
@@ -198,7 +191,7 @@ export default async function AdminDashboardPage() {
                             <span className={`text-sm font-medium truncate ${isTop ? 'text-blue-700' : isBottom ? 'text-orange-600' : 'text-gray-700'}`}>
                               {u.nome}
                             </span>
-                            <span className="text-xs text-gray-500 ml-2 shrink-0">{u.count} turni</span>
+                            <span className="text-xs text-gray-500 ml-2 shrink-0">{u.turni_totali} turni</span>
                           </div>
                           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden" aria-hidden="true">
                             <div
