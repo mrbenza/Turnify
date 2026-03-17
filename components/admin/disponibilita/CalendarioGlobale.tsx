@@ -695,20 +695,47 @@ export default function CalendarioGlobale({
       )}
 
       {/* ---- Legend ---- */}
-      <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500" aria-label="Legenda">
-        <LegendChip color="bg-green-400" label="Disponibile" />
-        <LegendChip color="bg-red-400" label="Turno assegnato" />
-        <LegendChip color="bg-gray-200" label="Non disponibile / nessuna risposta" />
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center shrink-0" aria-hidden="true">
-            <svg className="w-2 h-2 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z" clipRule="evenodd" /></svg>
+      <div className="mb-4 space-y-2" aria-label="Legenda">
+        {/* Chips calendario */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-500">
+          <LegendChip color="bg-green-400" label="Disponibile" />
+          <LegendChip color="bg-red-400" label="Turno assegnato" />
+          <LegendChip color="bg-gray-200" label="Non disponibile" />
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center shrink-0" aria-hidden="true">
+              <svg className="w-2 h-2 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z" clipRule="evenodd" /></svg>
+            </span>
+            Giorno coperto
           </span>
-          Turno assegnato (badge)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-amber-400 flex items-center justify-center shrink-0 text-white text-[8px] font-bold" aria-hidden="true">!</span>
-          Nessun turno ancora
-        </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-amber-400 flex items-center justify-center shrink-0 text-white text-[8px] font-bold" aria-hidden="true">!</span>
+            Giorno scoperto
+          </span>
+        </div>
+        {/* Badge pannello suggerimenti */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-500 border-t border-gray-100 pt-2">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-full">Pannello assegnazione</span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">★ Suggerito</span>
+            <span>Score equità più basso</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-[10px] text-green-700">✓ ottimo</span>
+            <span>Non ha lavorato né il mese scorso né il w.e. precedente</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-[10px] text-amber-600">⚠ recente</span>
+            <span>Ha lavorato il mese scorso o il w.e. precedente</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-[10px] text-red-600">✕ evita</span>
+            <span>Ha lavorato sia il mese scorso che il w.e. precedente</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-xs text-amber-600 font-medium">già in turno</span>
+            <span>Già assegnato a un altro weekend questo mese</span>
+          </span>
+        </div>
       </div>
 
       {/* ---- Calendar grid ---- */}
