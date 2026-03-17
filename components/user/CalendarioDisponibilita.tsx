@@ -72,7 +72,7 @@ export default function CalendarioDisponibilita({
   const shiftDates = new Set(shifts.map((s) => s.date))
   const holidayDates = new Set(holidays.map((h) => h.date))
 
-  const [savingDate, setSavingDate] = useState<string | null>(null)
+  const [savingDates, setSavingDates] = useState<Set<string>>(new Set())
   const [tooltip, setTooltip] = useState<{ date: string; msg: string } | null>(null)
   const [, startTransition] = useTransition()
 
@@ -113,6 +113,23 @@ export default function CalendarioDisponibilita({
     return true
   }
 
+  /* ---- Calcola il giorno partner del weekend (Sab↔Dom), null se festivo ---- */
+  function getWeekendPartner(dateStr: string): string | null {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay()
+    if (dow === 6) {
+      const sun = new Date(y, m - 1, d + 1)
+      const sunStr = toDateString(sun.getFullYear(), sun.getMonth(), sun.getDate())
+      return holidayDates.has(sunStr) ? null : sunStr
+    }
+    if (dow === 0) {
+      const sat = new Date(y, m - 1, d - 1)
+      const satStr = toDateString(sat.getFullYear(), sat.getMonth(), sat.getDate())
+      return holidayDates.has(satStr) ? null : satStr
+    }
+    return null
+  }
+
   /* ---- Click handler ---- */
   const handleDayClick = useCallback(
     async (dateStr: string) => {
@@ -125,63 +142,65 @@ export default function CalendarioDisponibilita({
         return
       }
 
-      setSavingDate(dateStr)
       const existing = availabilityByDate[dateStr]
       const newAvailable = existing ? !existing.available : true
 
-      // Optimistic update
-      if (!existing) {
-        const tempAvail: Availability = {
-          id: `temp-${dateStr}`,
-          user_id: userId,
-          date: dateStr,
-          available: true,
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-        startTransition(() => setLocalAvailability((prev) => [...prev, tempAvail]))
-      } else {
-        startTransition(() =>
-          setLocalAvailability((prev) =>
-            prev.map((a) => (a.date === dateStr ? { ...a, available: newAvailable } : a))
-          )
-        )
-      }
+      // Trova il partner del weekend (Sab↔Dom), solo se clickable
+      const partner = getWeekendPartner(dateStr)
+      const partnerClickable = partner ? isClickable(partner, getDayState(partner)) : false
+      const datesToSave = [dateStr, ...(partner && partnerClickable ? [partner] : [])]
+
+      setSavingDates(new Set(datesToSave))
+
+      // Optimistic update per tutte le date
+      startTransition(() =>
+        setLocalAvailability((prev) => {
+          let updated = [...prev]
+          for (const dt of datesToSave) {
+            const ex = updated.find((a) => a.date === dt)
+            if (!ex) {
+              updated = [...updated, {
+                id: `temp-${dt}`, user_id: userId, date: dt,
+                available: newAvailable, status: 'pending',
+                created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+              }]
+            } else {
+              updated = updated.map((a) => a.date === dt ? { ...a, available: newAvailable } : a)
+            }
+          }
+          return updated
+        })
+      )
 
       try {
-        // user_id is read server-side from session — only date and available are sent
-        const res = await fetch('/api/availability', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date: dateStr, available: newAvailable }),
-        })
-
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}))
-          throw new Error(json.error ?? 'Errore sconosciuto')
-        }
-
-        const data = await res.json() as Availability
-
-        if (!existing) {
-          // Replace temp record with real data from server
-          startTransition(() =>
-            setLocalAvailability((prev) =>
-              prev.map((a) => (a.id === `temp-${dateStr}` ? data : a))
-            )
+        const results = await Promise.all(
+          datesToSave.map((dt) =>
+            fetch('/api/availability', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ date: dt, available: newAvailable }),
+            }).then((r) => r.ok ? r.json() as Promise<Availability> : r.json().then((j) => { throw new Error(j.error ?? 'Errore') }))
           )
-        }
+        )
+        // Sostituisce i record temporanei con quelli reali
+        startTransition(() =>
+          setLocalAvailability((prev) => {
+            let updated = [...prev]
+            for (const data of results) {
+              updated = updated.map((a) => (a.id === `temp-${data.date}` || a.id === data.id) ? data : a)
+            }
+            return updated
+          })
+        )
       } catch (err) {
         console.error('Errore salvataggio disponibilità:', err)
-        // Rollback on error
         startTransition(() => setLocalAvailability(availabilityList))
       } finally {
-        setSavingDate(null)
+        setSavingDates(new Set())
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [localAvailability, availabilityList, userId, todayStr]
+    [localAvailability, availabilityList, userId, todayStr, holidayDates]
   )
 
   /* ---- Build calendar grid ---- */
@@ -264,7 +283,7 @@ export default function CalendarioDisponibilita({
           const state = getDayState(dateStr)
           const isPast = isBefore(dateStr, todayStr)
           const clickable = isClickable(dateStr, state)
-          const isSaving = savingDate === dateStr
+          const isSaving = savingDates.has(dateStr)
           const showTooltip = tooltip?.date === dateStr
 
           return (
