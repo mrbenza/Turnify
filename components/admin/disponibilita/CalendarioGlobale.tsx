@@ -557,7 +557,7 @@ export default function CalendarioGlobale({
                 .map(u => ({ u, s: getUserChipStatus(u.id, dateStr) }))
                 .filter(x => x.s !== 'unavailable')
                 .sort((a, b) => (a.s === 'shift' ? -1 : b.s === 'shift' ? 1 : 0))
-              const visible = relevant.slice(0, 8)
+              const visible = relevant.slice(0, 11)
               const overflow = relevant.length - visible.length
               return (
                 <>
