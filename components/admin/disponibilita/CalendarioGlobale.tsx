@@ -424,8 +424,6 @@ export default function CalendarioGlobale({
   function getRecommendationLevel(userId: string, dateStr: string): 'ideal' | 'warning' | 'avoid' | 'neutral' {
     const hasShiftOnDay = shiftMap.has(`${userId}-${dateStr}`)
     if (hasShiftOnDay) return 'neutral'
-    const shiftsOnDay = shifts.filter((s) => s.date === dateStr)
-    if (shiftsOnDay.length === 0) return 'neutral' // nessuno ancora assegnato
     const prevMonth = workedPrevMonth(userId)
     const prevWe = workedPrevWeekend(userId, dateStr)
     if (!prevMonth && !prevWe) return 'ideal'
@@ -844,7 +842,14 @@ export default function CalendarioGlobale({
                 const suggestedId = getSuggestedUserId(dateStr)
 
                 const assigned   = users.filter(u => shiftMap.has(`${u.id}-${dateStr}`))
-                const available  = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && !isWeekendBlocked(u.id, dateStr))
+                const recOrder = { ideal: 0, neutral: 1, warning: 2, avoid: 3 }
+                const available  = users
+                  .filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && !isWeekendBlocked(u.id, dateStr))
+                  .sort((a, b) => {
+                    const sa = a.id === suggestedId ? -1 : recOrder[getRecommendationLevel(a.id, dateStr)]
+                    const sb = b.id === suggestedId ? -1 : recOrder[getRecommendationLevel(b.id, dateStr)]
+                    return sa - sb
+                  })
                 const inTurno    = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && isWeekendBlocked(u.id, dateStr))
                 const notAvail   = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && !availabilityMap.get(`${u.id}-${dateStr}`)?.available)
 
@@ -889,21 +894,21 @@ export default function CalendarioGlobale({
                           {available.map(u => {
                             const rec = getRecommendationLevel(u.id, dateStr)
                             const suggested = u.id === suggestedId
+                            const rowBg =
+                              suggested    ? 'bg-blue-50 border-blue-200' :
+                              rec === 'avoid'   ? 'bg-red-50 border-red-200' :
+                              rec === 'warning' ? 'bg-amber-50 border-amber-200' :
+                              'bg-green-50 border-green-100'
                             return (
-                              <li key={u.id} className={`flex items-center justify-between gap-3 py-2 px-3 rounded-lg border ${suggested ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-100'}`}>
+                              <li key={u.id} className={`flex items-center justify-between gap-3 py-2 px-3 rounded-lg border ${rowBg}`}>
                                 <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
                                     {suggested && <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">★ Suggerito</span>}
+                                    {rec === 'ideal'   && <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded shrink-0">✓ ottimo</span>}
+                                    {rec === 'warning' && <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">⚠ recente</span>}
+                                    {rec === 'avoid'   && <span className="text-[10px] font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded shrink-0">✕ evita</span>}
                                   </div>
-                                  {rec !== 'neutral' && (
-                                    <p className="text-[10px] text-gray-400 ml-4 mt-0.5">
-                                      {rec === 'ideal'   && <span className="text-green-600">✓ ottimo — non ha lavorato di recente</span>}
-                                      {rec === 'warning' && <span className="text-amber-500">⚠ recente — ha lavorato il mese scorso o w.e. prec.</span>}
-                                      {rec === 'avoid'   && <span className="text-red-500">✕ evita — ha lavorato sia il mese scorso che il w.e. prec.</span>}
-                                    </p>
-                                  )}
                                 </div>
                                 {!locked && (
                                   <div className="shrink-0">
