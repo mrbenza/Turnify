@@ -387,9 +387,11 @@ export default function CalendarioGlobale({
 
     if (dow === 0 || dow === 6) {
       // Per weekend: esclude la coppia Sab+Dom corrente (stesso weekend = ok)
-      const satDay = dow === 6 ? d : d - 1
-      const satStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
-      const sunStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+      // Usa Date per gestire correttamente i weekend a cavallo di mese
+      const satDate = dow === 6 ? new Date(y, m - 1, d) : new Date(y, m - 1, d - 1)
+      const sunDate = new Date(satDate.getFullYear(), satDate.getMonth(), satDate.getDate() + 1)
+      const satStr = toDateString(satDate.getFullYear(), satDate.getMonth(), satDate.getDate())
+      const sunStr = toDateString(sunDate.getFullYear(), sunDate.getMonth(), sunDate.getDate())
       return shifts.some(
         (s) =>
           s.user_id === userId &&
@@ -411,6 +413,16 @@ export default function CalendarioGlobale({
   }
 
   /* ---- Suggerimenti 2° reperibile ---- */
+
+  // Se questa domenica forma un weekend a cavallo di mese (sab nel mese prec.),
+  // restituisce la data del sabato; altrimenti null
+  function getCrossMonthSat(dateStr: string): string | null {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    if (new Date(y, m - 1, d).getDay() !== 0) return null // non è domenica
+    const sat = new Date(y, m - 1, d - 1)
+    if (sat.getMonth() === m - 1) return null // sabato nello stesso mese
+    return toDateString(sat.getFullYear(), sat.getMonth(), sat.getDate())
+  }
 
   // Restituisce sat/sun del weekend PRECEDENTE a quello della data
   function getPrevWeekend(dateStr: string): { sat: string; sun: string } {
@@ -441,6 +453,12 @@ export default function CalendarioGlobale({
   function getRecommendationLevel(userId: string, dateStr: string): 'ideal' | 'warning' | 'avoid' | 'neutral' {
     const hasShiftOnDay = shiftMap.has(`${userId}-${dateStr}`)
     if (hasShiftOnDay) return 'neutral'
+    // Weekend a cavallo di mese: chi ha lavorato il sabato del mese precedente
+    // è il candidato naturale per questa domenica → trattalo come 'ideal'
+    const crossSat = getCrossMonthSat(dateStr)
+    if (crossSat && prevMonthShifts.some((s) => s.user_id === userId && s.date === crossSat)) {
+      return 'ideal'
+    }
     const prevMonth = workedPrevMonth(userId)
     const prevWe = workedPrevWeekend(userId, dateStr)
     if (!prevMonth && !prevWe) return 'ideal'
@@ -459,6 +477,15 @@ export default function CalendarioGlobale({
       return avail?.available === true
     })
     if (base.length === 0) return null
+
+    // Weekend a cavallo di mese: il sabato-worker ha priorità assoluta per la domenica
+    const crossSat = getCrossMonthSat(dateStr)
+    if (crossSat) {
+      const satWorker = base.find((u) =>
+        prevMonthShifts.some((s) => s.user_id === u.id && s.date === crossSat)
+      )
+      if (satWorker) return satWorker.id
+    }
 
     // Preferenza a chi NON ha lavorato il mese precedente
     const preferred = base.filter((u) => !workedPrevMonth(u.id))
