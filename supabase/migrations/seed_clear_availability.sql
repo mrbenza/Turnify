@@ -1,9 +1,15 @@
 -- ============================================================
--- Cancella tutte le disponibilità
--- NON tocca turni, utenti o mesi
+-- Reset completo storico: disponibilità, turni, mesi confermati
+-- NON tocca: utenti, festivi
 -- ============================================================
 
+DELETE FROM public.shifts;
 DELETE FROM public.availability;
+DELETE FROM public.month_status;
 
 -- Verifica
-SELECT count(*) AS righe_rimaste FROM public.availability;
+SELECT 'shifts'       AS tabella, count(*) AS righe FROM public.shifts
+UNION ALL
+SELECT 'availability' AS tabella, count(*) AS righe FROM public.availability
+UNION ALL
+SELECT 'month_status' AS tabella, count(*) AS righe FROM public.month_status;
