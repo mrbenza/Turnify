@@ -432,17 +432,23 @@ export default function CalendarioGlobale({
   }
 
   // Utente con score equity più basso tra i disponibili non ancora assegnati al giorno
+  // Priorità: non ha lavorato il mese precedente + score annuale più basso
   function getSuggestedUserId(dateStr: string): string | null {
     const assignedIds = new Set(shifts.filter((s) => s.date === dateStr).map((s) => s.user_id))
-    const candidates = users.filter((u) => {
+    const base = users.filter((u) => {
       if (assignedIds.has(u.id)) return false
       if (isWeekendBlocked(u.id, dateStr)) return false
       const avail = availabilityMap.get(`${u.id}-${dateStr}`)
       return avail?.available === true
     })
-    if (candidates.length === 0) return null
-    candidates.sort((a, b) => (equityScores.get(a.id) ?? 0) - (equityScores.get(b.id) ?? 0))
-    return candidates[0].id
+    if (base.length === 0) return null
+
+    // Preferenza a chi NON ha lavorato il mese precedente
+    const preferred = base.filter((u) => !workedPrevMonth(u.id))
+    const pool = preferred.length > 0 ? preferred : base
+
+    pool.sort((a, b) => (equityScores.get(a.id) ?? 0) - (equityScores.get(b.id) ?? 0))
+    return pool[0].id
   }
 
   /* ---- User chip status for a given date ---- */
