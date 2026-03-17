@@ -414,7 +414,7 @@ export default function CalendarioGlobale({
           }
         }}
         className={`
-          relative min-h-[80px] sm:min-h-[100px] p-1.5 rounded-lg transition-all
+          relative ${interactive ? 'min-h-[90px] sm:min-h-[110px] p-1.5' : 'min-h-[32px] sm:min-h-[40px] p-1'} rounded-lg transition-all
           ${bgClass} ${borderClass} ${cursorClass}
           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1
         `}
@@ -631,7 +631,7 @@ export default function CalendarioGlobale({
         </div>
       ) : (
         <div
-          className="grid grid-cols-7 gap-1"
+          className="grid grid-cols-7 gap-1 items-start"
           role="grid"
           aria-label={`Calendario ${MONTH_NAMES[viewMonth]} ${viewYear}`}
         >
@@ -657,7 +657,7 @@ export default function CalendarioGlobale({
                   key={`empty-${idx}`}
                   role="gridcell"
                   aria-hidden="true"
-                  className="min-h-[80px] sm:min-h-[100px] rounded-lg bg-gray-50/40"
+                  className="min-h-[32px] sm:min-h-[40px] rounded-lg bg-gray-50/40"
                 />
               )
             }
