@@ -110,6 +110,8 @@ export default function CalendarioGlobale({
   const [holidays, setHolidays] = useState<Holiday[]>(initialHolidays)
   const [users] = useState<User[]>(initialUsers)
   const [locked, setLocked] = useState(initialLocked)
+  const [prevMonthShifts, setPrevMonthShifts] = useState<Shift[]>([])
+  const [equityScores, setEquityScores] = useState<Map<string, number>>(new Map())
 
   /* ---- UI state ---- */
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null)
@@ -136,6 +138,37 @@ export default function CalendarioGlobale({
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [pendingAction, showUnlockDialog])
+
+  /* ---- Fetch turni mese precedente + equity scores ---- */
+  async function fetchAuxData(month: number, year: number) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createClient() as any
+      const prevMonth = month === 0 ? 11 : month - 1
+      const prevYear = month === 0 ? year - 1 : year
+      const prevFrom = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`
+      const prevTo = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(new Date(prevYear, prevMonth + 1, 0).getDate()).padStart(2, '0')}`
+
+      const [prevRes, equityRes] = await Promise.all([
+        supabase.from('shifts').select('user_id, date, shift_type').gte('date', prevFrom).lte('date', prevTo),
+        supabase.rpc('get_equity_scores', { p_month: 0, p_year: year }),
+      ])
+
+      setPrevMonthShifts((prevRes.data as Shift[]) ?? [])
+      const scoreMap = new Map<string, number>()
+      for (const row of equityRes.data ?? []) {
+        scoreMap.set(row.user_id, row.score ?? 0)
+      }
+      setEquityScores(scoreMap)
+    } catch (err) {
+      console.error('Errore fetch dati aux:', err)
+    }
+  }
+
+  useEffect(() => {
+    fetchAuxData(viewMonth, viewYear)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /* ---- Computed maps ---- */
   const availabilityMap = useMemo(() => {
@@ -222,6 +255,7 @@ export default function CalendarioGlobale({
       setShifts((shiftsRes.data as Shift[]) ?? [])
       setHolidays((holRes.data as Holiday[]) ?? [])
       setLocked(statusRes.data?.status === 'locked')
+      fetchAuxData(newMonth, newYear)
     } catch (err) {
       console.error('Errore navigazione mese:', err)
       setErrorMsg('Impossibile caricare i dati del mese.')
@@ -357,6 +391,60 @@ export default function CalendarioGlobale({
         s.date !== satStr &&
         s.date !== sunStr
     )
+  }
+
+  /* ---- Suggerimenti 2° reperibile ---- */
+
+  // Restituisce sat/sun del weekend PRECEDENTE a quello della data
+  function getPrevWeekend(dateStr: string): { sat: string; sun: string } {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay() // 0=Sun, 6=Sat
+    const currSat = dow === 6 ? d : d - 1
+    const prevSat = new Date(Date.UTC(y, m - 1, currSat - 7))
+    const prevSun = new Date(Date.UTC(y, m - 1, currSat - 6))
+    const fmt = (dt: Date) => dt.toISOString().split('T')[0]
+    return { sat: fmt(prevSat), sun: fmt(prevSun) }
+  }
+
+  function workedPrevMonth(userId: string): boolean {
+    return prevMonthShifts.some((s) => s.user_id === userId)
+  }
+
+  function workedPrevWeekend(userId: string, dateStr: string): boolean {
+    const { sat, sun } = getPrevWeekend(dateStr)
+    const allShifts = [...shifts, ...prevMonthShifts]
+    return allShifts.some((s) => s.user_id === userId && (s.date === sat || s.date === sun))
+  }
+
+  // Livello di raccomandazione per il 2° slot (quando c'è già 1 assegnato)
+  // 'ideal'   → non ha lavorato il mese prec. E non ha lavorato il w.e. prec.
+  // 'warning' → ha lavorato il mese prec. O il w.e. prec. (ma non entrambi)
+  // 'avoid'   → ha lavorato sia il mese prec. che il w.e. prec.
+  // 'neutral' → nessuna info rilevante (primo slot vuoto)
+  function getRecommendationLevel(userId: string, dateStr: string): 'ideal' | 'warning' | 'avoid' | 'neutral' {
+    const hasShiftOnDay = shiftMap.has(`${userId}-${dateStr}`)
+    if (hasShiftOnDay) return 'neutral'
+    const shiftsOnDay = shifts.filter((s) => s.date === dateStr)
+    if (shiftsOnDay.length === 0) return 'neutral' // nessuno ancora assegnato
+    const prevMonth = workedPrevMonth(userId)
+    const prevWe = workedPrevWeekend(userId, dateStr)
+    if (!prevMonth && !prevWe) return 'ideal'
+    if (prevMonth && prevWe) return 'avoid'
+    return 'warning'
+  }
+
+  // Utente con score equity più basso tra i disponibili non ancora assegnati al giorno
+  function getSuggestedUserId(dateStr: string): string | null {
+    const assignedIds = new Set(shifts.filter((s) => s.date === dateStr).map((s) => s.user_id))
+    const candidates = users.filter((u) => {
+      if (assignedIds.has(u.id)) return false
+      if (isWeekendBlocked(u.id, dateStr)) return false
+      const avail = availabilityMap.get(`${u.id}-${dateStr}`)
+      return avail?.available === true
+    })
+    if (candidates.length === 0) return null
+    candidates.sort((a, b) => (equityScores.get(a.id) ?? 0) - (equityScores.get(b.id) ?? 0))
+    return candidates[0].id
   }
 
   /* ---- User chip status for a given date ---- */
@@ -727,26 +815,53 @@ export default function CalendarioGlobale({
               )}
 
               <ul className="space-y-2" aria-label="Elenco dipendenti">
-                {users.map((user) => {
+                {(() => {
+                  const suggestedId = getSuggestedUserId(selectedDay.dateStr)
+                  return users.map((user) => {
                   const chipStatus = getUserChipStatus(user.id, selectedDay.dateStr)
                   const isLoadingThis = loadingAction === `${user.id}-${selectedDay.dateStr}`
                   const blocked = chipStatus !== 'shift' && isWeekendBlocked(user.id, selectedDay.dateStr)
+                  const recLevel = getRecommendationLevel(user.id, selectedDay.dateStr)
+                  const isSuggested = user.id === suggestedId
 
                   return (
                     <li
                       key={user.id}
-                      className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-gray-50 border border-gray-100"
+                      className={`flex items-center justify-between gap-3 py-2 px-3 rounded-lg border ${
+                        isSuggested && chipStatus !== 'shift'
+                          ? 'bg-blue-50 border-blue-200'
+                          : recLevel === 'ideal' && chipStatus !== 'shift'
+                          ? 'bg-green-50 border-green-100'
+                          : recLevel === 'avoid' && chipStatus !== 'shift'
+                          ? 'bg-red-50 border-red-100'
+                          : 'bg-gray-50 border-gray-100'
+                      }`}
                     >
                       {/* User info + status */}
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <StatusDot status={chipStatus} />
                         <span className="text-sm font-medium text-gray-800 truncate">{user.nome}</span>
+
+                        {/* Badge principale */}
+                        {isSuggested && chipStatus !== 'shift' && !blocked && (
+                          <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">★ Suggerito</span>
+                        )}
                         {blocked ? (
                           <span className="text-xs shrink-0 text-amber-600 font-medium">già in turno</span>
+                        ) : chipStatus === 'shift' ? (
+                          <span className="text-xs shrink-0 text-red-600">Turno</span>
+                        ) : chipStatus === 'available' ? (
+                          <>
+                            {recLevel === 'ideal' && <span className="text-[10px] text-green-700 shrink-0">✓ ottimo</span>}
+                            {recLevel === 'warning' && (
+                              <span className="text-[10px] text-amber-600 shrink-0" title="Ha lavorato il mese scorso o il weekend precedente">⚠ recente</span>
+                            )}
+                            {recLevel === 'avoid' && (
+                              <span className="text-[10px] text-red-600 shrink-0" title="Ha lavorato sia il mese scorso che il weekend precedente">✕ evita</span>
+                            )}
+                          </>
                         ) : (
-                          <span className={`text-xs shrink-0 ${chipStatus === 'shift' ? 'text-red-600' : chipStatus === 'available' ? 'text-green-600' : 'text-gray-400'}`}>
-                            {chipStatus === 'shift' ? 'Turno' : chipStatus === 'available' ? 'Disponibile' : 'Non disp.'}
-                          </span>
+                          <span className="text-xs shrink-0 text-gray-400">Non disp.</span>
                         )}
                       </div>
 
@@ -784,7 +899,8 @@ export default function CalendarioGlobale({
                       )}
                     </li>
                   )
-                })}
+                })
+              })()}
               </ul>
             </div>
           </div>

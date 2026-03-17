@@ -147,7 +147,8 @@ export async function GET(request: NextRequest) {
   }
 
   // Genera il file XLSX
-  const outBuf: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const outBuf: any = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true })
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
   return new NextResponse(outBuf, {
