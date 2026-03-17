@@ -373,24 +373,41 @@ export default function CalendarioGlobale({
     }
   }, [pendingAction, shiftMap])
 
-  /* ---- Weekend conflict check ---- */
-  // Restituisce true se l'utente ha già un turno weekend in un ALTRO weekend dello stesso mese
+  /* ---- Weekend/festivo conflict check ---- */
+  // Restituisce true se l'utente ha già un turno speciale (weekend o festivo)
+  // in un ALTRO giorno dello stesso mese
   function isWeekendBlocked(userId: string, dateStr: string): boolean {
     const [y, m, d] = dateStr.split('-').map(Number)
     const dow = new Date(y, m - 1, d).getDay() // 0=Sun, 6=Sat
-    if (dow !== 0 && dow !== 6) return false // giorno feriale → nessun blocco
-    const satDay = dow === 6 ? d : d - 1
-    const satStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
-    const sunStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+    const isHoliday = holidayMap.has(dateStr)
+    // Esce solo se il giorno non è né weekend né festivo
+    if (dow !== 0 && dow !== 6 && !isHoliday) return false
+
     const monthPrefix = `${y}-${String(m).padStart(2, '0')}`
-    return shifts.some(
-      (s) =>
-        s.user_id === userId &&
-        (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
-        s.date.startsWith(monthPrefix) &&
-        s.date !== satStr &&
-        s.date !== sunStr
-    )
+
+    if (dow === 0 || dow === 6) {
+      // Per weekend: esclude la coppia Sab+Dom corrente (stesso weekend = ok)
+      const satDay = dow === 6 ? d : d - 1
+      const satStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
+      const sunStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+      return shifts.some(
+        (s) =>
+          s.user_id === userId &&
+          (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
+          s.date.startsWith(monthPrefix) &&
+          s.date !== satStr &&
+          s.date !== sunStr
+      )
+    } else {
+      // Per festivi feriali: esclude solo la data stessa
+      return shifts.some(
+        (s) =>
+          s.user_id === userId &&
+          (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
+          s.date.startsWith(monthPrefix) &&
+          s.date !== dateStr
+      )
+    }
   }
 
   /* ---- Suggerimenti 2° reperibile ---- */
