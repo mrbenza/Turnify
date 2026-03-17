@@ -836,99 +836,131 @@ export default function CalendarioGlobale({
             </div>
 
             {/* Drawer body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {users.length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-8">Nessun dipendente attivo.</p>
               )}
+              {(() => {
+                const dateStr = selectedDay.dateStr
+                const suggestedId = getSuggestedUserId(dateStr)
 
-              <ul className="space-y-2" aria-label="Elenco dipendenti">
-                {(() => {
-                  const suggestedId = getSuggestedUserId(selectedDay.dateStr)
-                  return users.map((user) => {
-                  const chipStatus = getUserChipStatus(user.id, selectedDay.dateStr)
-                  const isLoadingThis = loadingAction === `${user.id}-${selectedDay.dateStr}`
-                  const blocked = chipStatus !== 'shift' && isWeekendBlocked(user.id, selectedDay.dateStr)
-                  const recLevel = getRecommendationLevel(user.id, selectedDay.dateStr)
-                  const isSuggested = user.id === suggestedId
+                const assigned   = users.filter(u => shiftMap.has(`${u.id}-${dateStr}`))
+                const available  = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && !isWeekendBlocked(u.id, dateStr))
+                const inTurno    = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && isWeekendBlocked(u.id, dateStr))
+                const notAvail   = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && !availabilityMap.get(`${u.id}-${dateStr}`)?.available)
 
-                  return (
-                    <li
-                      key={user.id}
-                      className={`flex items-center justify-between gap-3 py-2 px-3 rounded-lg border ${
-                        isSuggested && chipStatus !== 'shift'
-                          ? 'bg-blue-50 border-blue-200'
-                          : recLevel === 'ideal' && chipStatus !== 'shift'
-                          ? 'bg-green-50 border-green-100'
-                          : recLevel === 'avoid' && chipStatus !== 'shift'
-                          ? 'bg-red-50 border-red-100'
-                          : 'bg-gray-50 border-gray-100'
-                      }`}
-                    >
-                      {/* User info + status */}
-                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                        <StatusDot status={chipStatus} />
-                        <span className="text-sm font-medium text-gray-800 truncate">{user.nome}</span>
+                return (
+                  <>
+                    {/* ── Assegnati oggi ── */}
+                    {assigned.length > 0 && (
+                      <section aria-label="Assegnati">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1.5">
+                          Assegnati ({assigned.length})
+                        </p>
+                        <ul className="space-y-1.5">
+                          {assigned.map(u => (
+                            <li key={u.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-red-50 border border-red-100">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                                <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
+                              </div>
+                              <div className="shrink-0">
+                                {loadingAction === `${u.id}-${dateStr}` ? <Spinner small /> : !locked ? (
+                                  <button
+                                    onClick={() => setPendingAction({ userId: u.id, dateStr, userName: u.nome, action: 'remove' })}
+                                    className="text-xs px-2.5 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-100 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+                                  >Rimuovi</button>
+                                ) : (
+                                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
 
-                        {/* Badge principale */}
-                        {isSuggested && chipStatus !== 'shift' && !blocked && (
-                          <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">★ Suggerito</span>
-                        )}
-                        {blocked ? (
-                          <span className="text-xs shrink-0 text-amber-600 font-medium">già in turno</span>
-                        ) : chipStatus === 'shift' ? (
-                          <span className="text-xs shrink-0 text-red-600">Turno</span>
-                        ) : chipStatus === 'available' ? (
-                          <>
-                            {recLevel === 'ideal' && <span className="text-[10px] text-green-700 shrink-0">✓ ottimo</span>}
-                            {recLevel === 'warning' && (
-                              <span className="text-[10px] text-amber-600 shrink-0" title="Ha lavorato il mese scorso o il weekend precedente">⚠ recente</span>
-                            )}
-                            {recLevel === 'avoid' && (
-                              <span className="text-[10px] text-red-600 shrink-0" title="Ha lavorato sia il mese scorso che il weekend precedente">✕ evita</span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-xs shrink-0 text-gray-400">Non disp.</span>
-                        )}
-                      </div>
+                    {/* ── Disponibili ── */}
+                    {available.length > 0 && (
+                      <section aria-label="Disponibili">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1.5">
+                          Disponibili ({available.length})
+                        </p>
+                        <ul className="space-y-1.5">
+                          {available.map(u => {
+                            const rec = getRecommendationLevel(u.id, dateStr)
+                            const suggested = u.id === suggestedId
+                            return (
+                              <li key={u.id} className={`flex items-center justify-between gap-3 py-2 px-3 rounded-lg border ${suggested ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-100'}`}>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                                    <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
+                                    {suggested && <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">★ Suggerito</span>}
+                                  </div>
+                                  {rec !== 'neutral' && (
+                                    <p className="text-[10px] text-gray-400 ml-4 mt-0.5">
+                                      {rec === 'ideal'   && <span className="text-green-600">✓ ottimo — non ha lavorato di recente</span>}
+                                      {rec === 'warning' && <span className="text-amber-500">⚠ recente — ha lavorato il mese scorso o w.e. prec.</span>}
+                                      {rec === 'avoid'   && <span className="text-red-500">✕ evita — ha lavorato sia il mese scorso che il w.e. prec.</span>}
+                                    </p>
+                                  )}
+                                </div>
+                                {!locked && (
+                                  <div className="shrink-0">
+                                    {loadingAction === `${u.id}-${dateStr}` ? <Spinner small /> : (
+                                      <button
+                                        onClick={() => setPendingAction({ userId: u.id, dateStr, userName: u.nome, action: 'assign' })}
+                                        className="text-xs px-2.5 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400"
+                                      >Assegna</button>
+                                    )}
+                                  </div>
+                                )}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </section>
+                    )}
 
-                      {/* Action button */}
-                      {!locked && (
-                        <div className="shrink-0">
-                          {isLoadingThis ? (
-                            <Spinner small />
-                          ) : chipStatus === 'shift' ? (
-                            <button
-                              onClick={() => setPendingAction({ userId: user.id, dateStr: selectedDay.dateStr, userName: user.nome, action: 'remove' })}
-                              className="text-xs px-2.5 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
-                              aria-label={`Rimuovi turno di ${user.nome}`}
-                            >
-                              Rimuovi
-                            </button>
-                          ) : chipStatus === 'available' && !blocked ? (
-                            <button
-                              onClick={() => setPendingAction({ userId: user.id, dateStr: selectedDay.dateStr, userName: user.nome, action: 'assign' })}
-                              className="text-xs px-2.5 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400"
-                              aria-label={`Assegna turno a ${user.nome}`}
-                            >
-                              Assegna
-                            </button>
-                          ) : null}
-                        </div>
-                      )}
+                    {/* ── Già in turno questo mese ── */}
+                    {inTurno.length > 0 && (
+                      <section aria-label="Già in turno">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-500 mb-1.5">
+                          Già in turno questo mese ({inTurno.length})
+                        </p>
+                        <ul className="space-y-1">
+                          {inTurno.map(u => (
+                            <li key={u.id} className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-amber-50 border border-amber-100">
+                              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                              <span className="text-sm text-gray-700 truncate">{u.nome}</span>
+                              <span className="text-[10px] text-amber-500 ml-auto shrink-0">ha già un weekend assegnato</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
 
-                      {/* Locked state indicator */}
-                      {locked && chipStatus === 'shift' && (
-                        <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-label="Turno confermato">
-                          <title>Turno confermato</title>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                      )}
-                    </li>
-                  )
-                })
+                    {/* ── Non disponibili (collassabile) ── */}
+                    {notAvail.length > 0 && (
+                      <details>
+                        <summary className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 cursor-pointer select-none list-none flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                          Non disponibili ({notAvail.length})
+                        </summary>
+                        <ul className="mt-1.5 space-y-1">
+                          {notAvail.map(u => (
+                            <li key={u.id} className="flex items-center gap-2 py-1 px-3 rounded text-xs text-gray-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                              <span>{u.nome}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </>
+                )
               })()}
-              </ul>
             </div>
           </div>
         </>
