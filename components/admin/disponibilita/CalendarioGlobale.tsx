@@ -338,14 +338,13 @@ export default function CalendarioGlobale({
       }
       const data = await res.json() as Shift
       setShifts((prev) => [...prev, data])
-      fetchAuxData(viewMonth, viewYear)
     } catch (err) {
       console.error('Errore assegnazione turno:', err)
       setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'assegnazione del turno.')
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingAction, viewMonth, viewYear])
+  }, [pendingAction])
 
   /* ---- Remove shift ---- */
   const handleRemove = useCallback(async () => {
@@ -366,14 +365,13 @@ export default function CalendarioGlobale({
         throw new Error(json.error ?? 'Errore sconosciuto')
       }
       setShifts((prev) => prev.filter((s) => s.id !== shift.id))
-      fetchAuxData(viewMonth, viewYear)
     } catch (err) {
       console.error('Errore rimozione turno:', err)
       setErrorMsg('Errore durante la rimozione del turno.')
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingAction, shiftMap, viewMonth, viewYear])
+  }, [pendingAction, shiftMap])
 
   /* ---- Weekend conflict check ---- */
   // Restituisce true se l'utente ha già un turno weekend in un ALTRO weekend dello stesso mese
