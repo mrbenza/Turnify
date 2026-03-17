@@ -386,7 +386,7 @@ export default function CalendarioGlobale({
     return shifts.some(
       (s) =>
         s.user_id === userId &&
-        s.shift_type === 'weekend' &&
+        (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
         s.date.startsWith(monthPrefix) &&
         s.date !== satStr &&
         s.date !== sunStr

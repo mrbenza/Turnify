@@ -62,29 +62,36 @@ export async function POST(request: Request) {
 
   const shiftType: ShiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'
 
-  // Regola: max 1 weekend (coppia Sab+Dom) per dipendente per mese
-  if (shiftType === 'weekend') {
-    const dow = new Date(year, month - 1, day).getDay() // 0=Sun, 6=Sat
-    const satDay = dow === 6 ? day : day - 1
-    const satStr = `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
-    const sunStr = `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+  // Regola: max 1 turno speciale (weekend o festivo) per dipendente per mese
+  if (shiftType === 'weekend' || shiftType === 'festivo') {
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+
+    // Per i weekend escludiamo la coppia Sab+Dom corrente (stesso weekend = ok)
+    // Per i festivi escludiamo solo la data stessa
+    const dow = new Date(year, month - 1, day).getDay()
+    const satDay = shiftType === 'weekend' ? (dow === 6 ? day : day - 1) : null
+    const excludeSat = satDay
+      ? `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
+      : date
+    const excludeSun = satDay
+      ? `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+      : date
 
     const { data: conflict } = await supabase
       .from('shifts')
       .select('date')
       .eq('user_id', user_id)
-      .eq('shift_type', 'weekend')
+      .in('shift_type', ['weekend', 'festivo'])
       .gte('date', monthStart)
       .lte('date', monthEnd)
-      .neq('date', satStr)
-      .neq('date', sunStr)
+      .neq('date', excludeSat)
+      .neq('date', excludeSun)
       .limit(1)
 
     if (conflict && conflict.length > 0) {
       return NextResponse.json(
-        { error: 'Dipendente già assegnato a un altro weekend questo mese.' },
+        { error: 'Dipendente già assegnato a un turno speciale questo mese.' },
         { status: 409 }
       )
     }
