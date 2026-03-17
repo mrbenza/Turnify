@@ -549,39 +549,38 @@ export default function CalendarioGlobale({
           </span>
         )}
 
-        {/* User chips — only for interactive days */}
+        {/* User chips — solo assegnati (rosso) e disponibili (verde), assegnati per primi */}
         {interactive && (
           <div className="mt-1 flex flex-wrap gap-0.5">
-            {users.slice(0, 8).map((u) => {
-              const chipStatus = getUserChipStatus(u.id, dateStr)
-              const chipColor =
-                chipStatus === 'shift'
-                  ? 'bg-red-500 text-white'
-                  : chipStatus === 'available'
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-200 text-gray-400'
-              const initials = u.nome
-                .split(' ')
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((w: string) => w[0].toUpperCase())
-                .join('')
+            {(() => {
+              const relevant = users
+                .map(u => ({ u, s: getUserChipStatus(u.id, dateStr) }))
+                .filter(x => x.s !== 'unavailable')
+                .sort((a, b) => (a.s === 'shift' ? -1 : b.s === 'shift' ? 1 : 0))
+              const visible = relevant.slice(0, 8)
+              const overflow = relevant.length - visible.length
               return (
-                <span
-                  key={u.id}
-                  className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] font-bold ${chipColor}`}
-                  title={`${u.nome}: ${chipStatus === 'shift' ? 'Turno' : chipStatus === 'available' ? 'Disponibile' : 'Non disp.'}`}
-                  aria-hidden="true"
-                >
-                  {initials}
-                </span>
+                <>
+                  {visible.map(({ u, s }) => {
+                    const initials = u.nome.split(' ').filter(Boolean).slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
+                    const color = s === 'shift' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                    return (
+                      <span
+                        key={u.id}
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] font-bold ${color}`}
+                        title={`${u.nome}: ${s === 'shift' ? 'Turno' : 'Disponibile'}`}
+                        aria-hidden="true"
+                      >{initials}</span>
+                    )
+                  })}
+                  {overflow > 0 && (
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] bg-gray-100 text-gray-400 font-medium" aria-hidden="true">
+                      +{overflow}
+                    </span>
+                  )}
+                </>
               )
-            })}
-            {users.length > 8 && (
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] bg-gray-100 text-gray-400 font-medium" aria-hidden="true">
-                +{users.length - 8}
-              </span>
-            )}
+            })()}
           </div>
         )}
       </div>
