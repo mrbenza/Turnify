@@ -130,27 +130,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Converte tutte le formule (incluse shared formulas) in valori puri prima
-  // di scrivere. exceljs non riesce a renderizzare formule Excel native durante
-  // writeBuffer. Accediamo al modello interno _rows/_cells per coprire anche
-  // le shared formula slave che eachCell non vede come tipo Formula.
+  // ExcelJS non riesce a serializzare le regole di formattazione condizionale
+  // del template (CfRuleXform.renderExpression → crash). Le azzeriamo prima
+  // di scrivere: i colori delle celle sono già embedded negli stili delle celle
+  // stesse, quindi il file rimane visivamente corretto.
   wb.eachSheet((sheet) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = (sheet as any)['_rows'] as any[]
-    if (!rows) return
-    for (const row of rows) {
-      if (!row) continue
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cells = (row['_cells'] ?? []) as any[]
-      for (const cell of cells) {
-        if (!cell) continue
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const val = cell.value as any
-        if (val && typeof val === 'object' && ('formula' in val || 'sharedFormula' in val)) {
-          cell.value = val.result !== undefined ? val.result : null
-        }
-      }
-    }
+    ;(sheet as any).conditionalFormattings = []
   })
 
   // Genera il buffer XLSX
