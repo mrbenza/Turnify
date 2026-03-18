@@ -74,11 +74,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Template Excel non trovato nello storage' }, { status: 500 })
   }
 
-  const templateArrayBuf = await templateBlob.arrayBuffer()
+  let templateArrayBuf: ArrayBuffer
+  try {
+    templateArrayBuf = await templateBlob.arrayBuffer()
+  } catch (e) {
+    console.error('Errore conversione template in buffer:', e)
+    return NextResponse.json({ error: 'Errore lettura template' }, { status: 500 })
+  }
 
   // Legge il template con exceljs — preserva stili, font, immagini, merged cells
   const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(templateArrayBuf)
+  try {
+    await wb.xlsx.load(templateArrayBuf)
+  } catch (e) {
+    console.error('Errore parsing template Excel:', e)
+    return NextResponse.json({ error: 'Errore parsing template Excel' }, { status: 500 })
+  }
 
   const ws = wb.getWorksheet('Dati')
   if (!ws) {
