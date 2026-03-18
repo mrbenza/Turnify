@@ -23,7 +23,10 @@ function escXml(s: string): string {
  * s="..." style and removing any t="..." type attribute.
  */
 function setNumCell(xml: string, addr: string, value: number): string {
-  const re = new RegExp('<c r="' + addr + '"([^>]*)(?:/>|>[\\s\\S]*?</c>)')
+  // [^>]*? lazy — stops before the '/' in self-closing tags like <c r="A1" s="5"/>
+  // Greedy [^>]* would consume the '/', leaving only '>' which then mismatches />
+  // and falls back to >[\s\S]*?</c>, spanning across multiple cells.
+  const re = new RegExp('<c r="' + addr + '"([^>]*?)(?:/>|>[\\s\\S]*?</c>)')
   return xml.replace(re, (_match, attrs: string) => {
     const a = attrs.replace(/\s+t="[^"]*"/g, '')
     return `<c r="${addr}"${a}><v>${value}</v></c>`
@@ -36,7 +39,7 @@ function setNumCell(xml: string, addr: string, value: number): string {
  * If the cell is absent from the XML, inserts it into the row element.
  */
 function setInlineStr(xml: string, addr: string, value: string, red = false): string {
-  const re = new RegExp('<c r="' + addr + '"([^>]*)(?:/>|>[\\s\\S]*?</c>)')
+  const re = new RegExp('<c r="' + addr + '"([^>]*?)(?:/>|>[\\s\\S]*?</c>)')
 
   const makeCell = (attrs: string): string => {
     const a = attrs.replace(/\s+t="[^"]*"/g, '')
