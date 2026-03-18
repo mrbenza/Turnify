@@ -112,6 +112,10 @@ export default function CalendarioGlobale({
   const [locked, setLocked] = useState(initialLocked)
   const [prevMonthShifts, setPrevMonthShifts] = useState<Shift[]>([])
   const [equityScores, setEquityScores] = useState<Map<string, number>>(new Map())
+  // turniMap: turni_totali grezzi per utente — usato dal suggerito per equità sul conteggio
+  const [turniMap, setTurniMap] = useState<Map<string, number>>(new Map())
+  // IDs dei turni aggiunti in questa sessione (dalla navigazione al mese corrente)
+  const sessionShiftIdsRef = useRef<Set<string>>(new Set())
 
   /* ---- UI state ---- */
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null)
@@ -156,10 +160,13 @@ export default function CalendarioGlobale({
 
       setPrevMonthShifts((prevRes.data as Shift[]) ?? [])
       const scoreMap = new Map<string, number>()
+      const countMap = new Map<string, number>()
       for (const row of equityRes.data ?? []) {
         scoreMap.set(row.user_id, row.score ?? 0)
+        countMap.set(row.user_id, Number(row.turni_totali ?? 0))
       }
       setEquityScores(scoreMap)
+      setTurniMap(countMap)
     } catch (err) {
       console.error('Errore fetch dati aux:', err)
     }
@@ -237,6 +244,7 @@ export default function CalendarioGlobale({
     setViewYear(newYear)
     setLoadingMonth(true)
     setErrorMsg(null)
+    sessionShiftIdsRef.current = new Set() // reset turni di sessione al cambio mese
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -337,6 +345,7 @@ export default function CalendarioGlobale({
         throw new Error(json.error ?? 'Errore sconosciuto')
       }
       const data = await res.json() as Shift
+      sessionShiftIdsRef.current.add(data.id)
       setShifts((prev) => [...prev, data])
     } catch (err) {
       console.error('Errore assegnazione turno:', err)
@@ -491,7 +500,23 @@ export default function CalendarioGlobale({
     const preferred = base.filter((u) => !workedPrevMonth(u.id))
     const pool = preferred.length > 0 ? preferred : base
 
-    pool.sort((a, b) => (equityScores.get(a.id) ?? 0) - (equityScores.get(b.id) ?? 0))
+    // Conta solo i turni aggiunti IN QUESTA SESSIONE (non quelli già in DB al momento
+    // della navigazione, che sono già inclusi in turniMap). Evita il double counting.
+    const sessionCounts = new Map<string, number>()
+    for (const s of shifts) {
+      if (sessionShiftIdsRef.current.has(s.id)) {
+        sessionCounts.set(s.user_id, (sessionCounts.get(s.user_id) ?? 0) + 1)
+      }
+    }
+
+    // Ordina per turni_totali grezzi (non score ponderato): garantisce equità sul
+    // conteggio dei turni, evitando che i festivi inflazionino lo score e blocchino
+    // permanentemente un utente dai suggerimenti per i weekend normali.
+    pool.sort((a, b) => {
+      const countA = (turniMap.get(a.id) ?? 0) + (sessionCounts.get(a.id) ?? 0)
+      const countB = (turniMap.get(b.id) ?? 0) + (sessionCounts.get(b.id) ?? 0)
+      return countA - countB
+    })
     return pool[0].id
   }
 

@@ -99,28 +99,51 @@ Il sistema indica automaticamente l'utente ottimale per ogni giorno.
 
 ```mermaid
 flowchart TD
-    A([Calcolo suggerito\nper una data]) --> B[Filtra candidati:\n- disponibile sul giorno\n- non già assegnato\n- non già in turno nel mese]
+    A([Calcolo suggerito\nper una data]) --> X{Weekend a cavallo\ndi mese?\nes. Dom 1 feb}
+
+    X -- Sì --> X1{Esiste un utente\nche ha lavorato\nil sabato nel mese prec?}
+    X1 -- Sì --> X2([★ Suggerito = quel sabato-worker\npriorità assoluta])
+    X1 -- No --> B
+
+    X -- No --> B[Filtra candidati:\n- disponibile sul giorno\n- non già assegnato\n- non già in turno nel mese]
 
     B --> C{Esistono candidati\nche NON hanno lavorato\nil mese precedente?}
 
     C -- Sì --> D[Pool: solo chi\nnon ha lavorato\nil mese prec.]
     C -- No\ntutti hanno lavorato --> E[Pool: tutti i\ncandidati disponibili\ncome fallback]
 
-    D --> F[Ordina per score\nequità annuale ↑]
+    D --> F[Ordina per score\nequità effettivo ↑]
     E --> F
 
-    F --> G[★ Suggerito = primo\ndella lista]
+    F --> G([★ Suggerito = primo\ndella lista])
 ```
 
 ### Score equità
 
 ```
-score = turni_totali + (festivi × 2) + (fest_comandate × 3)
+score_storico  = turni_totali + (festivi × 2) + (fest_comandate × 3)
+score_effettivo = score_storico + turni_assegnati_in_questa_sessione
 ```
 
-- Score basso → poca esperienza → alta priorità
-- Calcolato su **tutti i turni dell'anno corrente** (mesi locked + aperti + assegnati non confermati)
-- Si aggiorna in tempo reale dopo ogni assegnazione/rimozione
+Lo **score effettivo** combina due fonti:
+
+| Fonte | Quando si aggiorna | Scopo |
+|---|---|---|
+| `score_storico` (dal DB via RPC) | Ad ogni navigazione di mese | Conta tutti i turni dell'anno, inclusi mesi non confermati |
+| `sessionCounts` (in memoria) | Ad ogni assegnazione nel mese corrente | Corregge il suggerito tra slot dello stesso mese senza rileggere il DB |
+
+**Perché due fonti?**
+`fetchAuxData` richiama il DB solo quando si naviga a un altro mese. Se si assegnano più slot nello stesso mese senza navigare, `score_storico` resta invariato e il sistema suggerirebbe sempre lo stesso utente. `sessionCounts` risolve questo contando i turni già presenti in `shifts` (aggiornati ottimisticamente dopo ogni click).
+
+### Consistenza cross-mese
+
+Poiché ogni assegnazione viene salvata immediatamente in DB via `POST /api/shifts` (indipendentemente dalla conferma del mese), quando si naviga al mese successivo `fetchAuxData` legge già i turni appena inseriti. Il suggerito del nuovo mese è quindi sempre coerente, anche se il mese precedente non è ancora stato confermato/locked.
+
+```
+Mese A: assegno turni (entrano in DB) → non confermo
+         ↓ navigo a Mese B
+Mese B: fetchAuxData → get_equity_scores conta già i turni di Mese A ✓
+```
 
 ---
 
@@ -156,7 +179,14 @@ flowchart TD
 ## Domande frequenti
 
 **La classifica aggiorna solo sui mesi confermati?**
-No. `get_equity_scores` legge dalla tabella `shifts` senza filtrare su `month_status`. Ogni turno assegnato — anche in un mese non confermato — incide immediatamente sullo score e sui suggerimenti.
+No. `get_equity_scores` legge dalla tabella `shifts` senza filtrare su `month_status`. Ogni turno assegnato — anche in un mese non confermato — incide sullo score al successivo cambio mese.
+
+**Quando si aggiornano gli equity scores?**
+In due momenti distinti:
+1. **Cambio mese** (navigazione nel calendario) → `fetchAuxData` richiama il DB → `score_storico` aggiornato
+2. **Intra-mese** (più assegnazioni nello stesso mese senza navigare) → `sessionCounts` in memoria → `score_effettivo` aggiornato localmente
+
+Non c'è nessuna chiamata al DB aggiuntiva dopo ogni singola assegnazione.
 
 **Cosa succede se 1° maggio (festivo) è subito prima del weekend 2-3 maggio?**
 Chi lavora il 1° maggio finisce nella sezione "Già in turno" per il weekend successivo, e non può essere riassegnato. La regola vale anche in direzione inversa.
