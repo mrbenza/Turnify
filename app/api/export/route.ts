@@ -130,19 +130,27 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Converte tutte le formule in valori puri prima di scrivere.
-  // exceljs non sa renderizzare le formule Excel (es. A10=A3, A11=A10+1)
-  // e andrebbe in errore durante writeBuffer. Usiamo il valore cached.
+  // Converte tutte le formule (incluse shared formulas) in valori puri prima
+  // di scrivere. exceljs non riesce a renderizzare formule Excel native durante
+  // writeBuffer. Accediamo al modello interno _rows/_cells per coprire anche
+  // le shared formula slave che eachCell non vede come tipo Formula.
   wb.eachSheet((sheet) => {
-    sheet.eachRow((row) => {
-      row.eachCell({ includeEmpty: false }, (cell) => {
-        if (cell.type === ExcelJS.ValueType.Formula) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const cached = (cell.value as any)?.result
-          cell.value = cached !== undefined ? cached : null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (sheet as any)['_rows'] as any[]
+    if (!rows) return
+    for (const row of rows) {
+      if (!row) continue
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cells = (row['_cells'] ?? []) as any[]
+      for (const cell of cells) {
+        if (!cell) continue
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const val = cell.value as any
+        if (val && typeof val === 'object' && ('formula' in val || 'sharedFormula' in val)) {
+          cell.value = val.result !== undefined ? val.result : null
         }
-      })
-    })
+      }
+    }
   })
 
   // Genera il buffer XLSX
