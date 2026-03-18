@@ -7,7 +7,7 @@ const MONTH_NAMES_IT = [
   'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
 ]
 
-/** Excel date serial: days elapsed since 1899-12-30 */
+/** Excel date serial: days since 1899-12-30 */
 function excelSerial(year: number, month: number, day: number): number {
   const d = Date.UTC(year, month - 1, day)
   const epoch = Date.UTC(1899, 11, 30)
@@ -19,29 +19,25 @@ function escXml(s: string): string {
 }
 
 /**
- * Replace a numeric-value cell in sheet XML.
- * Preserves s="..." (style) unless styleOverride is given.
- * Strips any existing t="..." type attribute.
+ * Replace a numeric cell value (e.g. a date serial), preserving existing
+ * s="..." style and removing any t="..." type attribute.
  */
-function setNumCell(xml: string, addr: string, value: number, styleOverride?: number): string {
-  // NOTE: no backslash before quotes — XML uses plain double-quotes
+function setNumCell(xml: string, addr: string, value: number): string {
   const re = new RegExp('<c r="' + addr + '"([^>]*)(?:/>|>[\\s\\S]*?</c>)')
   return xml.replace(re, (_match, attrs: string) => {
-    let a = attrs.replace(/\s+t="[^"]*"/g, '')
-    if (styleOverride !== undefined) {
-      a = a.replace(/\s+s="\d+"/, ` s="${styleOverride}"`)
-    }
+    const a = attrs.replace(/\s+t="[^"]*"/g, '')
     return `<c r="${addr}"${a}><v>${value}</v></c>`
   })
 }
 
 /**
  * Replace a cell with an inline string (t="inlineStr").
- * Optionally applies red color via rich-text run (no styles.xml change needed).
- * If the cell is absent from the XML and value is non-empty, inserts it into the row.
+ * For red=true, the text is wrapped in a rich-text run with red color.
+ * If the cell is absent from the XML, inserts it into the row element.
  */
 function setInlineStr(xml: string, addr: string, value: string, red = false): string {
   const re = new RegExp('<c r="' + addr + '"([^>]*)(?:/>|>[\\s\\S]*?</c>)')
+
   const makeCell = (attrs: string): string => {
     const a = attrs.replace(/\s+t="[^"]*"/g, '')
     if (!value) return `<c r="${addr}"${a}/>`
@@ -56,7 +52,7 @@ function setInlineStr(xml: string, addr: string, value: string, red = false): st
     return xml.replace(re, (_match, attrs: string) => makeCell(attrs))
   }
 
-  // Cell not found — insert into the correct row (only when value is non-empty)
+  // Cell absent — insert into the row (only when there is a value to write)
   if (!value) return xml
   const rowNum = addr.replace(/[A-Z]+/g, '')
   const rowRe = new RegExp('(<row\\b[^>]*\\br="' + rowNum + '"[^>]*>)([\\s\\S]*?)(</row>)')
@@ -65,60 +61,7 @@ function setInlineStr(xml: string, addr: string, value: string, red = false): st
   )
 }
 
-/** Read s="N" attribute from a cell element */
-function getCellStyleIdx(xml: string, addr: string): number {
-  const m = xml.match(new RegExp('<c r="' + addr + '"[^>]*\\bs="(\\d+)"'))
-  return m ? parseInt(m[1]) : 0
-}
-
-/**
- * Add a red-font variant of xf[baseIdx] to styles.xml.
- * Returns updated XML and new xf index.
- */
-function addRedXf(stylesXml: string, baseIdx: number): { xml: string; idx: number } {
-  // --- 1. Add red font ---
-  const fntCntM = stylesXml.match(/<fonts count="(\d+)"/)
-  const fntCnt = parseInt(fntCntM?.[1] ?? '1')
-  const redFontIdx = fntCnt
-
-  stylesXml = stylesXml
-    .replace(/<fonts count="\d+"/, `<fonts count="${fntCnt + 1}"`)
-    .replace('</fonts>', `<font><color rgb="FFFF0000"/></font></fonts>`)
-
-  // --- 2. Clone xf[baseIdx] with red font ---
-  const xfCntM = stylesXml.match(/<cellXfs count="(\d+)"/)
-  const xfCnt = parseInt(xfCntM?.[1] ?? '1')
-  const newIdx = xfCnt
-
-  const xfSectionM = stylesXml.match(/(<cellXfs[^>]*>)([\s\S]*?)(<\/cellXfs>)/)
-  if (!xfSectionM) return { xml: stylesXml, idx: newIdx }
-
-  const xfList: string[] = []
-  const xfRe = /<xf\b[^>]*(?:\/>|>[\s\S]*?<\/xf>)/g
-  let m: RegExpExecArray | null
-  while ((m = xfRe.exec(xfSectionM[2])) !== null) xfList.push(m[0])
-
-  let base = xfList[baseIdx] ?? '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
-
-  base = base.includes('fontId=')
-    ? base.replace(/fontId="\d+"/, `fontId="${redFontIdx}"`)
-    : base.replace('<xf ', `<xf fontId="${redFontIdx}" `)
-
-  base = base.includes('applyFont=')
-    ? base.replace(/applyFont="\d+"/, 'applyFont="1"')
-    : base.replace('<xf ', '<xf applyFont="1" ')
-
-  // Make the cloned xf self-closing (drop any child elements)
-  base = base.replace(/\s*>[\s\S]*$/, '/>')
-
-  stylesXml = stylesXml
-    .replace(/<cellXfs count="\d+"/, `<cellXfs count="${xfCnt + 1}"`)
-    .replace('</cellXfs>', base + '</cellXfs>')
-
-  return { xml: stylesXml, idx: newIdx }
-}
-
-/** Resolve path of the "Dati" worksheet from workbook.xml + workbook.xml.rels */
+/** Resolve the xl/worksheets/*.xml path for the sheet named "Dati" */
 async function getDatiSheetPath(zip: JSZip): Promise<string | null> {
   const wbFile = zip.files['xl/workbook.xml']
   if (!wbFile) return null
@@ -153,7 +96,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const month = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1))
-  const year = parseInt(searchParams.get('year') ?? String(new Date().getFullYear()))
+  const year  = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()))
 
   if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100)
     return NextResponse.json({ error: 'Parametri non validi' }, { status: 400 })
@@ -204,19 +147,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Foglio "Dati" non trovato nel template' }, { status: 500 })
   }
 
-  let sheetXml  = await zip.files[sheetPath].async('string')
-  let stylesXml = zip.files['xl/styles.xml']
-    ? await zip.files['xl/styles.xml'].async('string')
-    : ''
-
-  // Build a red-font style variant based on the style of cell A10
-  let redStyleIdx: number | undefined
-  if (stylesXml) {
-    const baseStyleIdx = getCellStyleIdx(sheetXml, 'A10')
-    const result = addRedXf(stylesXml, baseStyleIdx)
-    stylesXml   = result.xml
-    redStyleIdx = result.idx
-  }
+  let sheetXml = await zip.files[sheetPath].async('string')
 
   // A3: first day of selected month
   sheetXml = setNumCell(sheetXml, 'A3', excelSerial(year, month, 1))
@@ -240,21 +171,22 @@ export async function GET(request: NextRequest) {
       const isWeekend = dow === 0 || dow === 6
       const names     = shiftsByDate.get(dateStr) ?? []
 
-      sheetXml = setNumCell(sheetXml, addrA, serial, isWeekend ? redStyleIdx : undefined)
+      // Column A: date as serial number (template's cell format + CF handle display/colour)
+      sheetXml = setNumCell(sheetXml, addrA, serial)
+      // Columns D/E: cognome as inline string; red rich-text on weekends
       sheetXml = setInlineStr(sheetXml, addrD, names[0] ?? '', isWeekend)
       sheetXml = setInlineStr(sheetXml, addrE, names[1] ?? '', isWeekend)
     } else {
-      // Month has fewer than 31 days — clear leftover name cells
+      // Month shorter than 31 days — clear leftover name cells
       sheetXml = setInlineStr(sheetXml, addrD, '')
       sheetXml = setInlineStr(sheetXml, addrE, '')
     }
   }
 
-  // Write modified files back into the ZIP
+  // Write modified sheet back into the ZIP (all other files stay untouched)
   zip.file(sheetPath, sheetXml)
-  if (stylesXml) zip.file('xl/styles.xml', stylesXml)
 
-  // Remove stale calculation chain (Excel will rebuild it on open)
+  // Remove stale calculation chain (Excel rebuilds it on open)
   zip.remove('xl/calcChain.xml')
 
   const finalBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
