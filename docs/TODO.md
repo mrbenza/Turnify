@@ -39,6 +39,14 @@ Funzionalità da implementare in ordine di priorità.
 - **Schema DB**: nuova tabella `areas` (id, name, scheduling_mode); aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
 - **Frontend**: selettore area in navbar, CalendarioGlobale con logica dinamica per mode
 - **Da chiarire prima dell'implementazione**: per `sun_next_sat`, cosa succede se il Sab successivo è già occupato?
+- **Permessi**: ogni admin vede e gestisce solo i dipendenti della propria area; un super-admin vede tutto
+
+### Export Excel multi-area
+- Ogni area ha il proprio template Excel con:
+  - **Cella area**: nome dell'area di competenza (es. "AREA 4")
+  - **Cella team leader**: nome del manager/admin responsabile dell'area (preso da `users` dove `ruolo = 'admin'` e `area_id` corrisponde)
+- L'export filtra i turni per `area_id` dell'admin loggato
+- Ogni area potrà avere il proprio template su Supabase Storage (es. `templates/AREA4.xlsx`, `templates/AREA7.xlsx`)
 
 ### Festività anni futuri
 - Aggiungere festività per anni successivi al 2026
