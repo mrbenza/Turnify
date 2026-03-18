@@ -28,6 +28,18 @@ Funzionalità da implementare in ordine di priorità.
 
 ## Bassa priorità
 
+### Multi-area con scheduling modes diversi
+- **Obiettivo**: supportare più aree aziendali, ognuna con la propria logica di turnazione e i propri dipendenti
+- **Scheduling modes previsti**:
+  | Mode | Comportamento |
+  |------|--------------|
+  | `weekend_full` | Sab+Dom sempre insieme (comportamento attuale) |
+  | `single_day` | Sab e Dom indipendenti, assegnabili a persone diverse |
+  | `sun_next_sat` | Chi lavora Dom lavora anche il Sab della settimana successiva |
+- **Schema DB**: nuova tabella `areas` (id, name, scheduling_mode); aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
+- **Frontend**: selettore area in navbar, CalendarioGlobale con logica dinamica per mode
+- **Da chiarire prima dell'implementazione**: per `sun_next_sat`, cosa succede se il Sab successivo è già occupato?
+
 ### Festività anni futuri
 - Aggiungere festività per anni successivi al 2026
 - Valutare se far gestire le festività all'admin da UI (oggi solo da DB/SQL)
