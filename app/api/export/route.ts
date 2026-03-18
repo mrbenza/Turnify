@@ -130,6 +130,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Converte tutte le formule in valori puri prima di scrivere.
+  // exceljs non sa renderizzare le formule Excel (es. A10=A3, A11=A10+1)
+  // e andrebbe in errore durante writeBuffer. Usiamo il valore cached.
+  wb.eachSheet((sheet) => {
+    sheet.eachRow((row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (cell.type === ExcelJS.ValueType.Formula) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cached = (cell.value as any)?.result
+          cell.value = cached !== undefined ? cached : null
+        }
+      })
+    })
+  })
+
   // Genera il buffer XLSX
   const outBuf = Buffer.from(await wb.xlsx.writeBuffer())
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
