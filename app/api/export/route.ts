@@ -53,8 +53,13 @@ export async function GET(request: NextRequest) {
 
   // Fetch nomi dipendenti
   const { data: users } = await supabase.from('users').select('id, nome')
+  // Usa solo il cognome (tutto dopo il primo spazio): "Mario De Luca" → "De Luca"
   const userMap = new Map<string, string>(
-    (users ?? []).map((u: { id: string; nome: string }) => [u.id, u.nome])
+    (users ?? []).map((u: { id: string; nome: string }) => {
+      const idx = u.nome.indexOf(' ')
+      const cognome = idx === -1 ? u.nome : u.nome.slice(idx + 1)
+      return [u.id, cognome]
+    })
   )
 
   // Raggruppa i turni per data → array di nomi (1° e 2° reperibile)
@@ -99,14 +104,29 @@ export async function GET(request: NextRequest) {
 
   // Aggiorna dati giornalieri (righe 10-40)
   const DATA_START_ROW = 10
+  const RED_ARGB = 'FFFF0000'
   for (let day = 1; day <= 31; day++) {
     const rowNum = DATA_START_ROW + (day - 1)
     if (day <= daysInMonth) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
       const names = shiftsByDate.get(dateStr) ?? []
-      ws.getCell(`A${rowNum}`).value = new Date(year, month - 1, day)
-      ws.getCell(`D${rowNum}`).value = names[0] ?? ''
-      ws.getCell(`E${rowNum}`).value = names[1] ?? ''
+      const dow = new Date(year, month - 1, day).getDay() // 0=Dom, 6=Sab
+      const isWeekend = dow === 0 || dow === 6
+
+      const cellA = ws.getCell(`A${rowNum}`)
+      const cellD = ws.getCell(`D${rowNum}`)
+      const cellE = ws.getCell(`E${rowNum}`)
+
+      cellA.value = new Date(year, month - 1, day)
+      cellD.value = names[0] ?? ''
+      cellE.value = names[1] ?? ''
+
+      // Sabato e domenica: testo in rosso su data e nomi reperibili
+      if (isWeekend) {
+        cellA.font = { ...cellA.font, color: { argb: RED_ARGB } }
+        cellD.font = { ...cellD.font, color: { argb: RED_ARGB } }
+        cellE.font = { ...cellE.font, color: { argb: RED_ARGB } }
+      }
     } else {
       ws.getCell(`D${rowNum}`).value = ''
       ws.getCell(`E${rowNum}`).value = ''
