@@ -97,6 +97,21 @@ export async function POST(request: Request) {
     }
   }
 
+  // Blocco: mese locked non modificabile
+  const { data: monthStatus } = await supabase
+    .from('month_status')
+    .select('status')
+    .eq('month', month)
+    .eq('year', year)
+    .maybeSingle()
+
+  if (monthStatus?.status === 'locked') {
+    return NextResponse.json(
+      { error: 'Impossibile modificare un mese confermato.' },
+      { status: 409 }
+    )
+  }
+
   // Insert shift — adminId comes from session, not from client
   const { data, error } = await supabase
     .from('shifts')

@@ -43,6 +43,20 @@ export async function PATCH(
     return NextResponse.json({ error: 'Campo obbligatorio: attivo (boolean)' }, { status: 400 })
   }
 
+  // Impedisci di disabilitare utenti admin
+  const { data: targetProfile } = await supabase
+    .from('users')
+    .select('ruolo')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (targetProfile?.ruolo === 'admin') {
+    return NextResponse.json(
+      { error: 'Non è possibile modificare lo stato di un amministratore.' },
+      { status: 403 }
+    )
+  }
+
   const { data, error } = await supabase
     .from('users')
     .update({ attivo: body.attivo })

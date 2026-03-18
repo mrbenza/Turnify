@@ -34,6 +34,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Il campo available deve essere un booleano' }, { status: 400 })
   }
 
+  // Validazione range anno: solo anni ragionevoli
+  const dateYear = parseInt(date.split('-')[0])
+  const currentYear = new Date().getFullYear()
+  if (dateYear < currentYear || dateYear > currentYear + 2) {
+    return NextResponse.json(
+      { error: 'Data fuori dal range consentito.' },
+      { status: 400 }
+    )
+  }
+
+  // Blocco: mese locked — vale sia per nuove righe che per aggiornamenti
+  const dateMonth = parseInt(date.split('-')[1])
+  const { data: monthStatus } = await supabase
+    .from('month_status')
+    .select('status')
+    .eq('month', dateMonth)
+    .eq('year', dateYear)
+    .maybeSingle()
+
+  if (monthStatus?.status === 'locked') {
+    return NextResponse.json(
+      { error: 'La disponibilità non è modificabile per un mese confermato.' },
+      { status: 403 }
+    )
+  }
+
   // Check if a row already exists for this (user_id, date)
   const { data: existing, error: fetchError } = await supabase
     .from('availability')

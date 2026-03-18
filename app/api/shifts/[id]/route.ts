@@ -31,6 +31,33 @@ export async function DELETE(
     return NextResponse.json({ error: 'ID turno mancante' }, { status: 400 })
   }
 
+  // Recupera il turno per verificare la data
+  const { data: existingShift } = await supabase
+    .from('shifts')
+    .select('date')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (existingShift) {
+    const shiftDate = new Date(existingShift.date)
+    const shiftMonth = shiftDate.getUTCMonth() + 1
+    const shiftYear = shiftDate.getUTCFullYear()
+
+    const { data: monthStatus } = await supabase
+      .from('month_status')
+      .select('status')
+      .eq('month', shiftMonth)
+      .eq('year', shiftYear)
+      .maybeSingle()
+
+    if (monthStatus?.status === 'locked') {
+      return NextResponse.json(
+        { error: 'Impossibile modificare un mese confermato.' },
+        { status: 409 }
+      )
+    }
+  }
+
   const { error } = await supabase
     .from('shifts')
     .delete()
