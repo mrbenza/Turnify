@@ -13,7 +13,7 @@ con export Excel del mese confermato.
 | Backend/API | Supabase | Free tier |
 | Database | Supabase PostgreSQL | Free tier |
 | Auth | Supabase Auth | Email + password |
-| Export Excel | API route Next.js + libreria xlsx | Basato su template fornito dall'utente |
+| Export Excel | API route Next.js + JSZip | Template preservato intatto (logo, firma, CF); solo sheet1.xml modificato |
 
 ## Struttura cartelle
 ```
@@ -27,6 +27,7 @@ turnify/
 │   ├── api/                   ← backend server-side
 │   │   ├── shifts/
 │   │   ├── availability/
+│   │   ├── export/            ← genera XLSX su template (JSZip)
 │   │   ├── month/
 │   │   ├── email-settings/
 │   │   └── users/

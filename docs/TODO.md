@@ -6,15 +6,6 @@ Funzionalità da implementare in ordine di priorità.
 
 ## Alta priorità
 
-### Export Excel su template aziendale
-- L'utente deve fornire il **template Excel** di riferimento
-- Attualmente l'export genera un file semplice
-- Da convertire in XLSX che segue il modello aziendale
-
----
-
-## Media priorità
-
 ### Email notifica mese confermato
 - Integrare **Resend** (resend.com) per invio email automatico alla conferma mese
 - La tabella `email_settings` è già pronta su Supabase
@@ -57,3 +48,12 @@ Funzionalità da implementare in ordine di priorità.
 - **Situazione attuale**: lo score ponderato (festivo ×2, fest_cmd ×3) è solo cosmetic nella dashboard; il suggerito usa `turni_totali` grezzo (+1 per qualsiasi turno), quindi i festivi comandati non danno vantaggi reali nella rotazione
 - **Opzione A**: ricalibrate i moltiplicatori score e usarli nel suggerito (es. fest_cmd = 480 punti = 4 wknd/mese × 12 mesi × 10 anni)
 - **Opzione B**: blacklist per festivo specifico — chi ha lavorato Pasqua quest'anno non viene suggerito per Pasqua per N anni (tracciamento cross-anno separato)
+
+---
+
+## Completato
+
+- ✅ **Export Excel su template aziendale** — JSZip modifica solo `sheet1.xml`, il resto del template (logo, firma, conditional formatting) rimane intatto. Cognome only, rosso weekend su D/E via inline rich text.
+- ✅ **Score equità** — suggeriti ordinati per `turni_totali` grezzo (non score ponderato), con delta sessione via `sessionShiftIdsRef`
+- ✅ **Sab+Dom stesso reperibile** — domenica suggerisce automaticamente chi ha lavorato il sabato
+- ✅ **Fix API festivo su domenica** — il pair Sab+Dom viene escluso correttamente anche quando il festivo cade di domenica (es. Pasqua)
