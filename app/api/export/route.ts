@@ -1,28 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 const MONTH_NAMES_IT = [
   'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
   'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
 ]
-
-// Excel date serial: days since Dec 30, 1899 (with intentional 1900 leap year bug)
-function dateToExcelSerial(year: number, month: number, day: number): number {
-  const date = new Date(Date.UTC(year, month - 1, day))
-  const epoch = new Date(Date.UTC(1899, 11, 30))
-  return Math.round((date.getTime() - epoch.getTime()) / 86400000)
-}
-
-function setCell(ws: XLSX.WorkSheet, addr: string, value: string | number, type: 's' | 'n') {
-  if (ws[addr]) {
-    ws[addr].v = value
-    ws[addr].t = type
-    delete ws[addr].w // rimuove il valore formattato in cache
-  } else {
-    ws[addr] = { t: type, v: value }
-  }
-}
 
 export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,17 +63,7 @@ export async function GET(request: NextRequest) {
     shiftsByDate.get(shift.date)!.push(userMap.get(shift.user_id) ?? shift.user_id)
   }
 
-  // Fetch festività dell'anno per aggiornare il foglio Festivita
-  const yearFrom = `${year}-01-01`
-  const yearTo = `${year}-12-31`
-  const { data: holidays } = await supabase
-    .from('holidays')
-    .select('date')
-    .gte('date', yearFrom)
-    .lte('date', yearTo)
-    .order('date', { ascending: true })
-
-  // Scarica il template da Supabase Storage (bucket privato)
+  // Scarica il template da Supabase Storage
   const serviceClient = createServiceClient()
   const { data: templateBlob, error: storageError } = await serviceClient.storage
     .from('templates')
@@ -101,54 +74,53 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Template Excel non trovato nello storage' }, { status: 500 })
   }
 
-  const templateBuf = Buffer.from(await templateBlob.arrayBuffer())
+  const templateArrayBuf = await templateBlob.arrayBuffer()
 
-  const wb = XLSX.read(templateBuf, { type: 'buffer', cellStyles: true })
-  const ws = wb.Sheets['Dati']
+  // Legge il template con exceljs — preserva stili, font, immagini, merged cells
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(templateArrayBuf)
+
+  const ws = wb.getWorksheet('Dati')
   if (!ws) {
     return NextResponse.json({ error: 'Template non valido: foglio "Dati" non trovato' }, { status: 500 })
   }
 
-  // Aggiorna le celle per ogni giorno del mese (righe 10-40)
+  // Aggiorna A3: data del primo giorno del mese selezionato (formatted "mmmm yyyy")
+  const firstDay = new Date(year, month - 1, 1)
+  const cellA3 = ws.getCell('A3')
+  cellA3.value = firstDay
+
+  // Aggiorna C5: data di generazione (oggi)
+  const cellC5 = ws.getCell('C5')
+  cellC5.value = new Date()
+
+  // Aggiorna i dati per ogni giorno del mese (righe 10-40)
   const DATA_START_ROW = 10
   for (let day = 1; day <= 31; day++) {
     const rowNum = DATA_START_ROW + (day - 1)
 
     if (day <= daysInMonth) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      const serial = dateToExcelSerial(year, month, day)
       const names = shiftsByDate.get(dateStr) ?? []
 
-      // Colonna A: data (numero seriale Excel)
-      setCell(ws, `A${rowNum}`, serial, 'n')
+      // Colonna A: data del giorno
+      const cellA = ws.getCell(`A${rowNum}`)
+      cellA.value = new Date(year, month - 1, day)
 
       // Colonna D: 1° reperibile
-      setCell(ws, `D${rowNum}`, names[0] ?? '', 's')
+      ws.getCell(`D${rowNum}`).value = names[0] ?? ''
 
       // Colonna E: 2° reperibile
-      setCell(ws, `E${rowNum}`, names[1] ?? '', 's')
+      ws.getCell(`E${rowNum}`).value = names[1] ?? ''
     } else {
-      // Mesi con meno di 31 giorni: svuota le colonne nomi nelle righe extra
-      setCell(ws, `D${rowNum}`, '', 's')
-      setCell(ws, `E${rowNum}`, '', 's')
+      // Righe extra (mesi < 31 giorni): svuota i nomi
+      ws.getCell(`D${rowNum}`).value = ''
+      ws.getCell(`E${rowNum}`).value = ''
     }
   }
 
-  // Aggiorna il foglio Festivita con le festività dell'anno selezionato
-  const wsFestivita = wb.Sheets['Festivita']
-  if (wsFestivita && holidays && holidays.length > 0) {
-    holidays.forEach((h: { date: string }, i: number) => {
-      const [y, m, d] = h.date.split('-').map(Number)
-      const serial = dateToExcelSerial(y, m, d)
-      const addr = XLSX.utils.encode_cell({ r: i, c: 0 })
-      wsFestivita[addr] = { t: 'n', v: serial }
-    })
-    wsFestivita['!ref'] = `A1:A${holidays.length}`
-  }
-
-  // Genera il file XLSX
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const outBuf: any = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true })
+  // Genera il buffer XLSX
+  const outBuf = Buffer.from(await wb.xlsx.writeBuffer())
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
   return new NextResponse(outBuf, {
