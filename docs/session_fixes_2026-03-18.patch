@@ -1,0 +1,833 @@
+diff --git a/BUG/errore.jpg b/BUG/errore.jpg
+new file mode 100644
+index 0000000..1990d4c
+Binary files /dev/null and b/BUG/errore.jpg differ
+diff --git a/BUG/ok.jpg b/BUG/ok.jpg
+new file mode 100644
+index 0000000..52ded64
+Binary files /dev/null and b/BUG/ok.jpg differ
+diff --git a/app/admin/page.tsx b/app/admin/page.tsx
+index eb416bb..a7dcdd5 100644
+--- a/app/admin/page.tsx
++++ b/app/admin/page.tsx
+@@ -56,7 +56,7 @@ export default async function AdminDashboardPage() {
+     supabase.from('users').select('*').eq('ruolo', 'user').eq('attivo', true),
+     supabase.from('holidays').select('*').gte('date', from).lte('date', to).eq('mandatory', true),
+     supabase.from('month_status').select('*').eq('month', month + 1).eq('year', year).single<MonthStatus>(),
+-    supabaseAny.rpc('get_equity_scores', { p_month: month + 1, p_year: year }),
++    supabaseAny.rpc('get_equity_scores', { p_month: 0, p_year: year }),
+   ])
+ 
+   const shifts = (shiftsRes.data ?? []) as Shift[]
+@@ -70,16 +70,9 @@ export default async function AdminDashboardPage() {
+   /* ---- Compute stats ---- */
+   const userMap = new Map<string, string>(activeUsers.map((u) => [u.id, u.nome]))
+ 
+-  // Count shifts per user (for mini ranking)
+-  const shiftCountByUser = new Map<string, number>()
+-  shifts.forEach((s) => {
+-    shiftCountByUser.set(s.user_id, (shiftCountByUser.get(s.user_id) ?? 0) + 1)
+-  })
+-
+-  // Sort users by shift count
+-  const ranking = activeUsers
+-    .map((u) => ({ id: u.id, nome: u.nome, count: shiftCountByUser.get(u.id) ?? 0 }))
+-    .sort((a, b) => b.count - a.count)
++  // Ranking annuale basato su equity scores (turni_totali dell'anno)
++  const ranking = [...equityScores]
++    .sort((a, b) => b.turni_totali - a.turni_totali)
+ 
+   // Who covered mandatory holidays
+   const holidayCoverage: { holiday: Holiday; workers: string[] }[] = mandatoryHolidays.map((h) => {
+@@ -175,21 +168,21 @@ export default async function AdminDashboardPage() {
+               className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"
+             >
+               <h2 id="ranking-heading" className="text-base font-semibold text-gray-900 mb-4">
+-                Classifica turni — {MONTH_NAMES[month]}
++                Classifica turni — {year}
+               </h2>
+ 
+               {ranking.length === 0 ? (
+                 <p className="text-sm text-gray-400">Nessun dipendente attivo.</p>
+               ) : (
+-                <ol className="space-y-2.5" aria-label="Classifica turni questo mese">
++                <ol className="space-y-2.5" aria-label="Classifica turni anno corrente">
+                   {ranking.map((u, idx) => {
+-                    const maxCount = ranking[0].count || 1
+-                    const barWidth = Math.round((u.count / maxCount) * 100)
+-                    const isTop = idx === 0 && u.count > 0
++                    const maxCount = Number(ranking[0].turni_totali) || 1
++                    const barWidth = Math.round((Number(u.turni_totali) / maxCount) * 100)
++                    const isTop = idx === 0 && Number(u.turni_totali) > 0
+                     const isBottom = idx === ranking.length - 1 && ranking.length > 1
+ 
+                     return (
+-                      <li key={u.id} className="flex items-center gap-3">
++                      <li key={u.user_id} className="flex items-center gap-3">
+                         <span className="text-xs text-gray-400 font-medium w-5 text-center shrink-0">
+                           {idx + 1}
+                         </span>
+@@ -198,7 +191,7 @@ export default async function AdminDashboardPage() {
+                             <span className={`text-sm font-medium truncate ${isTop ? 'text-blue-700' : isBottom ? 'text-orange-600' : 'text-gray-700'}`}>
+                               {u.nome}
+                             </span>
+-                            <span className="text-xs text-gray-500 ml-2 shrink-0">{u.count} turni</span>
++                            <span className="text-xs text-gray-500 ml-2 shrink-0">{u.turni_totali} turni</span>
+                           </div>
+                           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden" aria-hidden="true">
+                             <div
+diff --git a/app/api/availability/route.ts b/app/api/availability/route.ts
+index cb83614..17a4fb7 100644
+--- a/app/api/availability/route.ts
++++ b/app/api/availability/route.ts
+@@ -34,6 +34,32 @@ export async function POST(request: Request) {
+     return NextResponse.json({ error: 'Il campo available deve essere un booleano' }, { status: 400 })
+   }
+ 
++  // Validazione range anno: solo anni ragionevoli
++  const dateYear = parseInt(date.split('-')[0])
++  const currentYear = new Date().getFullYear()
++  if (dateYear < currentYear || dateYear > currentYear + 2) {
++    return NextResponse.json(
++      { error: 'Data fuori dal range consentito.' },
++      { status: 400 }
++    )
++  }
++
++  // Blocco: mese locked — vale sia per nuove righe che per aggiornamenti
++  const dateMonth = parseInt(date.split('-')[1])
++  const { data: monthStatus } = await supabase
++    .from('month_status')
++    .select('status')
++    .eq('month', dateMonth)
++    .eq('year', dateYear)
++    .maybeSingle()
++
++  if (monthStatus?.status === 'locked') {
++    return NextResponse.json(
++      { error: 'La disponibilità non è modificabile per un mese confermato.' },
++      { status: 403 }
++    )
++  }
++
+   // Check if a row already exists for this (user_id, date)
+   const { data: existing, error: fetchError } = await supabase
+     .from('availability')
+diff --git a/app/api/shifts/[id]/route.ts b/app/api/shifts/[id]/route.ts
+index 8380702..b9d5d3c 100644
+--- a/app/api/shifts/[id]/route.ts
++++ b/app/api/shifts/[id]/route.ts
+@@ -31,6 +31,33 @@ export async function DELETE(
+     return NextResponse.json({ error: 'ID turno mancante' }, { status: 400 })
+   }
+ 
++  // Recupera il turno per verificare la data
++  const { data: existingShift } = await supabase
++    .from('shifts')
++    .select('date')
++    .eq('id', id)
++    .maybeSingle()
++
++  if (existingShift) {
++    const shiftDate = new Date(existingShift.date)
++    const shiftMonth = shiftDate.getUTCMonth() + 1
++    const shiftYear = shiftDate.getUTCFullYear()
++
++    const { data: monthStatus } = await supabase
++      .from('month_status')
++      .select('status')
++      .eq('month', shiftMonth)
++      .eq('year', shiftYear)
++      .maybeSingle()
++
++    if (monthStatus?.status === 'locked') {
++      return NextResponse.json(
++        { error: 'Impossibile modificare un mese confermato.' },
++        { status: 409 }
++      )
++    }
++  }
++
+   const { error } = await supabase
+     .from('shifts')
+     .delete()
+diff --git a/app/api/shifts/route.ts b/app/api/shifts/route.ts
+index d3f23ef..e483d04 100644
+--- a/app/api/shifts/route.ts
++++ b/app/api/shifts/route.ts
+@@ -62,34 +62,56 @@ export async function POST(request: Request) {
+ 
+   const shiftType: ShiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'
+ 
+-  // Regola: max 1 weekend (coppia Sab+Dom) per dipendente per mese
+-  if (shiftType === 'weekend') {
+-    const dow = new Date(year, month - 1, day).getDay() // 0=Sun, 6=Sat
+-    const satDay = dow === 6 ? day : day - 1
+-    const satStr = `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
+-    const sunStr = `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
++  // Regola: max 1 turno speciale (weekend o festivo) per dipendente per mese
++  if (shiftType === 'weekend' || shiftType === 'festivo') {
+     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+ 
++    // Per i weekend escludiamo la coppia Sab+Dom corrente (stesso weekend = ok)
++    // Per i festivi escludiamo solo la data stessa
++    const dow = new Date(year, month - 1, day).getDay()
++    const satDay = shiftType === 'weekend' ? (dow === 6 ? day : day - 1) : null
++    const excludeSat = satDay
++      ? `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
++      : date
++    const excludeSun = satDay
++      ? `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
++      : date
++
+     const { data: conflict } = await supabase
+       .from('shifts')
+       .select('date')
+       .eq('user_id', user_id)
+-      .eq('shift_type', 'weekend')
++      .in('shift_type', ['weekend', 'festivo'])
+       .gte('date', monthStart)
+       .lte('date', monthEnd)
+-      .neq('date', satStr)
+-      .neq('date', sunStr)
++      .neq('date', excludeSat)
++      .neq('date', excludeSun)
+       .limit(1)
+ 
+     if (conflict && conflict.length > 0) {
+       return NextResponse.json(
+-        { error: 'Dipendente già assegnato a un altro weekend questo mese.' },
++        { error: 'Dipendente già assegnato a un turno speciale questo mese.' },
+         { status: 409 }
+       )
+     }
+   }
+ 
++  // Blocco: mese locked non modificabile
++  const { data: monthStatus } = await supabase
++    .from('month_status')
++    .select('status')
++    .eq('month', month)
++    .eq('year', year)
++    .maybeSingle()
++
++  if (monthStatus?.status === 'locked') {
++    return NextResponse.json(
++      { error: 'Impossibile modificare un mese confermato.' },
++      { status: 409 }
++    )
++  }
++
+   // Insert shift — adminId comes from session, not from client
+   const { data, error } = await supabase
+     .from('shifts')
+diff --git a/app/api/users/[id]/route.ts b/app/api/users/[id]/route.ts
+index 267f487..cfe2335 100644
+--- a/app/api/users/[id]/route.ts
++++ b/app/api/users/[id]/route.ts
+@@ -43,6 +43,20 @@ export async function PATCH(
+     return NextResponse.json({ error: 'Campo obbligatorio: attivo (boolean)' }, { status: 400 })
+   }
+ 
++  // Impedisci di disabilitare utenti admin
++  const { data: targetProfile } = await supabase
++    .from('users')
++    .select('ruolo')
++    .eq('id', id)
++    .maybeSingle()
++
++  if (targetProfile?.ruolo === 'admin') {
++    return NextResponse.json(
++      { error: 'Non è possibile modificare lo stato di un amministratore.' },
++      { status: 403 }
++    )
++  }
++
+   const { data, error } = await supabase
+     .from('users')
+     .update({ attivo: body.attivo })
+diff --git a/components/admin/disponibilita/CalendarioGlobale.tsx b/components/admin/disponibilita/CalendarioGlobale.tsx
+index f188fc7..a067424 100644
+--- a/components/admin/disponibilita/CalendarioGlobale.tsx
++++ b/components/admin/disponibilita/CalendarioGlobale.tsx
+@@ -373,28 +373,57 @@ export default function CalendarioGlobale({
+     }
+   }, [pendingAction, shiftMap])
+ 
+-  /* ---- Weekend conflict check ---- */
+-  // Restituisce true se l'utente ha già un turno weekend in un ALTRO weekend dello stesso mese
++  /* ---- Weekend/festivo conflict check ---- */
++  // Restituisce true se l'utente ha già un turno speciale (weekend o festivo)
++  // in un ALTRO giorno dello stesso mese
+   function isWeekendBlocked(userId: string, dateStr: string): boolean {
+     const [y, m, d] = dateStr.split('-').map(Number)
+     const dow = new Date(y, m - 1, d).getDay() // 0=Sun, 6=Sat
+-    if (dow !== 0 && dow !== 6) return false // giorno feriale → nessun blocco
+-    const satDay = dow === 6 ? d : d - 1
+-    const satStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
+-    const sunStr = `${y}-${String(m).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
++    const isHoliday = holidayMap.has(dateStr)
++    // Esce solo se il giorno non è né weekend né festivo
++    if (dow !== 0 && dow !== 6 && !isHoliday) return false
++
+     const monthPrefix = `${y}-${String(m).padStart(2, '0')}`
+-    return shifts.some(
+-      (s) =>
+-        s.user_id === userId &&
+-        s.shift_type === 'weekend' &&
+-        s.date.startsWith(monthPrefix) &&
+-        s.date !== satStr &&
+-        s.date !== sunStr
+-    )
++
++    if (dow === 0 || dow === 6) {
++      // Per weekend: esclude la coppia Sab+Dom corrente (stesso weekend = ok)
++      // Usa Date per gestire correttamente i weekend a cavallo di mese
++      const satDate = dow === 6 ? new Date(y, m - 1, d) : new Date(y, m - 1, d - 1)
++      const sunDate = new Date(satDate.getFullYear(), satDate.getMonth(), satDate.getDate() + 1)
++      const satStr = toDateString(satDate.getFullYear(), satDate.getMonth(), satDate.getDate())
++      const sunStr = toDateString(sunDate.getFullYear(), sunDate.getMonth(), sunDate.getDate())
++      return shifts.some(
++        (s) =>
++          s.user_id === userId &&
++          (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
++          s.date.startsWith(monthPrefix) &&
++          s.date !== satStr &&
++          s.date !== sunStr
++      )
++    } else {
++      // Per festivi feriali: esclude solo la data stessa
++      return shifts.some(
++        (s) =>
++          s.user_id === userId &&
++          (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
++          s.date.startsWith(monthPrefix) &&
++          s.date !== dateStr
++      )
++    }
+   }
+ 
+   /* ---- Suggerimenti 2° reperibile ---- */
+ 
++  // Se questa domenica forma un weekend a cavallo di mese (sab nel mese prec.),
++  // restituisce la data del sabato; altrimenti null
++  function getCrossMonthSat(dateStr: string): string | null {
++    const [y, m, d] = dateStr.split('-').map(Number)
++    if (new Date(y, m - 1, d).getDay() !== 0) return null // non è domenica
++    const sat = new Date(y, m - 1, d - 1)
++    if (sat.getMonth() === m - 1) return null // sabato nello stesso mese
++    return toDateString(sat.getFullYear(), sat.getMonth(), sat.getDate())
++  }
++
+   // Restituisce sat/sun del weekend PRECEDENTE a quello della data
+   function getPrevWeekend(dateStr: string): { sat: string; sun: string } {
+     const [y, m, d] = dateStr.split('-').map(Number)
+@@ -424,8 +453,12 @@ export default function CalendarioGlobale({
+   function getRecommendationLevel(userId: string, dateStr: string): 'ideal' | 'warning' | 'avoid' | 'neutral' {
+     const hasShiftOnDay = shiftMap.has(`${userId}-${dateStr}`)
+     if (hasShiftOnDay) return 'neutral'
+-    const shiftsOnDay = shifts.filter((s) => s.date === dateStr)
+-    if (shiftsOnDay.length === 0) return 'neutral' // nessuno ancora assegnato
++    // Weekend a cavallo di mese: chi ha lavorato il sabato del mese precedente
++    // è il candidato naturale per questa domenica → trattalo come 'ideal'
++    const crossSat = getCrossMonthSat(dateStr)
++    if (crossSat && prevMonthShifts.some((s) => s.user_id === userId && s.date === crossSat)) {
++      return 'ideal'
++    }
+     const prevMonth = workedPrevMonth(userId)
+     const prevWe = workedPrevWeekend(userId, dateStr)
+     if (!prevMonth && !prevWe) return 'ideal'
+@@ -434,17 +467,32 @@ export default function CalendarioGlobale({
+   }
+ 
+   // Utente con score equity più basso tra i disponibili non ancora assegnati al giorno
++  // Priorità: non ha lavorato il mese precedente + score annuale più basso
+   function getSuggestedUserId(dateStr: string): string | null {
+     const assignedIds = new Set(shifts.filter((s) => s.date === dateStr).map((s) => s.user_id))
+-    const candidates = users.filter((u) => {
++    const base = users.filter((u) => {
+       if (assignedIds.has(u.id)) return false
+       if (isWeekendBlocked(u.id, dateStr)) return false
+       const avail = availabilityMap.get(`${u.id}-${dateStr}`)
+       return avail?.available === true
+     })
+-    if (candidates.length === 0) return null
+-    candidates.sort((a, b) => (equityScores.get(a.id) ?? 0) - (equityScores.get(b.id) ?? 0))
+-    return candidates[0].id
++    if (base.length === 0) return null
++
++    // Weekend a cavallo di mese: il sabato-worker ha priorità assoluta per la domenica
++    const crossSat = getCrossMonthSat(dateStr)
++    if (crossSat) {
++      const satWorker = base.find((u) =>
++        prevMonthShifts.some((s) => s.user_id === u.id && s.date === crossSat)
++      )
++      if (satWorker) return satWorker.id
++    }
++
++    // Preferenza a chi NON ha lavorato il mese precedente
++    const preferred = base.filter((u) => !workedPrevMonth(u.id))
++    const pool = preferred.length > 0 ? preferred : base
++
++    pool.sort((a, b) => (equityScores.get(a.id) ?? 0) - (equityScores.get(b.id) ?? 0))
++    return pool[0].id
+   }
+ 
+   /* ---- User chip status for a given date ---- */
+@@ -844,7 +892,14 @@ export default function CalendarioGlobale({
+                 const suggestedId = getSuggestedUserId(dateStr)
+ 
+                 const assigned   = users.filter(u => shiftMap.has(`${u.id}-${dateStr}`))
+-                const available  = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && !isWeekendBlocked(u.id, dateStr))
++                const recOrder = { ideal: 0, neutral: 1, warning: 2, avoid: 3 }
++                const available  = users
++                  .filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && !isWeekendBlocked(u.id, dateStr))
++                  .sort((a, b) => {
++                    const sa = a.id === suggestedId ? -1 : recOrder[getRecommendationLevel(a.id, dateStr)]
++                    const sb = b.id === suggestedId ? -1 : recOrder[getRecommendationLevel(b.id, dateStr)]
++                    return sa - sb
++                  })
+                 const inTurno    = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && isWeekendBlocked(u.id, dateStr))
+                 const notAvail   = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && !availabilityMap.get(`${u.id}-${dateStr}`)?.available)
+ 
+@@ -889,21 +944,21 @@ export default function CalendarioGlobale({
+                           {available.map(u => {
+                             const rec = getRecommendationLevel(u.id, dateStr)
+                             const suggested = u.id === suggestedId
++                            const rowBg =
++                              suggested    ? 'bg-blue-50 border-blue-200' :
++                              rec === 'avoid'   ? 'bg-red-50 border-red-200' :
++                              rec === 'warning' ? 'bg-amber-50 border-amber-200' :
++                              'bg-green-50 border-green-100'
+                             return (
+-                              <li key={u.id} className={`flex items-center justify-between gap-3 py-2 px-3 rounded-lg border ${suggested ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-100'}`}>
++                              <li key={u.id} className={`flex items-center justify-between gap-3 py-2 px-3 rounded-lg border ${rowBg}`}>
+                                 <div className="min-w-0">
+-                                  <div className="flex items-center gap-2">
+-                                    <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
++                                  <div className="flex items-center gap-2 flex-wrap">
+                                     <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
+                                     {suggested && <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">★ Suggerito</span>}
++                                    {rec === 'ideal'   && <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded shrink-0">✓ ottimo</span>}
++                                    {rec === 'warning' && <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">⚠ recente</span>}
++                                    {rec === 'avoid'   && <span className="text-[10px] font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded shrink-0">✕ evita</span>}
+                                   </div>
+-                                  {rec !== 'neutral' && (
+-                                    <p className="text-[10px] text-gray-400 ml-4 mt-0.5">
+-                                      {rec === 'ideal'   && <span className="text-green-600">✓ ottimo — non ha lavorato di recente</span>}
+-                                      {rec === 'warning' && <span className="text-amber-500">⚠ recente — ha lavorato il mese scorso o w.e. prec.</span>}
+-                                      {rec === 'avoid'   && <span className="text-red-500">✕ evita — ha lavorato sia il mese scorso che il w.e. prec.</span>}
+-                                    </p>
+-                                  )}
+                                 </div>
+                                 {!locked && (
+                                   <div className="shrink-0">
+diff --git a/docs/LOGICA_TURNI.md b/docs/LOGICA_TURNI.md
+new file mode 100644
+index 0000000..3c00d52
+--- /dev/null
++++ b/docs/LOGICA_TURNI.md
+@@ -0,0 +1,165 @@
++# Logica di Turnazione — Turnify
++
++Questo documento descrive il funzionamento del sistema di assegnazione turni di reperibilità.
++
++---
++
++## Tipi di turno
++
++| `shift_type` | Quando si applica |
++|---|---|
++| `weekend` | Sabato o domenica non festivi |
++| `festivo` | Qualsiasi giorno presente in tabella `holidays` |
++| `reperibilita` | Feriale non festivo (raro, uso futuro) |
++
++---
++
++## Regola fondamentale: max 1 turno speciale al mese
++
++Un dipendente non può lavorare più di **un turno speciale** (weekend o festivo) per mese.
++Un weekend conta come unità unica: sabato + domenica insieme.
++
++```
++Turni speciali = weekend (Sab+Dom) + festivi
++Max per mese per dipendente = 1
++```
++
++---
++
++## Flusso assegnazione turno (admin)
++
++```mermaid
++flowchart TD
++    A([Admin clicca su un giorno]) --> B{Il giorno è\nweekend o festivo?}
++    B -- No --> Z([Nessuna azione])
++    B -- Sì --> C[Apre pannello laterale]
++
++    C --> D[Carica lista utenti\ncon stato per quel giorno]
++
++    D --> E1[Sezione: ASSEGNATI\nsfondo rosso]
++    D --> E2[Sezione: DISPONIBILI\nsfondo verde/giallo/rosso]
++    D --> E3[Sezione: GIÀ IN TURNO\nsfondo ambra]
++    D --> E4[Sezione: NON DISPONIBILI\ncollassabile]
++
++    E2 --> F[Admin sceglie utente\ne clicca Assegna]
++    F --> G[Dialog di conferma]
++    G -- Annulla --> C
++    G -- Conferma --> H[POST /api/shifts]
++
++    H --> I{Validazione\nAPI}
++    I -- Utente già ha\nun turno speciale\nnel mese --> J([Errore 409\nMessaggio all'admin])
++    I -- OK --> K[Inserisce turno in DB]
++    K --> L[Aggiorna UI + ricalcola\nequity scores]
++```
++
++---
++
++## Classificazione utenti nel pannello laterale
++
++```mermaid
++flowchart TD
++    U([Utente]) --> A{Ha già un turno\nsu QUESTA data?}
++    A -- Sì --> R1[ASSEGNATI 🔴]
++
++    A -- No --> B{Ha disponibilità\nsu questa data?}
++    B -- No --> R4[NON DISPONIBILI ⚫]
++
++    B -- Sì --> C{Ha già un turno\nspeciale in un ALTRO\nweekend/festivo\ndi questo mese?}
++    C -- Sì --> R3[GIÀ IN TURNO 🟡]
++
++    C -- No --> R2[DISPONIBILI 🟢]
++    R2 --> D[Calcolo badge raccomandazione]
++```
++
++---
++
++## Calcolo badge raccomandazione (sezione Disponibili)
++
++I badge indicano se un utente ha lavorato di recente. Sono sempre visibili, anche se nessuno è ancora stato assegnato al giorno.
++
++```mermaid
++flowchart TD
++    U([Utente disponibile]) --> A{Ha lavorato\nil mese precedente?}
++    A -- No --> B{Ha lavorato\nil weekend precedente\na questo?}
++    B -- No --> G1["✓ ottimo\n(sfondo verde)"]
++    B -- Sì --> G2["⚠ recente\n(sfondo giallo)"]
++    A -- Sì --> C{Ha lavorato\nanche il weekend\nprecedente?}
++    C -- No --> G2
++    C -- Sì --> G3["✕ evita\n(sfondo rosso)"]
++```
++
++**Mese precedente**: turni nel mese prima di quello visualizzato.
++**Weekend precedente**: il sabato/domenica immediatamente prima del weekend corrente (anche se a cavallo di mese).
++
++---
++
++## Utente Suggerito (★)
++
++Il sistema indica automaticamente l'utente ottimale per ogni giorno.
++
++```mermaid
++flowchart TD
++    A([Calcolo suggerito\nper una data]) --> B[Filtra candidati:\n- disponibile sul giorno\n- non già assegnato\n- non già in turno nel mese]
++
++    B --> C{Esistono candidati\nche NON hanno lavorato\nil mese precedente?}
++
++    C -- Sì --> D[Pool: solo chi\nnon ha lavorato\nil mese prec.]
++    C -- No\ntutti hanno lavorato --> E[Pool: tutti i\ncandidati disponibili\ncome fallback]
++
++    D --> F[Ordina per score\nequità annuale ↑]
++    E --> F
++
++    F --> G[★ Suggerito = primo\ndella lista]
++```
++
++### Score equità
++
++```
++score = turni_totali + (festivi × 2) + (fest_comandate × 3)
++```
++
++- Score basso → poca esperienza → alta priorità
++- Calcolato su **tutti i turni dell'anno corrente** (mesi locked + aperti + assegnati non confermati)
++- Si aggiorna in tempo reale dopo ogni assegnazione/rimozione
++
++---
++
++## Ordine di visualizzazione nella sezione Disponibili
++
++```
++1. ★ Suggerito       → score annuale più basso tra chi non ha lavorato il mese prec.
++2. ✓ ottimo          → non ha lavorato né il mese scorso né il w.e. precedente
++3. ⚠ recente         → ha lavorato il mese scorso O il w.e. precedente
++4. ✕ evita           → ha lavorato sia il mese scorso che il w.e. precedente
++```
++
++---
++
++## Flusso conferma mese (lock)
++
++```mermaid
++flowchart TD
++    A([Admin clicca\nConferma mese]) --> B{Tutti i giorni\nweekend e festivi\nhanno almeno 1 turno?}
++
++    B -- No --> C[Errore:\nlista giorni scoperti]
++    B -- Sì --> D[POST /api/month\naction: lock]
++
++    D --> E[month_status → locked]
++    E --> F[Mese immutabile:\nnessuna aggiunta/rimozione\npossibile]
++    F --> G[Export Excel disponibile]
++```
++
++**Un mese locked non può essere modificato.** Può essere sbloccato dall'admin tramite il pulsante Annulla conferma, che riporta lo stato a `open`.
++
++---
++
++## Domande frequenti
++
++**La classifica aggiorna solo sui mesi confermati?**
++No. `get_equity_scores` legge dalla tabella `shifts` senza filtrare su `month_status`. Ogni turno assegnato — anche in un mese non confermato — incide immediatamente sullo score e sui suggerimenti.
++
++**Cosa succede se 1° maggio (festivo) è subito prima del weekend 2-3 maggio?**
++Chi lavora il 1° maggio finisce nella sezione "Già in turno" per il weekend successivo, e non può essere riassegnato. La regola vale anche in direzione inversa.
++
++**Il sistema può suggerire chi ha già lavorato il mese precedente?**
++Solo come fallback, se tutti gli utenti disponibili hanno lavorato il mese precedente. In quel caso viene indicato il badge ⚠ o ✕ per avvisare l'admin.
+diff --git a/middleware.ts b/middleware.ts
+new file mode 100644
+index 0000000..4d76763
+--- /dev/null
++++ b/middleware.ts
+@@ -0,0 +1,42 @@
++import { createServerClient } from '@supabase/ssr'
++import { NextResponse } from 'next/server'
++import type { NextRequest } from 'next/server'
++
++export async function middleware(request: NextRequest) {
++  const response = NextResponse.next()
++
++  const supabase = createServerClient(
++    process.env.NEXT_PUBLIC_SUPABASE_URL!,
++    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
++    {
++      cookies: {
++        getAll() { return request.cookies.getAll() },
++        setAll(cookiesToSet) {
++          cookiesToSet.forEach(({ name, value, options }) => {
++            response.cookies.set(name, value, options)
++          })
++        },
++      },
++    }
++  )
++
++  const { data: { user } } = await supabase.auth.getUser()
++
++  const { pathname } = request.nextUrl
++
++  // Route /admin/* e /user/* richiedono autenticazione
++  if ((pathname.startsWith('/admin') || pathname.startsWith('/user')) && !user) {
++    return NextResponse.redirect(new URL('/login', request.url))
++  }
++
++  // Route /login redirect a /user se già autenticato
++  if (pathname === '/login' && user) {
++    return NextResponse.redirect(new URL('/user', request.url))
++  }
++
++  return response
++}
++
++export const config = {
++  matcher: ['/admin/:path*', '/user/:path*', '/login'],
++}
+diff --git a/next.config.ts b/next.config.ts
+index e9ffa30..9547631 100644
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -1,7 +1,31 @@
+ import type { NextConfig } from "next";
+ 
+ const nextConfig: NextConfig = {
+-  /* config options here */
++  async headers() {
++    return [
++      {
++        source: '/(.*)',
++        headers: [
++          { key: 'X-Frame-Options', value: 'DENY' },
++          { key: 'X-Content-Type-Options', value: 'nosniff' },
++          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
++          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
++          {
++            key: 'Content-Security-Policy',
++            value: [
++              "default-src 'self'",
++              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
++              "style-src 'self' 'unsafe-inline'",
++              "img-src 'self' data: blob:",
++              "font-src 'self'",
++              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
++              "frame-ancestors 'none'",
++            ].join('; '),
++          },
++        ],
++      },
++    ]
++  },
+ };
+ 
+ export default nextConfig;
+diff --git a/supabase/migrations/004_equity_scores_year_filter.sql b/supabase/migrations/004_equity_scores_year_filter.sql
+new file mode 100644
+index 0000000..eb3278a
+--- /dev/null
++++ b/supabase/migrations/004_equity_scores_year_filter.sql
+@@ -0,0 +1,44 @@
++-- Aggiorna get_equity_scores: p_month=0 + p_year>0 = tutti i mesi di quell'anno
++-- Comportamento precedente (p_month=0, p_year=0) rimane invariato = tutti i tempi
++
++create or replace function get_equity_scores(p_month integer, p_year integer)
++returns table (
++  user_id        uuid,
++  nome           text,
++  turni_totali   bigint,
++  festivi        bigint,
++  fest_comandate bigint,
++  score          bigint
++)
++language sql security definer as $$
++  select
++    u.id,
++    u.nome,
++    count(s.id)                                                        as turni_totali,
++    count(s.id) filter (where h.date is not null)                      as festivi,
++    count(s.id) filter (where h.mandatory = true)                      as fest_comandate,
++    count(s.id)
++      + count(s.id) filter (where h.date is not null) * 2
++      + count(s.id) filter (where h.mandatory = true) * 3             as score
++  from public.users u
++  left join public.shifts s
++    on u.id = s.user_id
++    and (
++      (p_month = 0 and p_year = 0)                                              -- tutti i tempi
++      or (p_month = 0 and p_year > 0
++          and extract(year from s.date)::integer = p_year)                      -- tutto l'anno
++      or (p_month > 0
++          and extract(month from s.date)::integer = p_month
++          and extract(year  from s.date)::integer = p_year)                     -- mese specifico
++    )
++  left join public.holidays h on s.date = h.date
++  where u.ruolo = 'user' and u.attivo = true
++  group by u.id, u.nome
++  order by score asc;
++$$;
++
++comment on function get_equity_scores is
++  'Score equità turni: score basso = priorità alta.
++   p_month=0, p_year=0 → tutti i tempi.
++   p_month=0, p_year>0 → tutti i mesi dell''anno.
++   p_month>0, p_year>0 → mese specifico.';
+diff --git a/supabase/migrations/005_email_settings_rls.sql b/supabase/migrations/005_email_settings_rls.sql
+new file mode 100644
+index 0000000..1b89be6
+--- /dev/null
++++ b/supabase/migrations/005_email_settings_rls.sql
+@@ -0,0 +1,26 @@
++-- ============================================================
++-- Tabella email_settings con RLS
++-- ============================================================
++
++CREATE TABLE IF NOT EXISTS public.email_settings (
++  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++  email       text NOT NULL UNIQUE,
++  descrizione text,
++  attivo      boolean NOT NULL DEFAULT true,
++  created_at  timestamptz NOT NULL DEFAULT now()
++);
++
++ALTER TABLE public.email_settings ENABLE ROW LEVEL SECURITY;
++
++-- Solo admin può leggere e scrivere
++CREATE POLICY "email_settings: solo admin legge" ON public.email_settings
++  FOR SELECT USING (is_admin());
++
++CREATE POLICY "email_settings: solo admin inserisce" ON public.email_settings
++  FOR INSERT WITH CHECK (is_admin());
++
++CREATE POLICY "email_settings: solo admin aggiorna" ON public.email_settings
++  FOR UPDATE USING (is_admin());
++
++CREATE POLICY "email_settings: solo admin elimina" ON public.email_settings
++  FOR DELETE USING (is_admin());
+diff --git a/supabase/migrations/seed_availability_full_year.sql b/supabase/migrations/seed_availability_full_year.sql
+new file mode 100644
+index 0000000..5659345
+--- /dev/null
++++ b/supabase/migrations/seed_availability_full_year.sql
+@@ -0,0 +1,43 @@
++-- ============================================================
++-- Disponibilità per tutto l'anno 2026
++-- Copre: tutti i sabati, domeniche e festivi dell'anno
++-- Utenti: tutti quelli attivi con ruolo 'user'
++-- ============================================================
++
++INSERT INTO public.availability (user_id, date, available, status)
++SELECT
++  u.id,
++  d.giorno,
++  true,
++  'pending'
++FROM public.users u
++CROSS JOIN (
++  -- Tutti i sabati e domeniche del 2026
++  SELECT gs::date AS giorno
++  FROM generate_series('2026-01-01'::date, '2026-12-31'::date, '1 day'::interval) gs
++  WHERE EXTRACT(DOW FROM gs) IN (0, 6)
++
++  UNION
++
++  -- Tutti i festivi del 2026 già presenti in tabella
++  SELECT date AS giorno
++  FROM public.holidays
++  WHERE EXTRACT(YEAR FROM date) = 2026
++) d
++WHERE u.ruolo = 'user'
++  AND u.attivo = true
++ON CONFLICT (user_id, date) DO NOTHING;
++
++-- Verifica
++SELECT
++  EXTRACT(DOW FROM date) AS dow,
++  CASE EXTRACT(DOW FROM date)
++    WHEN 0 THEN 'Dom'
++    WHEN 6 THEN 'Sab'
++    ELSE 'Festivo feriale'
++  END AS tipo,
++  count(*) AS righe
++FROM public.availability
++WHERE EXTRACT(YEAR FROM date) = 2026
++GROUP BY 1, 2
++ORDER BY 1;
+diff --git a/supabase/migrations/seed_clear_availability.sql b/supabase/migrations/seed_clear_availability.sql
+new file mode 100644
+index 0000000..1e387a6
+--- /dev/null
++++ b/supabase/migrations/seed_clear_availability.sql
+@@ -0,0 +1,15 @@
++-- ============================================================
++-- Reset completo storico: disponibilità, turni, mesi confermati
++-- NON tocca: utenti, festivi
++-- ============================================================
++
++DELETE FROM public.shifts;
++DELETE FROM public.availability;
++DELETE FROM public.month_status;
++
++-- Verifica
++SELECT 'shifts'       AS tabella, count(*) AS righe FROM public.shifts
++UNION ALL
++SELECT 'availability' AS tabella, count(*) AS righe FROM public.availability
++UNION ALL
++SELECT 'month_status' AS tabella, count(*) AS righe FROM public.month_status;
