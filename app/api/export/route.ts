@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 
 const MONTH_NAMES_IT = [
@@ -8,213 +7,257 @@ const MONTH_NAMES_IT = [
   'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
 ]
 
+/** Excel date serial: days elapsed since 1899-12-30 */
+function excelSerial(year: number, month: number, day: number): number {
+  const d = Date.UTC(year, month - 1, day)
+  const epoch = Date.UTC(1899, 11, 30)
+  return Math.round((d - epoch) / 86400000)
+}
+
+function escXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Replace a numeric-value cell in sheet XML.
+ * Preserves s="..." (style) unless styleOverride is given.
+ * Strips any existing t="..." type attribute.
+ */
+function setNumCell(xml: string, addr: string, value: number, styleOverride?: number): string {
+  // NOTE: no backslash before quotes — XML uses plain double-quotes
+  const re = new RegExp('<c r="' + addr + '"([^>]*)(?:/>|>[\\s\\S]*?</c>)')
+  return xml.replace(re, (_match, attrs: string) => {
+    let a = attrs.replace(/\s+t="[^"]*"/g, '')
+    if (styleOverride !== undefined) {
+      a = a.replace(/\s+s="\d+"/, ` s="${styleOverride}"`)
+    }
+    return `<c r="${addr}"${a}><v>${value}</v></c>`
+  })
+}
+
+/**
+ * Replace a cell with an inline string (t="inlineStr").
+ * Optionally applies red color via rich-text run (no styles.xml change needed).
+ * If the cell is absent from the XML and value is non-empty, inserts it into the row.
+ */
+function setInlineStr(xml: string, addr: string, value: string, red = false): string {
+  const re = new RegExp('<c r="' + addr + '"([^>]*)(?:/>|>[\\s\\S]*?</c>)')
+  const makeCell = (attrs: string): string => {
+    const a = attrs.replace(/\s+t="[^"]*"/g, '')
+    if (!value) return `<c r="${addr}"${a}/>`
+    const t = escXml(value)
+    const inner = red
+      ? `<is><r><rPr><color rgb="FFFF0000"/></rPr><t>${t}</t></r></is>`
+      : `<is><t>${t}</t></is>`
+    return `<c r="${addr}"${a} t="inlineStr">${inner}</c>`
+  }
+
+  if (re.test(xml)) {
+    return xml.replace(re, (_match, attrs: string) => makeCell(attrs))
+  }
+
+  // Cell not found — insert into the correct row (only when value is non-empty)
+  if (!value) return xml
+  const rowNum = addr.replace(/[A-Z]+/g, '')
+  const rowRe = new RegExp('(<row\\b[^>]*\\br="' + rowNum + '"[^>]*>)([\\s\\S]*?)(</row>)')
+  return xml.replace(rowRe, (_m, open: string, content: string, close: string) =>
+    open + content + makeCell('') + close
+  )
+}
+
+/** Read s="N" attribute from a cell element */
+function getCellStyleIdx(xml: string, addr: string): number {
+  const m = xml.match(new RegExp('<c r="' + addr + '"[^>]*\\bs="(\\d+)"'))
+  return m ? parseInt(m[1]) : 0
+}
+
+/**
+ * Add a red-font variant of xf[baseIdx] to styles.xml.
+ * Returns updated XML and new xf index.
+ */
+function addRedXf(stylesXml: string, baseIdx: number): { xml: string; idx: number } {
+  // --- 1. Add red font ---
+  const fntCntM = stylesXml.match(/<fonts count="(\d+)"/)
+  const fntCnt = parseInt(fntCntM?.[1] ?? '1')
+  const redFontIdx = fntCnt
+
+  stylesXml = stylesXml
+    .replace(/<fonts count="\d+"/, `<fonts count="${fntCnt + 1}"`)
+    .replace('</fonts>', `<font><color rgb="FFFF0000"/></font></fonts>`)
+
+  // --- 2. Clone xf[baseIdx] with red font ---
+  const xfCntM = stylesXml.match(/<cellXfs count="(\d+)"/)
+  const xfCnt = parseInt(xfCntM?.[1] ?? '1')
+  const newIdx = xfCnt
+
+  const xfSectionM = stylesXml.match(/(<cellXfs[^>]*>)([\s\S]*?)(<\/cellXfs>)/)
+  if (!xfSectionM) return { xml: stylesXml, idx: newIdx }
+
+  const xfList: string[] = []
+  const xfRe = /<xf\b[^>]*(?:\/>|>[\s\S]*?<\/xf>)/g
+  let m: RegExpExecArray | null
+  while ((m = xfRe.exec(xfSectionM[2])) !== null) xfList.push(m[0])
+
+  let base = xfList[baseIdx] ?? '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+
+  base = base.includes('fontId=')
+    ? base.replace(/fontId="\d+"/, `fontId="${redFontIdx}"`)
+    : base.replace('<xf ', `<xf fontId="${redFontIdx}" `)
+
+  base = base.includes('applyFont=')
+    ? base.replace(/applyFont="\d+"/, 'applyFont="1"')
+    : base.replace('<xf ', '<xf applyFont="1" ')
+
+  // Make the cloned xf self-closing (drop any child elements)
+  base = base.replace(/\s*>[\s\S]*$/, '/>')
+
+  stylesXml = stylesXml
+    .replace(/<cellXfs count="\d+"/, `<cellXfs count="${xfCnt + 1}"`)
+    .replace('</cellXfs>', base + '</cellXfs>')
+
+  return { xml: stylesXml, idx: newIdx }
+}
+
+/** Resolve path of the "Dati" worksheet from workbook.xml + workbook.xml.rels */
+async function getDatiSheetPath(zip: JSZip): Promise<string | null> {
+  const wbFile = zip.files['xl/workbook.xml']
+  if (!wbFile) return null
+  const wbXml = await wbFile.async('string')
+
+  const shM = wbXml.match(/<sheet\b[^>]*\bname="Dati"[^>]*\br:id="([^"]+)"/)
+  if (!shM) return null
+  const rId = shM[1]
+
+  const relsFile = zip.files['xl/_rels/workbook.xml.rels']
+  if (!relsFile) return null
+  const relsXml = await relsFile.async('string')
+
+  const relM = relsXml.match(new RegExp('Id="' + rId + '"[^>]*Target="([^"]+)"'))
+  if (!relM) return null
+
+  const target = relM[1] // e.g. "worksheets/sheet1.xml"
+  return target.startsWith('xl/') ? target : `xl/${target}`
+}
+
 export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any
 
-  // Auth check
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
 
   const { data: profile } = await supabase
-    .from('users')
-    .select('ruolo')
-    .eq('id', user.id)
-    .single()
-  if (profile?.ruolo !== 'admin') {
+    .from('users').select('ruolo').eq('id', user.id).single()
+  if (profile?.ruolo !== 'admin')
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
-  }
 
-  // Parse params — month è 1-based (1=Gennaio...12=Dicembre)
   const { searchParams } = new URL(request.url)
   const month = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1))
   const year = parseInt(searchParams.get('year') ?? String(new Date().getFullYear()))
 
-  if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100) {
+  if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100)
     return NextResponse.json({ error: 'Parametri non validi' }, { status: 400 })
-  }
 
   const daysInMonth = new Date(year, month, 0).getDate()
   const from = `${year}-${String(month).padStart(2, '0')}-01`
-  const to = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+  const to   = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-  // Fetch turni del mese
   const { data: shifts, error: shiftsError } = await supabase
-    .from('shifts')
-    .select('date, user_id')
-    .gte('date', from)
-    .lte('date', to)
-    .order('date', { ascending: true })
+    .from('shifts').select('date, user_id')
+    .gte('date', from).lte('date', to).order('date', { ascending: true })
 
   if (shiftsError) {
     console.error('Errore fetch turni:', shiftsError)
     return NextResponse.json({ error: 'Errore lettura turni dal database' }, { status: 500 })
   }
 
-  // Fetch nomi dipendenti
   const { data: users } = await supabase.from('users').select('id, nome')
-  // Usa solo il cognome (tutto dopo il primo spazio): "Mario De Luca" → "De Luca"
   const userMap = new Map<string, string>(
     (users ?? []).map((u: { id: string; nome: string }) => {
       const idx = u.nome.indexOf(' ')
-      const cognome = idx === -1 ? u.nome : u.nome.slice(idx + 1)
-      return [u.id, cognome]
+      return [u.id, idx === -1 ? u.nome : u.nome.slice(idx + 1)]
     })
   )
 
-  // Raggruppa i turni per data → array di nomi (1° e 2° reperibile)
   const shiftsByDate = new Map<string, string[]>()
-  for (const shift of shifts ?? []) {
-    if (!shiftsByDate.has(shift.date)) shiftsByDate.set(shift.date, [])
-    shiftsByDate.get(shift.date)!.push(userMap.get(shift.user_id) ?? shift.user_id)
+  for (const s of shifts ?? []) {
+    if (!shiftsByDate.has(s.date)) shiftsByDate.set(s.date, [])
+    shiftsByDate.get(s.date)!.push(userMap.get(s.user_id) ?? s.user_id)
   }
 
-  // Scarica il template da Supabase Storage
+  // Download template from Supabase Storage
   const serviceClient = createServiceClient()
-  const { data: templateBlob, error: storageError } = await serviceClient.storage
-    .from('templates')
-    .download('AREA4.xlsx')
+  const { data: blob, error: storageError } = await serviceClient.storage
+    .from('templates').download('AREA4.xlsx')
 
-  if (storageError || !templateBlob) {
-    console.error('Errore download template da Storage:', storageError)
+  if (storageError || !blob) {
+    console.error('Template non trovato:', storageError)
     return NextResponse.json({ error: 'Template Excel non trovato nello storage' }, { status: 500 })
   }
 
-  const templateArrayBuf = await templateBlob.arrayBuffer()
+  const templateBuf = await blob.arrayBuffer()
+  const zip = await JSZip.loadAsync(templateBuf)
 
-  // Legge il template con ExcelJS per modificare celle dati
-  const wb = new ExcelJS.Workbook()
-  try {
-    await wb.xlsx.load(templateArrayBuf)
-  } catch (e) {
-    console.error('Errore parsing template Excel:', e)
-    return NextResponse.json({ error: 'Errore parsing template Excel' }, { status: 500 })
+  // Locate "Dati" worksheet
+  const sheetPath = await getDatiSheetPath(zip)
+  if (!sheetPath || !zip.files[sheetPath]) {
+    return NextResponse.json({ error: 'Foglio "Dati" non trovato nel template' }, { status: 500 })
   }
 
-  const ws = wb.getWorksheet('Dati')
-  if (!ws) {
-    return NextResponse.json({ error: 'Template non valido: foglio "Dati" non trovato' }, { status: 500 })
+  let sheetXml  = await zip.files[sheetPath].async('string')
+  let stylesXml = zip.files['xl/styles.xml']
+    ? await zip.files['xl/styles.xml'].async('string')
+    : ''
+
+  // Build a red-font style variant based on the style of cell A10
+  let redStyleIdx: number | undefined
+  if (stylesXml) {
+    const baseStyleIdx = getCellStyleIdx(sheetXml, 'A10')
+    const result = addRedXf(stylesXml, baseStyleIdx)
+    stylesXml   = result.xml
+    redStyleIdx = result.idx
   }
 
-  // Aggiorna A3: primo giorno del mese selezionato (formato "mmmm yyyy")
-  ws.getCell('A3').value = new Date(year, month - 1, 1)
+  // A3: first day of selected month
+  sheetXml = setNumCell(sheetXml, 'A3', excelSerial(year, month, 1))
 
-  // Aggiorna C5: data di generazione
-  ws.getCell('C5').value = new Date()
+  // C5: generation date (today)
+  const now = new Date()
+  sheetXml = setNumCell(sheetXml, 'C5', excelSerial(now.getFullYear(), now.getMonth() + 1, now.getDate()))
 
-  // Aggiorna dati giornalieri (righe 10-40)
-  const DATA_START_ROW = 10
-  const RED_ARGB = 'FFFF0000'
+  // Data rows 10–40 (days 1–31)
+  const DATA_START = 10
   for (let day = 1; day <= 31; day++) {
-    const rowNum = DATA_START_ROW + (day - 1)
+    const row     = DATA_START + day - 1
+    const addrA   = `A${row}`
+    const addrD   = `D${row}`
+    const addrE   = `E${row}`
+
     if (day <= daysInMonth) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      const names = shiftsByDate.get(dateStr) ?? []
-      const dow = new Date(year, month - 1, day).getDay() // 0=Dom, 6=Sab
+      const dateStr   = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      const serial    = excelSerial(year, month, day)
+      const dow       = new Date(year, month - 1, day).getDay() // 0=Sun, 6=Sat
       const isWeekend = dow === 0 || dow === 6
+      const names     = shiftsByDate.get(dateStr) ?? []
 
-      const cellA = ws.getCell(`A${rowNum}`)
-      const cellD = ws.getCell(`D${rowNum}`)
-      const cellE = ws.getCell(`E${rowNum}`)
-
-      cellA.value = new Date(year, month - 1, day)
-      cellD.value = names[0] ?? ''
-      cellE.value = names[1] ?? ''
-
-      // Sabato e domenica: testo in rosso su data e nomi reperibili
-      if (isWeekend) {
-        cellA.font = { ...cellA.font, color: { argb: RED_ARGB } }
-        cellD.font = { ...cellD.font, color: { argb: RED_ARGB } }
-        cellE.font = { ...cellE.font, color: { argb: RED_ARGB } }
-      }
+      sheetXml = setNumCell(sheetXml, addrA, serial, isWeekend ? redStyleIdx : undefined)
+      sheetXml = setInlineStr(sheetXml, addrD, names[0] ?? '', isWeekend)
+      sheetXml = setInlineStr(sheetXml, addrE, names[1] ?? '', isWeekend)
     } else {
-      ws.getCell(`D${rowNum}`).value = ''
-      ws.getCell(`E${rowNum}`).value = ''
+      // Month has fewer than 31 days — clear leftover name cells
+      sheetXml = setInlineStr(sheetXml, addrD, '')
+      sheetXml = setInlineStr(sheetXml, addrE, '')
     }
   }
 
-  // ExcelJS non serializza le regole di conditional formatting del template
-  // (CfRuleXform.renderExpression crash). Le azzeriamo — i colori fissi delle
-  // celle rimangono perché sono negli stili delle celle stesse.
-  wb.eachSheet((sheet) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(sheet as any).conditionalFormattings = []
-  })
+  // Write modified files back into the ZIP
+  zip.file(sheetPath, sheetXml)
+  if (stylesXml) zip.file('xl/styles.xml', stylesXml)
 
-  // Genera il buffer base con ExcelJS
-  const excelBuf = Buffer.from(await wb.xlsx.writeBuffer())
+  // Remove stale calculation chain (Excel will rebuild it on open)
+  zip.remove('xl/calcChain.xml')
 
-  // -----------------------------------------------------------------------
-  // Iniezione immagini via JSZip
-  //
-  // ExcelJS non supporta le immagini "in cella" di Excel (rich values).
-  // Il template le usa: xl/media/image*.* + xl/richData/*.
-  // Strategia: carichiamo entrambi i ZIP (template e output ExcelJS), copiamo
-  // i file richData + media dal template nell'output, aggiorniamo le relazioni
-  // e i content types, poi generiamo il file finale.
-  // -----------------------------------------------------------------------
-  const [outputZip, templateZip] = await Promise.all([
-    JSZip.loadAsync(excelBuf),
-    JSZip.loadAsync(templateArrayBuf),
-  ])
-
-  // File da copiare dal template all'output
-  const filesToCopy = [
-    'xl/metadata.xml',
-    'xl/richData/richValueRel.xml',
-    'xl/richData/rdrichvalue.xml',
-    'xl/richData/rdrichvaluestructure.xml',
-    'xl/richData/rdRichValueTypes.xml',
-    'xl/richData/_rels/richValueRel.xml.rels',
-  ]
-  // Copia tutti i file media (immagini)
-  for (const name of Object.keys(templateZip.files)) {
-    if (name.startsWith('xl/media/')) filesToCopy.push(name)
-  }
-
-  for (const path of filesToCopy) {
-    if (templateZip.files[path]) {
-      const content = await templateZip.files[path].async('nodebuffer')
-      outputZip.file(path, content)
-    }
-  }
-
-  // Aggiunge le relazioni richData nel workbook.xml.rels dell'output.
-  // Usiamo rId con numeri alti (100+) per evitare conflitti con quelli di ExcelJS.
-  const richDataRels = [
-    `<Relationship Id="rId100" Type="http://schemas.microsoft.com/office/2022/10/relationships/richValueRel" Target="richData/richValueRel.xml"/>`,
-    `<Relationship Id="rId101" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue" Target="richData/rdrichvalue.xml"/>`,
-    `<Relationship Id="rId102" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure" Target="richData/rdrichvaluestructure.xml"/>`,
-    `<Relationship Id="rId103" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes" Target="richData/rdRichValueTypes.xml"/>`,
-    `<Relationship Id="rId104" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/>`,
-  ].join('')
-
-  const wbRels = await outputZip.files['xl/_rels/workbook.xml.rels'].async('string')
-  outputZip.file('xl/_rels/workbook.xml.rels', wbRels.replace('</Relationships>', richDataRels + '</Relationships>'))
-
-  // Aggiunge i content types mancanti per immagini e richData
-  const richDataContentTypes = [
-    `<Default Extension="jpeg" ContentType="image/jpeg"/>`,
-    `<Default Extension="png" ContentType="image/png"/>`,
-    `<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>`,
-    `<Override PartName="/xl/richData/richValueRel.xml" ContentType="application/vnd.ms-excel.richvaluerel+xml"/>`,
-    `<Override PartName="/xl/richData/rdrichvalue.xml" ContentType="application/vnd.ms-excel.rdrichvalue+xml"/>`,
-    `<Override PartName="/xl/richData/rdrichvaluestructure.xml" ContentType="application/vnd.ms-excel.rdrichvaluestructure+xml"/>`,
-    `<Override PartName="/xl/richData/rdRichValueTypes.xml" ContentType="application/vnd.ms-excel.rdrichvaluetypes+xml"/>`,
-  ]
-
-  let contentTypes = await outputZip.files['[Content_Types].xml'].async('string')
-  for (const entry of richDataContentTypes) {
-    // Evita duplicati
-    const key = entry.match(/(?:Extension|PartName)="([^"]+)"/)?.[1] ?? ''
-    if (key && !contentTypes.includes(key)) {
-      contentTypes = contentTypes.replace('</Types>', entry + '</Types>')
-    }
-  }
-  outputZip.file('[Content_Types].xml', contentTypes)
-
-  // Genera il file finale
-  const finalBuf = await outputZip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+  const finalBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
   return new NextResponse(finalBuf as unknown as BodyInit, {
