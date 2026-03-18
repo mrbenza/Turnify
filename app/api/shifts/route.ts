@@ -67,14 +67,18 @@ export async function POST(request: Request) {
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
 
-    // Per i weekend escludiamo la coppia Sab+Dom corrente (stesso weekend = ok)
-    // Per i festivi escludiamo solo la data stessa
+    // Per i weekend escludiamo la coppia Sab+Dom corrente (stesso weekend = ok).
+    // Se il festivo cade di sabato o domenica (es. Pasqua), escludiamo comunque
+    // la coppia Sab+Dom: sabato + festivo-domenica sono lo stesso weekend.
     const dow = new Date(year, month - 1, day).getDay()
-    const satDay = shiftType === 'weekend' ? (dow === 6 ? day : day - 1) : null
-    const excludeSat = satDay
+    const isWeekendDay = dow === 0 || dow === 6
+    const satDay = (shiftType === 'weekend' || (shiftType === 'festivo' && isWeekendDay))
+      ? (dow === 6 ? day : day - 1)
+      : null
+    const excludeSat = satDay !== null
       ? `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
       : date
-    const excludeSun = satDay
+    const excludeSun = satDay !== null
       ? `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
       : date
 
