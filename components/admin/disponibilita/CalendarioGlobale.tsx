@@ -496,6 +496,20 @@ export default function CalendarioGlobale({
       if (satWorker) return satWorker.id
     }
 
+    // Domenica stesso mese: se il sabato dello stesso weekend è già assegnato,
+    // suggerisci lo stesso utente per la domenica (coppia Sab+Dom coerente)
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay()
+    if (dow === 0) { // è domenica
+      const satDate = new Date(y, m - 1, d - 1)
+      const satStr = `${satDate.getFullYear()}-${String(satDate.getMonth() + 1).padStart(2, '0')}-${String(satDate.getDate()).padStart(2, '0')}`
+      const satShift = shifts.find((s) => s.date === satStr)
+      if (satShift) {
+        const satWorker = base.find((u) => u.id === satShift.user_id)
+        if (satWorker) return satWorker.id
+      }
+    }
+
     // Preferenza a chi NON ha lavorato il mese precedente
     const preferred = base.filter((u) => !workedPrevMonth(u.id))
     const pool = preferred.length > 0 ? preferred : base
