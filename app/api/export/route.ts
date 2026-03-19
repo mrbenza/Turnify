@@ -193,6 +193,16 @@ export async function GET(request: NextRequest) {
   zip.remove('xl/calcChain.xml')
 
   const finalBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+
+  // Segna tutte le disponibilità pending del mese come approved
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serviceClient2 = createServiceClient() as any
+  await serviceClient2
+    .from('availability')
+    .update({ status: 'approved' })
+    .eq('status', 'pending')
+    .gte('date', from)
+    .lte('date', to)
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
   return new NextResponse(finalBuf as unknown as BodyInit, {
