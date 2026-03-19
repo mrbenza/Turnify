@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -21,9 +22,10 @@ export default function NavbarUtente({ nomeUtente }: NavbarUtenteProps) {
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         {/* Logo */}
-        <span className="text-lg font-bold text-blue-600 tracking-tight select-none">
-          Turnify
-        </span>
+        <div className="flex items-center gap-2.5">
+          <Image src="/logo.png" alt="Sigma" width={90} height={15} />
+          <span className="text-sm font-semibold text-blue-600 tracking-tight select-none border-l border-gray-200 pl-2.5">Turnify</span>
+        </div>
 
         {/* Right side: nome + impostazioni + logout */}
         <div className="flex items-center gap-3">

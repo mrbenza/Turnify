@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 /* ------------------------------------------------------------------ */
@@ -107,10 +108,11 @@ function SidebarContent({ pathname, nomeAdmin, onLinkClick, onLogout }: SidebarC
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-6 py-5 border-b border-gray-100">
-        <span className="text-xl font-bold text-blue-600 tracking-tight select-none">
-          Turnify
-        </span>
-        <p className="text-xs text-gray-400 mt-0.5">Admin Panel</p>
+        <Image src="/logo.png" alt="Sigma" width={110} height={18} className="mb-1.5" />
+        <div className="flex items-center gap-2">
+          <span className="text-base font-bold text-blue-600 tracking-tight select-none">Turnify</span>
+          <span className="text-xs text-gray-400">Admin Panel</span>
+        </div>
       </div>
 
       {/* Navigation */}
