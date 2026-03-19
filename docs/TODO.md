@@ -44,9 +44,11 @@ Funzionalità da implementare in ordine di priorità.
 - L'export filtra i turni per `area_id` dell'admin loggato
 - Ogni area potrà avere il proprio template su Supabase Storage (es. `templates/AREA4.xlsx`, `templates/AREA7.xlsx`)
 
-### Festività anni futuri
-- Aggiungere festività per anni successivi al 2026
-- Valutare se far gestire le festività all'admin da UI (oggi solo da DB/SQL)
+### Aggiornamento automatico festività
+- **Fonte**: API pubblica gratuita senza auth — Nager.Date (`date.nager.at/api/v3/PublicHolidays/{anno}/IT`) o OpenHolidays API
+- **Implementazione**: Vercel Cron Job (1 gennaio ogni anno) + bottone manuale "Aggiorna festività" nella pagina Impostazioni admin
+- **Logica**: chiamata API → upsert nella tabella `holidays` per l'anno richiesto (evitare duplicati)
+- **Attuale**: festività presenti solo fino al 2026, anni successivi non coperti
 
 ### Rotazione festivi comandati (es. Pasqua ogni 10 anni)
 - **Obiettivo**: chi lavora un festivo comandato non dovrebbe riprenderlo per ~10 anni (con 10 persone in rotazione)
