@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { User, UserRole } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
@@ -170,34 +169,36 @@ interface AddUserModalProps {
 function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
-  const [authId, setAuthId] = useState('')
   const [ruolo, setRuolo] = useState<UserRole>('user')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!nome.trim() || !email.trim() || !authId.trim()) {
+    if (!nome.trim() || !email.trim()) {
       setError('Compila tutti i campi obbligatori.')
       return
     }
 
     setSaving(true)
     setError(null)
+    setSuccessMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
-      const { data, error: dbError } = await supabase
-        .from('users')
-        .insert({ id: authId.trim(), nome: nome.trim(), email: email.trim(), ruolo, attivo: true })
-        .select()
-        .single()
-
-      if (dbError) throw dbError
-      onAdded(data as User)
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
+      setSuccessMsg('Utente creato. Password temporanea: 1234')
+      onAdded(json as User)
     } catch (err) {
       console.error('Errore inserimento utente:', err)
-      setError('Errore durante il salvataggio. Verifica che l\'ID Auth sia corretto e non già presente.')
+      setError(err instanceof Error ? err.message : 'Errore durante il salvataggio.')
     } finally {
       setSaving(false)
     }
@@ -212,18 +213,9 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
     >
       <div className="absolute inset-0 bg-black/20" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-2xl shadow-xl border border-gray-100 p-6 max-w-md w-full z-10">
-        <h2 id="add-user-modal-title" className="text-base font-semibold text-gray-900 mb-1">
+        <h2 id="add-user-modal-title" className="text-base font-semibold text-gray-900 mb-4">
           Aggiungi utente
         </h2>
-
-        {/* Instructions */}
-        <div className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 mb-4">
-          <p className="text-xs text-amber-700 font-medium mb-1">Istruzioni</p>
-          <p className="text-xs text-amber-600">
-            Crea prima l&apos;utente dalla <strong>Supabase Dashboard</strong> (Authentication → Users → Invite user).
-            Poi copia qui l&apos;UUID dell&apos;utente creato.
-          </p>
-        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {/* Nome */}
@@ -258,22 +250,6 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
             />
           </div>
 
-          {/* Auth UUID */}
-          <div>
-            <label htmlFor="add-auth-id" className="block text-xs font-medium text-gray-700 mb-1">
-              UUID Supabase Auth <span aria-hidden="true" className="text-red-500">*</span>
-            </label>
-            <input
-              id="add-auth-id"
-              type="text"
-              value={authId}
-              onChange={(e) => setAuthId(e.target.value)}
-              required
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-300"
-            />
-          </div>
-
           {/* Ruolo */}
           <div>
             <label htmlFor="add-ruolo" className="block text-xs font-medium text-gray-700 mb-1">Ruolo</label>
@@ -288,6 +264,11 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
             </select>
           </div>
 
+          {/* Success */}
+          {successMsg && (
+            <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2" role="status">{successMsg}</p>
+          )}
+
           {/* Error */}
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2" role="alert">{error}</p>
@@ -297,7 +278,7 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
           <div className="flex gap-2 pt-1">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !!successMsg}
               className="flex-1 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 inline-flex items-center justify-center gap-2"
             >
               {saving && (

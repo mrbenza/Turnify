@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -24,11 +25,17 @@ export default function NavbarUtente({ nomeUtente }: NavbarUtenteProps) {
           Turnify
         </span>
 
-        {/* Right side: nome + logout */}
+        {/* Right side: nome + impostazioni + logout */}
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-700 font-medium hidden sm:block">
             {nomeUtente}
           </span>
+          <Link
+            href="/user/impostazioni"
+            className="text-sm text-gray-500 hover:text-blue-600 border border-gray-200 hover:border-blue-200 rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            Impostazioni
+          </Link>
           <button
             onClick={handleLogout}
             className="text-sm text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
