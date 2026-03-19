@@ -12,6 +12,7 @@ interface CalendarioDisponibilitaProps {
   availabilityList: Availability[]
   holidays: Holiday[]
   shifts: Shift[]
+  lockedMonths: Set<string>
 }
 
 type DayState =
@@ -19,8 +20,8 @@ type DayState =
   | 'available'
   | 'unavailable'
   | 'approved'
-  | 'locked'
-  | 'shift'
+  | 'shift-pending'
+  | 'shift-confirmed'
   | 'holiday-free'
 
 /* ------------------------------------------------------------------ */
@@ -56,6 +57,7 @@ export default function CalendarioDisponibilita({
   availabilityList,
   holidays,
   shifts,
+  lockedMonths,
 }: CalendarioDisponibilitaProps) {
   const today = new Date()
   const todayStr = toDateString(today.getFullYear(), today.getMonth(), today.getDate())
@@ -94,11 +96,16 @@ export default function CalendarioDisponibilita({
 
   /* ---- Day classification ---- */
   function getDayState(dateStr: string): DayState {
-    if (shiftDates.has(dateStr)) return 'shift'
+    // Shift assigned: color depends on whether the month is locked
+    if (shiftDates.has(dateStr)) {
+      const monthKey = dateStr.slice(0, 7) // "YYYY-MM"
+      return lockedMonths.has(monthKey) ? 'shift-confirmed' : 'shift-pending'
+    }
     const avail = availabilityByDate[dateStr]
     if (avail) {
+      // approved (Excel downloaded) or locked status → confirmed/red
       if (avail.status === 'approved') return 'approved'
-      if (avail.status === 'locked') return 'locked'
+      if (avail.status === 'locked') return 'shift-confirmed'
       return avail.available ? 'available' : 'unavailable'
     }
     const [year, month, day] = dateStr.split('-').map(Number)
@@ -109,7 +116,12 @@ export default function CalendarioDisponibilita({
 
   function isClickable(dateStr: string, state: DayState): boolean {
     if (isBefore(dateStr, todayStr)) return false
-    if (state === 'shift' || state === 'approved' || state === 'locked' || state === 'weekday') return false
+    if (
+      state === 'shift-pending' ||
+      state === 'shift-confirmed' ||
+      state === 'approved' ||
+      state === 'weekday'
+    ) return false
     return true
   }
 
@@ -135,7 +147,7 @@ export default function CalendarioDisponibilita({
     async (dateStr: string) => {
       const state = getDayState(dateStr)
       if (!isClickable(dateStr, state)) {
-        if (state === 'approved' || state === 'locked') {
+        if (state === 'approved' || state === 'shift-confirmed' || state === 'shift-pending') {
           setTooltip({ date: dateStr, msg: 'Non modificabile' })
           setTimeout(() => setTooltip(null), 2000)
         }
@@ -224,9 +236,12 @@ export default function CalendarioDisponibilita({
       'holiday-free': `${base} bg-white border-2 border-gray-200 text-gray-700 ${clickable && !isPast ? 'cursor-pointer hover:border-blue-400 hover:bg-blue-50' : 'cursor-default'}`,
       available: `${base} bg-green-100 border-2 border-green-400 text-green-800 ${clickable && !isPast ? 'cursor-pointer hover:bg-green-200' : 'cursor-default'}`,
       unavailable: `${base} bg-white border-2 border-gray-200 text-gray-500 ${clickable && !isPast ? 'cursor-pointer hover:border-blue-400' : 'cursor-default'}`,
-      approved: `${base} bg-yellow-100 border-2 border-yellow-400 text-yellow-800 cursor-not-allowed`,
-      locked: `${base} bg-yellow-100 border-2 border-yellow-400 text-yellow-800 cursor-not-allowed`,
-      shift: `${base} bg-red-100 border-2 border-red-400 text-red-800 cursor-default`,
+      // Turno assegnato, mese non ancora locked → giallo
+      'shift-pending': `${base} bg-yellow-100 border-2 border-yellow-400 text-yellow-800 cursor-default`,
+      // Turno assegnato con mese locked, oppure availability approved → rosso
+      'shift-confirmed': `${base} bg-red-100 border-2 border-red-400 text-red-800 cursor-default`,
+      // availability.status === 'approved' (Excel scaricato) → rosso, stessa di shift-confirmed
+      approved: `${base} bg-red-100 border-2 border-red-400 text-red-800 cursor-default`,
     }
 
     return `${map[state]} ${opacityClass}`.trim()
@@ -361,8 +376,8 @@ export default function CalendarioDisponibilita({
         <LegendItem color="bg-gray-100" label="Feriale" />
         <LegendItem color="bg-white border-2 border-gray-200" label="Sab / Dom / Festività" />
         <LegendItem color="bg-green-100 border-2 border-green-400" label="Disponibile" />
-        <LegendItem color="bg-yellow-100 border-2 border-yellow-400" label="Visto dall'admin" />
-        <LegendItem color="bg-red-100 border-2 border-red-400" label="Turno assegnato" />
+        <LegendItem color="bg-yellow-100 border-2 border-yellow-400" label="Turno assegnato" />
+        <LegendItem color="bg-red-100 border-2 border-red-400" label="Mese confermato" />
       </div>
     </section>
   )

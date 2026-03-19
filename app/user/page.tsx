@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { User } from '@/lib/supabase/types'
+import type { User, MonthStatus } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
 import CalendarioDisponibilita from '@/components/user/CalendarioDisponibilita'
 import StoricoTurni from '@/components/user/StoricoTurni'
@@ -31,7 +31,7 @@ export default async function UserPage() {
   const toStr = endOfNextMonth.toISOString().slice(0, 10)
 
   // Parallel fetches for performance
-  const [availabilityRes, holidaysRes, shiftsRes] = await Promise.all([
+  const [availabilityRes, holidaysRes, shiftsRes, monthStatusRes] = await Promise.all([
     supabase
       .from('availability')
       .select('*')
@@ -51,11 +51,24 @@ export default async function UserPage() {
       .eq('user_id', authUser.id)
       .gte('date', fromStr)
       .lte('date', toStr),
+
+    supabase
+      .from('month_status')
+      .select('*')
+      .eq('status', 'locked'),
   ])
 
   const availabilityList = availabilityRes.data ?? []
   const holidays = holidaysRes.data ?? []
   const shifts = shiftsRes.data ?? []
+
+  // Build a Set of locked months in "YYYY-MM" format
+  const rawMonthStatuses = (monthStatusRes.data ?? []) as MonthStatus[]
+  const lockedMonths = new Set<string>(
+    rawMonthStatuses.map(
+      (m) => `${m.year}-${String(m.month).padStart(2, '0')}`
+    )
+  )
 
   const nomeUtente = profile?.nome ?? authUser.email ?? 'Utente'
 
@@ -90,6 +103,7 @@ export default async function UserPage() {
             availabilityList={availabilityList}
             holidays={holidays}
             shifts={shifts}
+            lockedMonths={lockedMonths}
           />
         </section>
 
