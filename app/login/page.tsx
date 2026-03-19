@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 // Inner component that uses useSearchParams — must be wrapped in Suspense
@@ -60,9 +61,9 @@ function LoginForm() {
     <div className="bg-white rounded-2xl shadow-md p-8 w-full max-w-sm">
 
       {/* Logo / Titolo */}
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Turnify</h1>
-        <p className="text-sm text-gray-500 mt-1">Gestione reperibilità</p>
+      <div className="flex flex-col items-center mb-8 gap-3">
+        <Image src="/logo.png" alt="Sigma" width={180} height={30} priority />
+        <p className="text-sm text-gray-500">Gestione reperibilità</p>
       </div>
 
       {/* Success message from reset-password redirect */}
