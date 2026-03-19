@@ -8,7 +8,7 @@ import type { User } from '@/lib/supabase/types'
  * Crea un nuovo utente auth + profilo in un'unica operazione server-side.
  * Richiede che il chiamante sia autenticato come admin.
  *
- * Body: { nome: string, email: string, ruolo: 'user' | 'admin' }
+ * Body: { nome: string, email: string, ruolo: 'dipendente' | 'manager' | 'admin' }
  * Returns: User (il record appena inserito in public.users)
  */
 export async function POST(request: Request) {
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     .eq('id', user.id)
     .single()
 
-  if (callerProfile?.ruolo !== 'admin') {
+  if (callerProfile?.ruolo !== 'admin' && callerProfile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
@@ -48,8 +48,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Campi obbligatori: nome, email' }, { status: 400 })
   }
 
-  if (ruolo !== 'user' && ruolo !== 'admin') {
-    return NextResponse.json({ error: 'Ruolo non valido. Valori ammessi: user, admin' }, { status: 400 })
+  if (ruolo !== 'dipendente' && ruolo !== 'manager' && ruolo !== 'admin') {
+    return NextResponse.json({ error: 'Ruolo non valido. Valori ammessi: dipendente, manager, admin' }, { status: 400 })
   }
 
   // Validazione email minimale

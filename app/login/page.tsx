@@ -50,10 +50,10 @@ function LoginForm() {
       .eq('id', user!.id)
       .single<{ ruolo: string }>()
 
-    if (profile?.ruolo === 'admin') {
+    if (profile?.ruolo === 'admin' || profile?.ruolo === 'manager') {
       router.push('/admin')
     } else {
-      router.push('/user')
+      router.push('/user') // dipendente o user (legacy)
     }
   }
 

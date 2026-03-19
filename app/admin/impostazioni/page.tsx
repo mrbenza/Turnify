@@ -32,7 +32,7 @@ export default async function ImpostazioniPage() {
     .eq('id', authUser.id)
     .single<{ ruolo: string; nome: string }>()
 
-  if (profile?.ruolo !== 'admin') redirect('/user')
+  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
   /* ---- Email settings ---- */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -8,13 +8,15 @@ import type { User, UserRole } from '@/lib/supabase/types'
 /* ------------------------------------------------------------------ */
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  admin: 'Admin',
-  user: 'Dipendente',
+  admin: 'Administrator',
+  manager: 'Manager',
+  dipendente: 'Dipendente',
 }
 
 const ROLE_STYLES: Record<UserRole, string> = {
   admin: 'bg-purple-50 text-purple-700',
-  user: 'bg-blue-50 text-blue-700',
+  manager: 'bg-blue-50 text-blue-700',
+  dipendente: 'bg-gray-50 text-gray-600',
 }
 
 /* ------------------------------------------------------------------ */
@@ -169,7 +171,7 @@ interface AddUserModalProps {
 function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
-  const [ruolo, setRuolo] = useState<UserRole>('user')
+  const [ruolo, setRuolo] = useState<UserRole>('dipendente')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -259,8 +261,9 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
               onChange={(e) => setRuolo(e.target.value as UserRole)}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
-              <option value="user">Dipendente</option>
-              <option value="admin">Admin</option>
+              <option value="dipendente">Dipendente</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Administrator</option>
             </select>
           </div>
 

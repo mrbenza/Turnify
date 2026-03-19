@@ -15,7 +15,7 @@ async function getAdminOrError(supabase: any): Promise<{ user: { id: string } } 
     .eq('id', user.id)
     .single()
 
-  if (profile?.ruolo !== 'admin') {
+  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 

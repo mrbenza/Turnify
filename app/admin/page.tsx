@@ -37,7 +37,7 @@ export default async function AdminDashboardPage() {
     .eq('id', authUser.id)
     .single<User>()
 
-  if (profile?.ruolo !== 'admin') redirect('/user')
+  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
   /* ---- Current month range ---- */
   const now = new Date()

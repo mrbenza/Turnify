@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('users').select('ruolo').eq('id', user.id).single()
-  if (profile?.ruolo !== 'admin')
+  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager')
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)

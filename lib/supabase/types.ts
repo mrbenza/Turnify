@@ -1,7 +1,7 @@
 // Tipi TypeScript che rispecchiano lo schema Supabase
 // Aggiornare ogni volta che cambia SHEET_SCHEMA.md
 
-export type UserRole = 'admin' | 'user'
+export type UserRole = 'admin' | 'manager' | 'dipendente'
 export type AvailabilityStatus = 'pending' | 'approved' | 'locked'
 export type ShiftType = 'weekend' | 'festivo' | 'reperibilita'
 export type MonthStatusValue = 'open' | 'approved' | 'locked'

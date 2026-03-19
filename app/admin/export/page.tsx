@@ -17,7 +17,7 @@ export default async function ExportPage() {
     .eq('id', authUser.id)
     .single<{ ruolo: string; nome: string }>()
 
-  if (profile?.ruolo !== 'admin') redirect('/user')
+  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
   /* ---- Users list for name resolution ---- */
   const { data: usersData } = await supabase.from('users').select('*')
