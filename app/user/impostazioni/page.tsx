@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { User } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
@@ -30,6 +31,12 @@ export default async function ImpostazioniPage() {
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-8">
         {/* Heading */}
         <div>
+          <Link
+            href="/user"
+            className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium mb-3"
+          >
+            ← Home
+          </Link>
           <h1 className="text-xl font-semibold text-gray-900">Impostazioni</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Gestisci le tue preferenze account
