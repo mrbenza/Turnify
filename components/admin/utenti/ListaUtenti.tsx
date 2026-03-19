@@ -25,11 +25,13 @@ const ROLE_STYLES: Record<UserRole, string> = {
 
 interface ListaUtentiProps {
   initialUsers: User[]
+  currentUserId: string
 }
 
-export default function ListaUtenti({ initialUsers }: ListaUtentiProps) {
+export default function ListaUtenti({ initialUsers, currentUserId }: ListaUtentiProps) {
   const [users, setUsers] = useState<User[]>(initialUsers)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
 
@@ -54,6 +56,26 @@ export default function ListaUtenti({ initialUsers }: ListaUtentiProps) {
       setErrorMsg('Errore durante l\'aggiornamento dell\'utente.')
     } finally {
       setToggling(null)
+    }
+  }
+
+  /* ---- Delete user ---- */
+  async function handleDelete(user: User) {
+    if (!confirm(`Sei sicuro di voler eliminare l'utente "${user.nome}"? Questa azione è irreversibile.`)) return
+    setDeleting(user.id)
+    setErrorMsg(null)
+    try {
+      const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== user.id))
+    } catch (err) {
+      console.error('Errore eliminazione utente:', err)
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'eliminazione dell\'utente.')
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -123,10 +145,14 @@ export default function ListaUtenti({ initialUsers }: ListaUtentiProps) {
                           role="switch"
                           aria-checked={user.attivo}
                           aria-label={`${user.attivo ? 'Disattiva' : 'Attiva'} utente ${user.nome}`}
+                          title={user.id === currentUserId ? 'Non puoi disattivare il tuo account' : undefined}
                           onClick={() => handleToggleActive(user)}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                            user.attivo ? 'bg-green-500' : 'bg-gray-200'
-                          }`}
+                          disabled={user.id === currentUserId}
+                          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                            user.id === currentUserId
+                              ? 'cursor-not-allowed opacity-50'
+                              : 'cursor-pointer'
+                          } ${user.attivo ? 'bg-green-500' : 'bg-gray-200'}`}
                         >
                           <span
                             className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${
@@ -139,6 +165,16 @@ export default function ListaUtenti({ initialUsers }: ListaUtentiProps) {
                       <span className={`text-xs ${user.attivo ? 'text-green-600' : 'text-gray-400'}`}>
                         {user.attivo ? 'Attivo' : 'Inattivo'}
                       </span>
+                      {!user.attivo && user.id !== currentUserId && (
+                        <button
+                          onClick={() => handleDelete(user)}
+                          disabled={deleting === user.id}
+                          aria-label={`Elimina utente ${user.nome}`}
+                          className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-2 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deleting === user.id ? '...' : 'Elimina'}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -46,7 +46,7 @@ export default async function UtentiPage() {
             className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
           >
             <h2 id="lista-utenti-heading" className="sr-only">Lista utenti</h2>
-            <ListaUtenti initialUsers={users} />
+            <ListaUtenti initialUsers={users} currentUserId={authUser.id} />
           </section>
         </main>
       </div>
