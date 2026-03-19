@@ -29,7 +29,7 @@ export default async function DisponibilitaPage() {
 
   /* ---- Parallel fetches ---- */
   const [usersRes, availRes, shiftsRes, holidaysRes, monthStatusRes] = await Promise.all([
-    supabase.from('users').select('*').eq('ruolo', 'user').eq('attivo', true).order('nome'),
+    supabase.from('users').select('*').eq('ruolo', 'dipendente').eq('attivo', true).order('nome'),
     supabase.from('availability').select('*').gte('date', from).lte('date', to),
     supabase.from('shifts').select('*').gte('date', from).lte('date', to),
     supabase.from('holidays').select('*').gte('date', from).lte('date', to),
