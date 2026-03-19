@@ -15,6 +15,11 @@ Funzionalità da implementare in ordine di priorità.
 - Da installare: `npm install resend`
 - Variabile d'ambiente da aggiungere: `RESEND_API_KEY=re_...`
 
+### Invio Excel via email → approved automatico
+- Quando l'admin invia il file Excel via email (con Resend), segnare tutte le disponibilità `pending` del mese come `approved`
+- Stessa logica già implementata per il download manuale (`GET /api/export`)
+- Da coordinare con l'implementazione email Resend (vedi sopra)
+
 ---
 
 ## Bassa priorità
