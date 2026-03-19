@@ -9,8 +9,8 @@ import type { User, UserRole } from '@/lib/supabase/types'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrator',
-  manager: 'Manager',
-  dipendente: 'Dipendente',
+  manager: 'Area Manager',
+  dipendente: 'ATC',
 }
 
 const ROLE_STYLES: Record<UserRole, string> = {
@@ -261,8 +261,8 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
               onChange={(e) => setRuolo(e.target.value as UserRole)}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
-              <option value="dipendente">Dipendente</option>
-              <option value="manager">Manager</option>
+              <option value="dipendente">ATC</option>
+              <option value="manager">Area Manager</option>
               <option value="admin">Administrator</option>
             </select>
           </div>

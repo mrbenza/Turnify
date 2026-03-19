@@ -203,6 +203,12 @@ export async function GET(request: NextRequest) {
     .eq('status', 'pending')
     .gte('date', from)
     .lte('date', to)
+
+  // Aggiorna lo stato del mese a "confirmed" (Excel scaricato)
+  await serviceClient2
+    .from('month_status')
+    .upsert({ month, year, status: 'confirmed' }, { onConflict: 'month,year' })
+
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
   return new NextResponse(finalBuf as unknown as BodyInit, {

@@ -51,12 +51,13 @@ export default async function AdminDashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabaseAny = supabase as any
 
-  const [shiftsRes, usersRes, holidaysRes, monthStatusRes, equityRes] = await Promise.all([
+  const [shiftsRes, usersRes, holidaysRes, monthStatusRes, equityRes, availabilityRes] = await Promise.all([
     supabase.from('shifts').select('*').gte('date', from).lte('date', to),
-    supabase.from('users').select('*').eq('ruolo', 'user').eq('attivo', true),
+    supabase.from('users').select('*').eq('ruolo', 'dipendente').eq('attivo', true),
     supabase.from('holidays').select('*').gte('date', from).lte('date', to).eq('mandatory', true),
     supabase.from('month_status').select('*').eq('month', month + 1).eq('year', year).single<MonthStatus>(),
     supabaseAny.rpc('get_equity_scores', { p_month: 0, p_year: year }),
+    supabase.from('availability').select('user_id').gte('date', from).lte('date', to).eq('available', true),
   ])
 
   const shifts = (shiftsRes.data ?? []) as Shift[]
@@ -65,7 +66,18 @@ export default async function AdminDashboardPage() {
   const monthStatus = monthStatusRes.data as MonthStatus | null
   const equityScores = (equityRes.data ?? []) as EquityScore[]
 
-  const isLocked = monthStatus?.status === 'locked'
+  // Dipendenti con almeno una disponibilità nel mese corrente (intersezione con activeUsers)
+  const activeUserIds = new Set(activeUsers.map((u) => u.id))
+  const availabilityUserIds = new Set(
+    ((availabilityRes.data ?? []) as { user_id: string }[])
+      .map((a) => a.user_id)
+      .filter((id) => activeUserIds.has(id))
+  )
+  const usersWithAvailability = availabilityUserIds.size
+
+  const monthStatusValue = monthStatus?.status ?? 'open'
+  const isLocked = monthStatusValue === 'locked'
+  const isConfirmed = monthStatusValue === 'confirmed'
 
   /* ---- Compute stats ---- */
   const userMap = new Map<string, string>(activeUsers.map((u) => [u.id, u.nome]))
@@ -121,7 +133,7 @@ export default async function AdminDashboardPage() {
                 <p className="text-xs text-gray-400 mt-1">{MONTH_NAMES[month]} {year}</p>
               </div>
 
-              {/* Active users */}
+              {/* Active users — doppia info */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                 <div className="flex items-center gap-3 mb-3">
                   <span className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center shrink-0" aria-hidden="true">
@@ -129,18 +141,40 @@ export default async function AdminDashboardPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
                   </span>
-                  <p className="text-sm text-gray-500">Dipendenti attivi</p>
+                  <p className="text-sm text-gray-500">Dipendenti</p>
                 </div>
-                <p className="text-3xl font-bold text-gray-900">{activeUsers.length}</p>
-                <p className="text-xs text-gray-400 mt-1">disponibili questo mese</p>
+                <div className="flex items-end gap-5">
+                  <div>
+                    <p className="text-3xl font-bold text-gray-900">{activeUsers.length}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">attivi</p>
+                  </div>
+                  <div className="mb-0.5">
+                    <p className="text-3xl font-bold text-gray-900">{usersWithAvailability}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">con disponibilità</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Month status */}
-              <div className={`rounded-2xl shadow-sm border p-5 ${isLocked ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-100'}`}>
+              {/* Month status — open / locked / confirmed */}
+              <div className={`rounded-2xl shadow-sm border p-5 ${
+                isConfirmed ? 'bg-green-50 border-green-100'
+                : isLocked  ? 'bg-blue-50 border-blue-100'
+                :              'bg-white border-gray-100'
+              }`}>
                 <div className="flex items-center gap-3 mb-3">
-                  <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isLocked ? 'bg-gray-100' : 'bg-amber-50'}`} aria-hidden="true">
-                    <svg className={`w-5 h-5 ${isLocked ? 'text-gray-500' : 'text-amber-600'}`} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                      {isLocked ? (
+                  <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    isConfirmed ? 'bg-green-100'
+                    : isLocked  ? 'bg-blue-100'
+                    :              'bg-amber-50'
+                  }`} aria-hidden="true">
+                    <svg className={`w-5 h-5 ${
+                      isConfirmed ? 'text-green-600'
+                      : isLocked  ? 'text-blue-600'
+                      :              'text-amber-600'
+                    }`} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                      {isConfirmed ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      ) : isLocked ? (
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       ) : (
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -149,11 +183,17 @@ export default async function AdminDashboardPage() {
                   </span>
                   <p className="text-sm text-gray-500">Stato mese</p>
                 </div>
-                <p className={`text-lg font-bold ${isLocked ? 'text-gray-600' : 'text-amber-600'}`}>
-                  {isLocked ? 'Confermato' : monthStatus?.status === 'approved' ? 'Approvato' : 'Aperto'}
+                <p className={`text-lg font-bold ${
+                  isConfirmed ? 'text-green-700'
+                  : isLocked  ? 'text-blue-700'
+                  :              'text-amber-600'
+                }`}>
+                  {isConfirmed ? 'Comunicato' : isLocked ? 'Chiuso' : 'Aperto'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {isLocked ? 'Non modificabile' : 'Modifiche permesse'}
+                  {isConfirmed ? 'Excel scaricato/inviato'
+                  : isLocked  ? 'Pronto per l\'invio'
+                  :              'Modifiche permesse'}
                 </p>
               </div>
             </div>

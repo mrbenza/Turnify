@@ -4,7 +4,7 @@
 export type UserRole = 'admin' | 'manager' | 'dipendente'
 export type AvailabilityStatus = 'pending' | 'approved' | 'locked'
 export type ShiftType = 'weekend' | 'festivo' | 'reperibilita'
-export type MonthStatusValue = 'open' | 'approved' | 'locked'
+export type MonthStatusValue = 'open' | 'approved' | 'locked' | 'confirmed'
 
 export interface User {
   id: string
