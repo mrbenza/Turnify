@@ -108,6 +108,20 @@ export async function GET(request: NextRequest) {
   const from = `${year}-${String(month).padStart(2, '0')}-01`
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
+  const { data: monthStatus } = await supabase
+    .from('month_status')
+    .select('status')
+    .eq('month', month)
+    .eq('year', year)
+    .maybeSingle()
+
+  if (!monthStatus || (monthStatus.status !== 'locked' && monthStatus.status !== 'confirmed')) {
+    return NextResponse.json(
+      { error: 'Il mese deve essere confermato prima di poter esportare.' },
+      { status: 403 }
+    )
+  }
+
   const { data: shifts, error: shiftsError } = await supabase
     .from('shifts').select('date, user_id')
     .gte('date', from).lte('date', to).order('date', { ascending: true })
@@ -194,20 +208,23 @@ export async function GET(request: NextRequest) {
 
   const finalBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 
-  // Segna tutte le disponibilità pending del mese come approved
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serviceClient2 = createServiceClient() as any
-  await serviceClient2
-    .from('availability')
-    .update({ status: 'approved' })
-    .eq('status', 'pending')
-    .gte('date', from)
-    .lte('date', to)
 
-  // Aggiorna lo stato del mese a "confirmed" (Excel scaricato)
-  await serviceClient2
-    .from('month_status')
-    .upsert({ month, year, status: 'confirmed' }, { onConflict: 'month,year' })
+  try {
+    await serviceClient2
+      .from('availability')
+      .update({ status: 'approved' })
+      .eq('status', 'pending')
+      .gte('date', from)
+      .lte('date', to)
+
+    await serviceClient2
+      .from('month_status')
+      .upsert({ month, year, status: 'confirmed' }, { onConflict: 'month,year' })
+  } catch (err) {
+    console.error('Errore aggiornamento stato post-export (non bloccante):', err)
+  }
 
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 

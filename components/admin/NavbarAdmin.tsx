@@ -6,10 +6,46 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 /* ------------------------------------------------------------------ */
-/* Navigation items                                                    */
+/* Navigation item definitions                                         */
 /* ------------------------------------------------------------------ */
 
-const NAV_ITEMS = [
+/* Admin-only nav items (flat list — no MORE_ITEMS overflow) */
+const ADMIN_NAV_ITEMS = [
+  {
+    href: '/admin',
+    label: 'Dashboard',
+    shortLabel: 'Dashboard',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/utenti',
+    label: 'Utenti',
+    shortLabel: 'Utenti',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/sistema',
+    label: 'Sistema',
+    shortLabel: 'Sistema',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+  },
+]
+
+/* Manager primary nav items (shown in bottom bar on mobile) */
+const MANAGER_NAV_ITEMS = [
   {
     href: '/admin',
     label: 'Dashboard',
@@ -52,23 +88,14 @@ const NAV_ITEMS = [
   },
 ]
 
-/* Secondary items shown in the "Altro" overflow menu */
-const MORE_ITEMS = [
+/* Manager secondary items shown in the "Altro" overflow menu */
+const MANAGER_MORE_ITEMS = [
   {
     href: '/admin/export',
     label: 'Export',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-      </svg>
-    ),
-  },
-  {
-    href: '/admin/utenti',
-    label: 'Utenti',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
       </svg>
     ),
   },
@@ -84,9 +111,6 @@ const MORE_ITEMS = [
   },
 ]
 
-/* All items combined — used by the desktop sidebar */
-const ALL_NAV_ITEMS = [...NAV_ITEMS, ...MORE_ITEMS]
-
 /* ------------------------------------------------------------------ */
 /* Sidebar inner content — used only on desktop (lg+)                  */
 /* ------------------------------------------------------------------ */
@@ -94,11 +118,12 @@ const ALL_NAV_ITEMS = [...NAV_ITEMS, ...MORE_ITEMS]
 interface SidebarContentProps {
   pathname: string
   nomeAdmin?: string
+  allNavItems: { href: string; label: string; icon: React.ReactNode }[]
   onLinkClick: () => void
   onLogout: () => void
 }
 
-function SidebarContent({ pathname, nomeAdmin, onLinkClick, onLogout }: SidebarContentProps) {
+function SidebarContent({ pathname, nomeAdmin, allNavItems, onLinkClick, onLogout }: SidebarContentProps) {
   function isActive(href: string): boolean {
     if (href === '/admin') return pathname === '/admin'
     return pathname.startsWith(href)
@@ -117,7 +142,7 @@ function SidebarContent({ pathname, nomeAdmin, onLinkClick, onLogout }: SidebarC
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5" aria-label="Navigazione admin">
-        {ALL_NAV_ITEMS.map((item) => {
+        {allNavItems.map((item) => {
           const active = isActive(item.href)
           return (
             <a
@@ -171,9 +196,10 @@ function SidebarContent({ pathname, nomeAdmin, onLinkClick, onLogout }: SidebarC
 
 interface NavbarAdminProps {
   nomeAdmin?: string
+  ruolo?: 'admin' | 'manager'
 }
 
-export default function NavbarAdmin({ nomeAdmin }: NavbarAdminProps) {
+export default function NavbarAdmin({ nomeAdmin, ruolo }: NavbarAdminProps) {
   const pathname = usePathname()
   const router = useRouter()
   /* moreOpen controls the "Altro" overflow sheet on mobile */
@@ -190,8 +216,14 @@ export default function NavbarAdmin({ nomeAdmin }: NavbarAdminProps) {
     return pathname.startsWith(href)
   }
 
+  /* Compute nav items based on role */
+  const effectiveRuolo = ruolo ?? 'manager'
+  const navItems = effectiveRuolo === 'admin' ? ADMIN_NAV_ITEMS : MANAGER_NAV_ITEMS
+  const moreItems = effectiveRuolo === 'admin' ? [] : MANAGER_MORE_ITEMS
+  const allNavItems = effectiveRuolo === 'admin' ? ADMIN_NAV_ITEMS : [...MANAGER_NAV_ITEMS, ...MANAGER_MORE_ITEMS]
+
   /* Is any secondary item currently active? Used to highlight "Altro" */
-  const moreActive = MORE_ITEMS.some((item) => isActive(item.href))
+  const moreActive = moreItems.some((item) => isActive(item.href))
 
   return (
     <>
@@ -205,6 +237,7 @@ export default function NavbarAdmin({ nomeAdmin }: NavbarAdminProps) {
         <SidebarContent
           pathname={pathname}
           nomeAdmin={nomeAdmin}
+          allNavItems={allNavItems}
           onLinkClick={() => {}}
           onLogout={handleLogout}
         />
@@ -219,7 +252,7 @@ export default function NavbarAdmin({ nomeAdmin }: NavbarAdminProps) {
       >
         <div className="flex items-stretch h-16">
           {/* Primary nav items */}
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active = isActive(item.href)
             return (
               <a
@@ -241,39 +274,41 @@ export default function NavbarAdmin({ nomeAdmin }: NavbarAdminProps) {
             )
           })}
 
-          {/* "Altro" button — opens overflow sheet */}
-          <button
-            onClick={() => setMoreOpen((v) => !v)}
-            className={`
-              flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px]
-              text-[10px] font-medium transition-colors
-              focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400
-              ${moreActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-800'}
-            `}
-            aria-label={moreOpen ? 'Chiudi menu secondario' : 'Apri menu secondario'}
-            aria-expanded={moreOpen}
-            aria-haspopup="menu"
-          >
-            {/* ··· icon */}
-            <svg
-              className={`w-5 h-5 ${moreActive ? 'text-blue-600' : 'text-gray-400'}`}
-              fill="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
+          {/* "Altro" button — only shown when there are overflow items */}
+          {moreItems.length > 0 && (
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              className={`
+                flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px]
+                text-[10px] font-medium transition-colors
+                focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400
+                ${moreActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-800'}
+              `}
+              aria-label={moreOpen ? 'Chiudi menu secondario' : 'Apri menu secondario'}
+              aria-expanded={moreOpen}
+              aria-haspopup="menu"
             >
-              <circle cx="5" cy="12" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="19" cy="12" r="1.5" />
-            </svg>
-            <span>Altro</span>
-          </button>
+              {/* ··· icon */}
+              <svg
+                className={`w-5 h-5 ${moreActive ? 'text-blue-600' : 'text-gray-400'}`}
+                fill="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="5" cy="12" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="19" cy="12" r="1.5" />
+              </svg>
+              <span>Altro</span>
+            </button>
+          )}
         </div>
       </nav>
 
       {/* ============================================================ */}
       {/* Mobile overflow sheet for secondary items                    */}
       {/* ============================================================ */}
-      {moreOpen && (
+      {moreOpen && moreItems.length > 0 && (
         <>
           {/* Backdrop */}
           <div
@@ -302,7 +337,7 @@ export default function NavbarAdmin({ nomeAdmin }: NavbarAdminProps) {
 
             {/* Secondary links */}
             <ul className="py-2">
-              {MORE_ITEMS.map((item) => {
+              {moreItems.map((item) => {
                 const active = isActive(item.href)
                 return (
                   <li key={item.href} role="none">

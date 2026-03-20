@@ -71,8 +71,8 @@ export async function POST(request: Request) {
     // Se il festivo cade di sabato o domenica (es. Pasqua), escludiamo comunque
     // la coppia Sab+Dom: sabato + festivo-domenica sono lo stesso weekend.
     const dow = new Date(year, month - 1, day).getDay()
-    const isWeekendDay = dow === 0 || dow === 6
-    const satDay = (shiftType === 'weekend' || (shiftType === 'festivo' && isWeekendDay))
+    const isWeekendDate = dow === 0 || dow === 6
+    const satDay = (shiftType === 'weekend' || (shiftType === 'festivo' && isWeekendDate))
       ? (dow === 6 ? day : day - 1)
       : null
     const excludeSat = satDay !== null

@@ -30,6 +30,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Formato data non valido. Atteso: YYYY-MM-DD' }, { status: 400 })
   }
 
+  const parsed = new Date(date)
+  if (isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    return NextResponse.json({ error: 'Data non valida.' }, { status: 400 })
+  }
+
   if (typeof available !== 'boolean') {
     return NextResponse.json({ error: 'Il campo available deve essere un booleano' }, { status: 400 })
   }

@@ -2,6 +2,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { User } from '@/lib/supabase/types'
 
+const VALID_ROLES = ['dipendente', 'manager', 'admin'] as const
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -15,7 +17,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
 
-  // Admin check
+  // Admin/manager check
   const { data: profile } = await supabase
     .from('users')
     .select('ruolo')
@@ -32,44 +34,97 @@ export async function PATCH(
     return NextResponse.json({ error: 'ID utente mancante' }, { status: 400 })
   }
 
-  let body: { attivo?: boolean }
+  let body: { attivo?: boolean; ruolo?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
   }
 
-  if (typeof body.attivo !== 'boolean') {
-    return NextResponse.json({ error: 'Campo obbligatorio: attivo (boolean)' }, { status: 400 })
+  /* ---------------------------------------------------------------- */
+  /* Handle ruolo change                                               */
+  /* ---------------------------------------------------------------- */
+  if (body.ruolo !== undefined) {
+    // Solo admin può cambiare ruoli, non il manager
+    if (profile?.ruolo !== 'admin') {
+      return NextResponse.json({ error: 'Solo l\'amministratore può modificare i ruoli.' }, { status: 403 })
+    }
+
+    // Valida il valore del ruolo
+    if (!(VALID_ROLES as readonly string[]).includes(body.ruolo)) {
+      return NextResponse.json(
+        { error: `Ruolo non valido. Valori ammessi: ${VALID_ROLES.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // Impedisci di cambiare il proprio ruolo
+    if (id === user.id) {
+      return NextResponse.json(
+        { error: 'Non puoi modificare il tuo ruolo.' },
+        { status: 403 }
+      )
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ ruolo: body.ruolo })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Errore aggiornamento ruolo:', error)
+      return NextResponse.json({ error: 'Errore durante l\'aggiornamento del ruolo.' }, { status: 500 })
+    }
+
+    return NextResponse.json(data as User)
   }
 
-  // Impedisci di disabilitare utenti admin
-  const { data: targetProfile } = await supabase
-    .from('users')
-    .select('ruolo')
-    .eq('id', id)
-    .maybeSingle()
+  /* ---------------------------------------------------------------- */
+  /* Handle attivo change                                              */
+  /* ---------------------------------------------------------------- */
+  if (body.attivo !== undefined) {
+    if (typeof body.attivo !== 'boolean') {
+      return NextResponse.json({ error: 'Campo obbligatorio: attivo (boolean)' }, { status: 400 })
+    }
 
-  if (targetProfile?.ruolo === 'admin') {
-    return NextResponse.json(
-      { error: 'Non è possibile modificare lo stato di un amministratore.' },
-      { status: 403 }
-    )
+    // Impedisci di disabilitare utenti admin
+    const { data: targetProfile } = await supabase
+      .from('users')
+      .select('ruolo')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (targetProfile?.ruolo === 'admin') {
+      return NextResponse.json(
+        { error: 'Non è possibile modificare lo stato di un amministratore.' },
+        { status: 403 }
+      )
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ attivo: body.attivo })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Errore aggiornamento utente:', error)
+      return NextResponse.json({ error: 'Errore durante l\'aggiornamento dell\'utente.' }, { status: 500 })
+    }
+
+    return NextResponse.json(data as User)
   }
 
-  const { data, error } = await supabase
-    .from('users')
-    .update({ attivo: body.attivo })
-    .eq('id', id)
-    .select()
-    .single()
-
-  if (error) {
-    console.error('Errore aggiornamento utente:', error)
-    return NextResponse.json({ error: 'Errore durante l\'aggiornamento dell\'utente.' }, { status: 500 })
-  }
-
-  return NextResponse.json(data as User)
+  /* ---------------------------------------------------------------- */
+  /* Neither field provided                                            */
+  /* ---------------------------------------------------------------- */
+  return NextResponse.json(
+    { error: 'Almeno un campo deve essere presente: attivo o ruolo' },
+    { status: 400 }
+  )
 }
 
 export async function DELETE(

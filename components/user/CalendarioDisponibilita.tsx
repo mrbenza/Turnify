@@ -164,6 +164,8 @@ export default function CalendarioDisponibilita({
 
       setSavingDates(new Set(datesToSave))
 
+      const snapshot = localAvailability
+
       // Optimistic update per tutte le date
       startTransition(() =>
         setLocalAvailability((prev) => {
@@ -206,7 +208,7 @@ export default function CalendarioDisponibilita({
         )
       } catch (err) {
         console.error('Errore salvataggio disponibilità:', err)
-        startTransition(() => setLocalAvailability(availabilityList))
+        startTransition(() => setLocalAvailability(snapshot))
       } finally {
         setSavingDates(new Set())
       }

@@ -20,20 +20,40 @@ const ROLE_STYLES: Record<UserRole, string> = {
 }
 
 /* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+
+function formatDate(iso: string | null): string {
+  if (!iso) return 'Mai'
+  return new Date(iso).toLocaleDateString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
+/* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
 interface ListaUtentiProps {
   initialUsers: User[]
   currentUserId: string
+  lastLogins: { id: string; last_sign_in_at: string | null }[]
 }
 
-export default function ListaUtenti({ initialUsers, currentUserId }: ListaUtentiProps) {
+export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }: ListaUtentiProps) {
   const [users, setUsers] = useState<User[]>(initialUsers)
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [changingRole, setChangingRole] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+
+  /* Build a fast lookup map for last logins */
+  const lastLoginMap = new Map<string, string | null>(
+    lastLogins.map(({ id, last_sign_in_at }) => [id, last_sign_in_at])
+  )
 
   /* ---- Toggle active/inactive ---- */
   async function handleToggleActive(user: User) {
@@ -56,6 +76,29 @@ export default function ListaUtenti({ initialUsers, currentUserId }: ListaUtenti
       setErrorMsg('Errore durante l\'aggiornamento dell\'utente.')
     } finally {
       setToggling(null)
+    }
+  }
+
+  /* ---- Change role inline ---- */
+  async function handleRoleChange(user: User, newRole: UserRole) {
+    setChangingRole(user.id)
+    setErrorMsg(null)
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ruolo: newRole }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, ruolo: newRole } : u))
+    } catch (err) {
+      console.error('Errore cambio ruolo:', err)
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante il cambio ruolo.')
+    } finally {
+      setChangingRole(null)
     }
   }
 
@@ -120,6 +163,7 @@ export default function ListaUtenti({ initialUsers, currentUserId }: ListaUtenti
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-0 font-semibold text-gray-500 text-xs uppercase tracking-wide">Nome</th>
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Email</th>
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Ruolo</th>
+                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Ultimo login</th>
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Attivo</th>
               </tr>
             </thead>
@@ -132,9 +176,31 @@ export default function ListaUtenti({ initialUsers, currentUserId }: ListaUtenti
                   </td>
                   <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell">{user.email}</td>
                   <td className="py-3 px-4 sm:px-2">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_STYLES[user.ruolo]}`}>
-                      {ROLE_LABELS[user.ruolo]}
-                    </span>
+                    {/* Inline role select */}
+                    {changingRole === user.id ? (
+                      <span className="text-gray-400"><Spinner /></span>
+                    ) : (
+                      <select
+                        value={user.ruolo}
+                        onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
+                        disabled={user.id === currentUserId}
+                        aria-label={`Ruolo di ${user.nome}`}
+                        title={user.id === currentUserId ? 'Non puoi modificare il tuo ruolo' : undefined}
+                        className={`
+                          text-xs font-medium rounded-full px-2 py-0.5 border-0 cursor-pointer
+                          focus:outline-none focus:ring-2 focus:ring-blue-400
+                          ${ROLE_STYLES[user.ruolo]}
+                          ${user.id === currentUserId ? 'cursor-not-allowed opacity-60' : ''}
+                        `}
+                      >
+                        <option value="dipendente">ATC</option>
+                        <option value="manager">Area Manager</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell text-xs">
+                    {formatDate(lastLoginMap.get(user.id) ?? null)}
                   </td>
                   <td className="py-3 px-4 sm:px-2">
                     <div className="flex items-center gap-2">

@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { User } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
-import ExportForm from '@/components/admin/export/ExportForm'
+import GestioneTemplate from '@/components/admin/sistema/GestioneTemplate'
+import AggiornamentoCalendario from '@/components/admin/sistema/AggiornamentoCalendario'
 
-export default async function ExportPage() {
+export default async function SistemaPage() {
   const supabase = await createClient()
 
   /* ---- Auth ---- */
@@ -17,11 +17,9 @@ export default async function ExportPage() {
     .eq('id', authUser.id)
     .single<{ ruolo: string; nome: string }>()
 
+  /* Solo admin può accedere — manager viene rediretto */
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
-
-  /* ---- Users list for name resolution ---- */
-  const { data: usersData } = await supabase.from('users').select('*')
-  const users = (usersData ?? []) as User[]
+  if (profile?.ruolo === 'manager') redirect('/admin/disponibilita')
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -31,21 +29,30 @@ export default async function ExportPage() {
         <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Export dati</h1>
+            <h1 className="text-xl font-semibold text-gray-900">Sistema</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Scarica i turni del mese in formato CSV
+              Configurazione template e calendario festività
             </p>
           </div>
 
+          {/* Sezione 1: Template Excel */}
           <section
-            aria-labelledby="export-form-heading"
+            aria-labelledby="template-heading"
             className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
           >
-            <h2 id="export-form-heading" className="text-base font-semibold text-gray-900 mb-6">
-              Esporta turni
-            </h2>
-            <ExportForm users={users} />
+            <h2 id="template-heading" className="sr-only">Template Excel</h2>
+            <GestioneTemplate />
           </section>
+
+          {/* Sezione 2: Aggiornamento calendario */}
+          <section
+            aria-labelledby="calendario-heading"
+            className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
+          >
+            <h2 id="calendario-heading" className="sr-only">Aggiornamento calendario festività</h2>
+            <AggiornamentoCalendario />
+          </section>
+
         </main>
       </div>
     </div>

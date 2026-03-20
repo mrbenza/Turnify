@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import type { User } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import ListaUtenti from '@/components/admin/utenti/ListaUtenti'
@@ -18,6 +18,7 @@ export default async function UtentiPage() {
     .single<{ ruolo: string; nome: string }>()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
+  if (profile?.ruolo === 'manager') redirect('/admin/disponibilita')
 
   /* ---- All users ---- */
   const { data: usersData } = await supabase
@@ -27,9 +28,23 @@ export default async function UtentiPage() {
 
   const users = (usersData ?? []) as User[]
 
+  /* ---- Last login via service client ---- */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serviceClient = createServiceClient() as any
+  const { data: authList } = await serviceClient.auth.admin.listUsers({ perPage: 1000 })
+  const lastLoginMap = new Map<string, string | null>()
+  for (const authUser of authList?.users ?? []) {
+    lastLoginMap.set(authUser.id, authUser.last_sign_in_at ?? null)
+  }
+
+  const lastLogins = users.map((u) => ({
+    id: u.id,
+    last_sign_in_at: lastLoginMap.get(u.id) ?? null,
+  }))
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} />
+      <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
 
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -46,7 +61,11 @@ export default async function UtentiPage() {
             className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
           >
             <h2 id="lista-utenti-heading" className="sr-only">Lista utenti</h2>
-            <ListaUtenti initialUsers={users} currentUserId={authUser.id} />
+            <ListaUtenti
+              initialUsers={users}
+              currentUserId={authUser.id}
+              lastLogins={lastLogins}
+            />
           </section>
         </main>
       </div>

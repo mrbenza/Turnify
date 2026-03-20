@@ -18,6 +18,7 @@ export default async function StatistichePage() {
     .single<{ ruolo: string; nome: string }>()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
+  if (profile?.ruolo === 'admin') redirect('/admin')
 
   /* ---- Initial equity scores for current month ---- */
   const now = new Date()
@@ -35,7 +36,7 @@ export default async function StatistichePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} />
+      <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
 
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">

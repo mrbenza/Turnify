@@ -100,7 +100,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} />
+      <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
 
       {/* Main content offset for sidebar on desktop; pb-16 reserves space for mobile bottom nav */}
       <div className="lg:pl-56 pb-16 lg:pb-0">

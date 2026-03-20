@@ -334,6 +334,8 @@ export default function CalendarioGlobale({
     setLoadingAction(cellKey)
     setErrorMsg(null)
 
+    const prevShifts = shifts
+
     try {
       const res = await fetch('/api/shifts', {
         method: 'POST',
@@ -348,12 +350,13 @@ export default function CalendarioGlobale({
       sessionShiftIdsRef.current.add(data.id)
       setShifts((prev) => [...prev, data])
     } catch (err) {
+      setShifts(prevShifts)
       console.error('Errore assegnazione turno:', err)
       setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'assegnazione del turno.')
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingAction])
+  }, [pendingAction, shifts])
 
   /* ---- Remove shift ---- */
   const handleRemove = useCallback(async () => {
@@ -363,6 +366,8 @@ export default function CalendarioGlobale({
     setPendingAction(null)
     setLoadingAction(cellKey)
     setErrorMsg(null)
+
+    const prevShifts = shifts
 
     try {
       const shift = shiftMap.get(`${userId}-${dateStr}`)
@@ -375,12 +380,13 @@ export default function CalendarioGlobale({
       }
       setShifts((prev) => prev.filter((s) => s.id !== shift.id))
     } catch (err) {
+      setShifts(prevShifts)
       console.error('Errore rimozione turno:', err)
       setErrorMsg('Errore durante la rimozione del turno.')
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingAction, shiftMap])
+  }, [pendingAction, shiftMap, shifts])
 
   /* ---- Weekend/festivo conflict check ---- */
   // Restituisce true se l'utente ha già un turno speciale (weekend o festivo)
