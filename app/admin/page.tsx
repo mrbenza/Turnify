@@ -1,28 +1,7 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import type { User, Shift, Holiday, MonthStatus, EquityScore } from '@/lib/supabase/types'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import type { User } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                             */
-/* ------------------------------------------------------------------ */
-
-const MONTH_NAMES = [
-  'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
-  'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
-]
-
-function formatDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  return new Date(year, month - 1, day).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: 'long',
-  })
-}
-
-/* ------------------------------------------------------------------ */
-/* Page                                                                */
-/* ------------------------------------------------------------------ */
 
 export default async function AdminDashboardPage() {
   const supabase = await createClient()
@@ -38,263 +17,164 @@ export default async function AdminDashboardPage() {
     .single<User>()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
+  if (profile?.ruolo === 'manager') redirect('/admin/disponibilita')
 
-  /* ---- Current month range ---- */
-  const now = new Date()
-  const month = now.getMonth() // 0-indexed
-  const year = now.getFullYear()
-  const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
-
-  /* ---- Parallel data fetching ---- */
+  /* ---- Dati sistema ---- */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabaseAny = supabase as any
+  const serviceClient = createServiceClient() as any
 
-  const [shiftsRes, usersRes, holidaysRes, monthStatusRes, equityRes, availabilityRes] = await Promise.all([
-    supabase.from('shifts').select('*').gte('date', from).lte('date', to),
-    supabase.from('users').select('*').eq('ruolo', 'dipendente').eq('attivo', true),
-    supabase.from('holidays').select('*').gte('date', from).lte('date', to).eq('mandatory', true),
-    supabase.from('month_status').select('*').eq('month', month + 1).eq('year', year).single<MonthStatus>(),
-    supabaseAny.rpc('get_equity_scores', { p_month: 0, p_year: year }),
-    supabase.from('availability').select('user_id').gte('date', from).lte('date', to).eq('available', true),
+  const [usersRes, authListRes, templateRes] = await Promise.all([
+    supabase.from('users').select('ruolo, attivo'),
+    serviceClient.auth.admin.listUsers({ perPage: 1000 }),
+    serviceClient.storage.from('templates').list(),
   ])
 
-  const shifts = (shiftsRes.data ?? []) as Shift[]
-  const activeUsers = (usersRes.data ?? []) as User[]
-  const mandatoryHolidays = (holidaysRes.data ?? []) as Holiday[]
-  const monthStatus = monthStatusRes.data as MonthStatus | null
-  const equityScores = (equityRes.data ?? []) as EquityScore[]
+  const users = (usersRes.data ?? []) as { ruolo: string; attivo: boolean }[]
+  const totaleUtenti = users.length
+  const utentiAttivi = users.filter((u) => u.attivo).length
+  const perRuolo = {
+    admin: users.filter((u) => u.ruolo === 'admin').length,
+    manager: users.filter((u) => u.ruolo === 'manager').length,
+    dipendente: users.filter((u) => u.ruolo === 'dipendente').length,
+  }
 
-  // Dipendenti con almeno una disponibilità nel mese corrente (intersezione con activeUsers)
-  const activeUserIds = new Set(activeUsers.map((u) => u.id))
-  const availabilityUserIds = new Set(
-    ((availabilityRes.data ?? []) as { user_id: string }[])
-      .map((a) => a.user_id)
-      .filter((id) => activeUserIds.has(id))
-  )
-  const usersWithAvailability = availabilityUserIds.size
+  const authUsers = authListRes.data?.users ?? []
+  const maiLoggati = authUsers.filter((u: { last_sign_in_at?: string }) => !u.last_sign_in_at).length
 
-  const monthStatusValue = monthStatus?.status ?? 'open'
-  const isLocked = monthStatusValue === 'locked'
-  const isConfirmed = monthStatusValue === 'confirmed'
-
-  /* ---- Compute stats ---- */
-  const userMap = new Map<string, string>(activeUsers.map((u) => [u.id, u.nome]))
-
-  // Ranking annuale basato su equity scores (turni_totali dell'anno)
-  const ranking = [...equityScores]
-    .sort((a, b) => b.turni_totali - a.turni_totali)
-
-  // Who covered mandatory holidays
-  const holidayCoverage: { holiday: Holiday; workers: string[] }[] = mandatoryHolidays.map((h) => {
-    const workers = shifts
-      .filter((s) => s.date === h.date)
-      .map((s) => userMap.get(s.user_id) ?? '—')
-    return { holiday: h, workers }
-  })
-
-  /* ---------------------------------------------------------------- */
-  /* Render                                                            */
-  /* ---------------------------------------------------------------- */
+  const templateFiles = (templateRes.data ?? []) as { name: string; updated_at?: string }[]
+  const templateAttuale = templateFiles.find((f) => f.name === 'AREA4.xlsx') ?? null
 
   return (
     <div className="min-h-screen bg-gray-50">
       <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
 
-      {/* Main content offset for sidebar on desktop; pb-16 reserves space for mobile bottom nav */}
       <div className="lg:pl-56 pb-16 lg:pb-0">
-        <main className="max-w-5xl mx-auto px-4 py-6 space-y-8">
+        <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
 
-          {/* Welcome header */}
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Dashboard Admin</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Panoramica di {MONTH_NAMES[month]} {year}
-            </p>
+            <h1 className="text-xl font-semibold text-gray-900">Pannello di amministrazione</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Riepilogo sistema</p>
           </div>
 
-          {/* Summary cards */}
-          <section aria-labelledby="cards-heading">
-            <h2 id="cards-heading" className="sr-only">Riepilogo mese</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Card utenti */}
+          <section aria-labelledby="utenti-heading" className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 id="utenti-heading" className="text-base font-semibold text-gray-900">Utenti</h2>
+              <a
+                href="/admin/utenti"
+                className="text-xs text-blue-600 hover:underline font-medium"
+              >
+                Gestisci →
+              </a>
+            </div>
 
-              {/* Total shifts */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0" aria-hidden="true">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  </span>
-                  <p className="text-sm text-gray-500">Turni assegnati</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Totale', value: totaleUtenti, color: 'text-gray-900' },
+                { label: 'Attivi', value: utentiAttivi, color: 'text-green-600' },
+                { label: 'Inattivi', value: totaleUtenti - utentiAttivi, color: 'text-gray-400' },
+                { label: 'Mai loggati', value: maiLoggati, color: maiLoggati > 0 ? 'text-amber-600' : 'text-gray-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-gray-50 rounded-xl p-3">
+                  <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{label}</p>
                 </div>
-                <p className="text-3xl font-bold text-gray-900">{shifts.length}</p>
-                <p className="text-xs text-gray-400 mt-1">{MONTH_NAMES[month]} {year}</p>
-              </div>
+              ))}
+            </div>
 
-              {/* Active users — doppia info */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center shrink-0" aria-hidden="true">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  </span>
-                  <p className="text-sm text-gray-500">Dipendenti</p>
-                </div>
-                <div className="flex items-end gap-5">
-                  <div>
-                    <p className="text-3xl font-bold text-gray-900">{activeUsers.length}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">attivi</p>
-                  </div>
-                  <div className="mb-0.5">
-                    <p className="text-3xl font-bold text-gray-900">{usersWithAvailability}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">con disponibilità</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Month status — open / locked / confirmed */}
-              <div className={`rounded-2xl shadow-sm border p-5 ${
-                isConfirmed ? 'bg-green-50 border-green-100'
-                : isLocked  ? 'bg-blue-50 border-blue-100'
-                :              'bg-white border-gray-100'
-              }`}>
-                <div className="flex items-center gap-3 mb-3">
-                  <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    isConfirmed ? 'bg-green-100'
-                    : isLocked  ? 'bg-blue-100'
-                    :              'bg-amber-50'
-                  }`} aria-hidden="true">
-                    <svg className={`w-5 h-5 ${
-                      isConfirmed ? 'text-green-600'
-                      : isLocked  ? 'text-blue-600'
-                      :              'text-amber-600'
-                    }`} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                      {isConfirmed ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      ) : isLocked ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                      )}
-                    </svg>
-                  </span>
-                  <p className="text-sm text-gray-500">Stato mese</p>
-                </div>
-                <p className={`text-lg font-bold ${
-                  isConfirmed ? 'text-green-700'
-                  : isLocked  ? 'text-blue-700'
-                  :              'text-amber-600'
-                }`}>
-                  {isConfirmed ? 'Comunicato' : isLocked ? 'Chiuso' : 'Aperto'}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {isConfirmed ? 'Excel scaricato/inviato'
-                  : isLocked  ? 'Pronto per l\'invio'
-                  :              'Modifiche permesse'}
-                </p>
-              </div>
+            <div className="mt-4 pt-4 border-t border-gray-50 flex flex-wrap gap-3">
+              {[
+                { label: 'Administrator', count: perRuolo.admin, style: 'bg-purple-50 text-purple-700' },
+                { label: 'Area Manager', count: perRuolo.manager, style: 'bg-blue-50 text-blue-700' },
+                { label: 'ATC', count: perRuolo.dipendente, style: 'bg-gray-100 text-gray-600' },
+              ].map(({ label, count, style }) => (
+                <span key={label} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${style}`}>
+                  {label}
+                  <span className="font-bold">{count}</span>
+                </span>
+              ))}
             </div>
           </section>
 
-          {/* Bottom row: ranking + holidays */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Card template */}
+          <section aria-labelledby="template-heading" className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 id="template-heading" className="text-base font-semibold text-gray-900">Template Excel</h2>
+              <a
+                href="/admin/sistema"
+                className="text-xs text-blue-600 hover:underline font-medium"
+              >
+                Gestisci →
+              </a>
+            </div>
 
-            {/* Mini ranking */}
-            <section
-              aria-labelledby="ranking-heading"
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"
-            >
-              <h2 id="ranking-heading" className="text-base font-semibold text-gray-900 mb-4">
-                Classifica turni — {year}
-              </h2>
-
-              {ranking.length === 0 ? (
-                <p className="text-sm text-gray-400">Nessun dipendente attivo.</p>
-              ) : (
-                <ol className="space-y-2.5" aria-label="Classifica turni anno corrente">
-                  {ranking.map((u, idx) => {
-                    const maxCount = Number(ranking[0].turni_totali) || 1
-                    const barWidth = Math.round((Number(u.turni_totali) / maxCount) * 100)
-                    const isTop = idx === 0 && Number(u.turni_totali) > 0
-                    const isBottom = idx === ranking.length - 1 && ranking.length > 1
-
-                    return (
-                      <li key={u.user_id} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-400 font-medium w-5 text-center shrink-0">
-                          {idx + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-sm font-medium truncate ${isTop ? 'text-blue-700' : isBottom ? 'text-orange-600' : 'text-gray-700'}`}>
-                              {u.nome}
-                            </span>
-                            <span className="text-xs text-gray-500 ml-2 shrink-0">{u.turni_totali} turni</span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden" aria-hidden="true">
-                            <div
-                              className={`h-full rounded-full ${isTop ? 'bg-blue-500' : isBottom ? 'bg-orange-400' : 'bg-gray-300'}`}
-                              style={{ width: `${barWidth}%` }}
-                            />
-                          </div>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ol>
-              )}
-
-              {/* Equity score mini note */}
-              {equityScores.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-50">
-                  <p className="text-xs text-gray-400">
-                    Priorità prossimo turno:{' '}
-                    <strong className="text-green-700">
-                      {[...equityScores].sort((a, b) => a.score - b.score)[0]?.nome ?? '—'}
-                    </strong>
-                  </p>
+            {templateAttuale ? (
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{templateAttuale.name}</p>
+                  {templateAttuale.updated_at && (
+                    <p className="text-xs text-gray-400">
+                      Aggiornato il {new Date(templateAttuale.updated_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </p>
+                  )}
                 </div>
-              )}
-            </section>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-red-600">Nessun template caricato</p>
+                  <p className="text-xs text-gray-400">L&apos;export Excel non sarà disponibile</p>
+                </div>
+              </div>
+            )}
+          </section>
 
-            {/* Mandatory holidays coverage */}
-            <section
-              aria-labelledby="holidays-heading"
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"
-            >
-              <h2 id="holidays-heading" className="text-base font-semibold text-gray-900 mb-4">
-                Festività comandate — {MONTH_NAMES[month]}
-              </h2>
+          {/* Card accessi rapidi */}
+          <section aria-labelledby="accessi-heading" className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <h2 id="accessi-heading" className="text-base font-semibold text-gray-900 mb-4">Accesso rapido</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <a
+                href="/admin/utenti"
+                className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors group"
+              >
+                <span className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Gestione utenti</p>
+                  <p className="text-xs text-gray-400">Crea, modifica, disattiva</p>
+                </div>
+              </a>
 
-              {holidayCoverage.length === 0 ? (
-                <p className="text-sm text-gray-400">Nessuna festività comandata questo mese.</p>
-              ) : (
-                <ul className="space-y-3" aria-label="Copertura festività comandate">
-                  {holidayCoverage.map(({ holiday, workers }) => (
-                    <li key={holiday.id} className="flex items-start gap-3">
-                      <span
-                        className={`mt-0.5 shrink-0 w-2 h-2 rounded-full ${workers.length > 0 ? 'bg-green-400' : 'bg-red-400'}`}
-                        aria-hidden="true"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-700">
-                          {holiday.name}
-                          <span className="ml-2 text-xs text-gray-400 font-normal">{formatDate(holiday.date)}</span>
-                        </p>
-                        {workers.length > 0 ? (
-                          <p className="text-xs text-green-600">{workers.join(', ')}</p>
-                        ) : (
-                          <p className="text-xs text-red-500">Nessuno assegnato</p>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
+              <a
+                href="/admin/sistema"
+                className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors group"
+              >
+                <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 group-hover:bg-gray-200 transition-colors">
+                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Sistema</p>
+                  <p className="text-xs text-gray-400">Template, calendario</p>
+                </div>
+              </a>
+            </div>
+          </section>
 
         </main>
       </div>
