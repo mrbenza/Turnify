@@ -147,12 +147,13 @@ export async function GET(request: NextRequest) {
 
   // Download template from Supabase Storage
   // Usa il template specificato nel parametro, oppure il primo file disponibile nel bucket
-  const serviceClient = createServiceClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serviceClient = createServiceClient() as any
   const templateParam = searchParams.get('template')
 
   let templateName = templateParam
   if (!templateName) {
-    const { data: fileList } = await (serviceClient as any).storage.from('templates').list()
+    const { data: fileList } = await serviceClient.storage.from('templates').list()
     const xlsxFiles = (fileList ?? []).filter((f: { name: string }) => f.name.endsWith('.xlsx'))
     if (xlsxFiles.length === 0) {
       return NextResponse.json({ error: 'Nessun template Excel trovato nello storage' }, { status: 500 })
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
     templateName = xlsxFiles[0].name
   }
 
-  const { data: blob, error: storageError } = await (serviceClient as any).storage
+  const { data: blob, error: storageError } = await serviceClient.storage
     .from('templates').download(templateName)
 
   if (storageError || !blob) {
