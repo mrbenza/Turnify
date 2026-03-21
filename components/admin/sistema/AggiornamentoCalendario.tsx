@@ -26,8 +26,20 @@ function groupByYear(holidays: Holiday[]): [number, Holiday[]][] {
   return Array.from(map.entries()).sort((a, b) => b[0] - a[0])
 }
 
+const CURRENT_YEAR = new Date().getFullYear()
+
 export default function AggiornamentoCalendario({ initialHolidays }: AggiornamentoCalendarioProps) {
   const [holidays, setHolidays] = useState<Holiday[]>(initialHolidays)
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([CURRENT_YEAR]))
+
+  function toggleYear(year: number) {
+    setExpandedYears((prev) => {
+      const next = new Set(prev)
+      if (next.has(year)) next.delete(year)
+      else next.add(year)
+      return next
+    })
+  }
 
   /* Import da API */
   const [importYear, setImportYear] = useState<number>(2026)
@@ -237,17 +249,37 @@ export default function AggiornamentoCalendario({ initialHolidays }: Aggiornamen
         <p className="text-sm text-gray-400 mb-6">Nessuna festività presente.</p>
       )}
 
-      {grouped.map(([year, items]) => (
-        <div key={year} className="mb-6">
-          {/* Header anno */}
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-semibold text-gray-700">{year}</span>
+      {grouped.map(([year, items]) => {
+        const isExpanded = expandedYears.has(year)
+        return (
+        <div key={year} className="mb-4">
+          {/* Header anno — cliccabile */}
+          <button
+            type="button"
+            onClick={() => toggleYear(year)}
+            className="w-full flex items-center gap-2 mb-2 group focus:outline-none"
+            aria-expanded={isExpanded}
+          >
+            <svg
+              className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900">
+              {year}
+            </span>
             <span className="text-xs text-gray-400 font-normal">
               {items.length} festività
             </span>
-          </div>
+          </button>
 
-          <div className="space-y-1.5">
+          {isExpanded && (
+          <div className="space-y-1.5 pl-1">
             {items.map((holiday) => (
               <div
                 key={holiday.id}
@@ -332,8 +364,10 @@ export default function AggiornamentoCalendario({ initialHolidays }: Aggiornamen
               </div>
             ))}
           </div>
+          )}
         </div>
-      ))}
+        )
+      })}
 
       {/* ---- Form aggiunta manuale (collassabile) ---- */}
       <div className="border border-gray-100 rounded-xl overflow-hidden">
