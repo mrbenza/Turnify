@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -17,13 +17,13 @@ export default function AuthGuard() {
   const [secondsLeft, setSecondsLeft] = useState(WARNING_BEFORE_SECONDS)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  async function logout() {
+  const logout = useCallback(async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
-  }
+  }, [router])
 
-  function resetTimers() {
+  const resetTimers = useCallback(() => {
     // Cancella timers esistenti
     if (timerRef.current) clearTimeout(timerRef.current)
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current)
@@ -46,7 +46,7 @@ export default function AuthGuard() {
     timerRef.current = setTimeout(() => {
       logout()
     }, inactivityMs)
-  }
+  }, [logout])
 
   useEffect(() => {
     const supabase = createClient()
@@ -70,7 +70,7 @@ export default function AuthGuard() {
       if (countdownRef.current) clearInterval(countdownRef.current)
       EVENTS.forEach(e => window.removeEventListener(e, resetTimers))
     }
-  }, [])
+  }, [resetTimers, router])
 
   if (!showWarning) return null
 

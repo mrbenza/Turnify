@@ -7,12 +7,6 @@ import type { User, UserRole } from '@/lib/supabase/types'
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
-const ROLE_LABELS: Record<UserRole, string> = {
-  admin: 'Administrator',
-  manager: 'Area Manager',
-  dipendente: 'ATC',
-}
-
 const ROLE_STYLES: Record<UserRole, string> = {
   admin: 'bg-purple-50 text-purple-700',
   manager: 'bg-blue-50 text-blue-700',

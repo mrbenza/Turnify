@@ -111,7 +111,6 @@ export default function CalendarioGlobale({
   const [users] = useState<User[]>(initialUsers)
   const [locked, setLocked] = useState(initialLocked)
   const [prevMonthShifts, setPrevMonthShifts] = useState<Shift[]>([])
-  const [equityScores, setEquityScores] = useState<Map<string, number>>(new Map())
   // turniMap: turni_totali grezzi per utente — usato dal suggerito per equità sul conteggio
   const [turniMap, setTurniMap] = useState<Map<string, number>>(new Map())
   // IDs dei turni aggiunti in questa sessione (dalla navigazione al mese corrente)
@@ -159,13 +158,10 @@ export default function CalendarioGlobale({
       ])
 
       setPrevMonthShifts((prevRes.data as Shift[]) ?? [])
-      const scoreMap = new Map<string, number>()
       const countMap = new Map<string, number>()
       for (const row of equityRes.data ?? []) {
-        scoreMap.set(row.user_id, row.score ?? 0)
         countMap.set(row.user_id, Number(row.turni_totali ?? 0))
       }
-      setEquityScores(scoreMap)
       setTurniMap(countMap)
     } catch (err) {
       console.error('Errore fetch dati aux:', err)
@@ -1162,8 +1158,3 @@ function LegendChip({ color, label }: { color: string; label: string }) {
   )
 }
 
-function StatusDot({ status }: { status: 'shift' | 'available' | 'unavailable' }) {
-  const color =
-    status === 'shift' ? 'bg-red-400' : status === 'available' ? 'bg-green-400' : 'bg-gray-300'
-  return <span className={`w-2 h-2 rounded-full shrink-0 ${color}`} aria-hidden="true" />
-}
