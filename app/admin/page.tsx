@@ -17,7 +17,6 @@ export default async function AdminDashboardPage() {
     .single<User>()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
-  if (profile?.ruolo === 'manager') redirect('/admin/disponibilita')
 
   /* ---- Dati sistema ---- */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
