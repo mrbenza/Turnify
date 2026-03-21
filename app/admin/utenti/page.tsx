@@ -18,13 +18,19 @@ export default async function UtentiPage() {
     .single<{ ruolo: string; nome: string }>()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
-  if (profile?.ruolo === 'manager') redirect('/admin/disponibilita')
 
-  /* ---- All users ---- */
-  const { data: usersData } = await supabase
-    .from('users')
-    .select('*')
-    .order('nome', { ascending: true })
+  const isAdmin = profile?.ruolo === 'admin'
+
+  /* ---- Users filtrati per ruolo ----
+     Admin: vede manager + dipendenti (non altri admin)
+     Manager: vede solo dipendenti */
+  let query = supabase.from('users').select('*').order('nome', { ascending: true })
+  if (isAdmin) {
+    query = query.neq('ruolo', 'admin')
+  } else {
+    query = query.eq('ruolo', 'dipendente')
+  }
+  const { data: usersData } = await query
 
   const users = (usersData ?? []) as User[]
 
