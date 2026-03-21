@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import type { User } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import ExportForm from '@/components/admin/export/ExportForm'
@@ -19,9 +19,17 @@ export default async function ExportPage() {
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
-  /* ---- Users list for name resolution ---- */
-  const { data: usersData } = await supabase.from('users').select('*')
-  const users = (usersData ?? []) as User[]
+  /* ---- Users list + template list ---- */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serviceClient = createServiceClient() as any
+  const [usersRes, templatesRes] = await Promise.all([
+    supabase.from('users').select('*'),
+    serviceClient.storage.from('templates').list(),
+  ])
+
+  const users = (usersRes.data ?? []) as User[]
+  const templates = ((templatesRes.data ?? []) as { name: string }[])
+    .filter((f) => f.name.endsWith('.xlsx'))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -33,7 +41,7 @@ export default async function ExportPage() {
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Export dati</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Scarica i turni del mese in formato CSV
+              Scarica i turni del mese in formato Excel
             </p>
           </div>
 
@@ -44,7 +52,7 @@ export default async function ExportPage() {
             <h2 id="export-form-heading" className="text-base font-semibold text-gray-900 mb-6">
               Esporta turni
             </h2>
-            <ExportForm users={users} />
+            <ExportForm users={users} templates={templates} />
           </section>
         </main>
       </div>

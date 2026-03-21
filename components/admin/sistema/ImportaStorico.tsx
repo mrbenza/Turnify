@@ -1,10 +1,19 @@
 'use client'
 
 import { useState, useRef, DragEvent } from 'react'
-import type { TemplateFile } from '@/app/admin/sistema/page'
 
-interface GestioneTemplateProps {
-  initialTemplates: TemplateFile[]
+const MONTH_NAMES_IT = [
+  'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+  'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+]
+
+interface ImportResult {
+  month: number
+  year: number
+  imported: number
+  skipped: number
+  unmatched: string[]
+  ambiguous: string[]
 }
 
 function formatBytes(bytes?: number): string {
@@ -13,16 +22,10 @@ function formatBytes(bytes?: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 
-function formatDate(iso?: string): string {
-  if (!iso) return ''
-  return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })
-}
-
-export default function GestioneTemplate({ initialTemplates }: GestioneTemplateProps) {
-  const [templates, setTemplates] = useState<TemplateFile[]>(initialTemplates)
+export default function ImportaStorico() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState<ImportResult | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -36,7 +39,7 @@ export default function GestioneTemplate({ initialTemplates }: GestioneTemplateP
     }
     setSelectedFile(file)
     setErrorMsg(null)
-    setSuccessMsg(null)
+    setResult(null)
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -58,17 +61,17 @@ export default function GestioneTemplate({ initialTemplates }: GestioneTemplateP
     setDragging(false)
   }
 
-  async function handleUpload() {
+  async function handleImport() {
     if (!selectedFile) return
-    setUploading(true)
+    setImporting(true)
     setErrorMsg(null)
-    setSuccessMsg(null)
+    setResult(null)
 
     try {
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const res = await fetch('/api/templates', {
+      const res = await fetch('/api/import-shifts', {
         method: 'POST',
         body: formData,
       })
@@ -76,61 +79,26 @@ export default function GestioneTemplate({ initialTemplates }: GestioneTemplateP
       const json = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        throw new Error(json.error ?? 'Errore durante il caricamento.')
+        throw new Error(json.error ?? 'Errore durante l\'importazione.')
       }
 
-      const newTemplate: TemplateFile = { name: json.name, updated_at: new Date().toISOString() }
-      setTemplates((prev) => {
-        const exists = prev.find((t) => t.name === json.name)
-        if (exists) return prev.map((t) => t.name === json.name ? newTemplate : t)
-        return [...prev, newTemplate]
-      })
-      setSuccessMsg(`Template "${json.name}" caricato con successo.`)
+      setResult(json as ImportResult)
       setSelectedFile(null)
       if (inputRef.current) inputRef.current.value = ''
     } catch (err) {
-      console.error('Errore upload template:', err)
-      setErrorMsg(err instanceof Error ? err.message : 'Errore durante il caricamento.')
+      console.error('Errore import storico:', err)
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'importazione.')
     } finally {
-      setUploading(false)
+      setImporting(false)
     }
   }
 
   return (
     <div>
-      <h2 className="text-base font-semibold text-gray-900 mb-1">Template Excel</h2>
+      <h2 className="text-base font-semibold text-gray-900 mb-1">Importa storico reperibilità</h2>
       <p className="text-sm text-gray-500 mb-5">
-        Carica i file .xlsx usati per l&apos;export mensile. Il nome del file diventa il nome del template.
+        Carica un file Excel con il formato del template per importare turni passati
       </p>
-
-      {/* Lista template esistenti */}
-      {templates.length > 0 && (
-        <div className="mb-5 space-y-2">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Template caricati</p>
-          {templates.map((t) => (
-            <div key={t.name} className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-xl">
-              <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{t.name}</p>
-                <p className="text-xs text-gray-400">
-                  {[formatBytes(t.size), formatDate(t.updated_at)].filter(Boolean).join(' · ')}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {templates.length === 0 && (
-        <div className="mb-5 flex items-center gap-2 text-sm text-amber-600 bg-amber-50 rounded-xl px-3 py-2.5">
-          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Nessun template caricato — l&apos;export non sarà disponibile.
-        </div>
-      )}
 
       {/* Drop zone */}
       <div
@@ -168,7 +136,7 @@ export default function GestioneTemplate({ initialTemplates }: GestioneTemplateP
             <p className="text-sm font-medium text-gray-700">
               Trascina il file qui o <span className="text-blue-600">seleziona dal computer</span>
             </p>
-            <p className="text-xs text-gray-400 mt-1">Solo file .xlsx — il nome del file verrà mantenuto</p>
+            <p className="text-xs text-gray-400 mt-1">Solo file .xlsx — stesso formato del template export</p>
           </div>
         )}
 
@@ -183,33 +151,97 @@ export default function GestioneTemplate({ initialTemplates }: GestioneTemplateP
         />
       </div>
 
-      {successMsg && (
-        <p className="mt-3 text-sm text-green-700 bg-green-50 rounded-lg px-4 py-2.5" role="status">
-          {successMsg}
-        </p>
-      )}
+      {/* Messaggio errore */}
       {errorMsg && (
         <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5" role="alert">
           {errorMsg}
         </p>
       )}
 
+      {/* Risultato importazione */}
+      {result && (
+        <div className="mt-3 space-y-2" role="status">
+          {/* Riga principale — successo */}
+          <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-4 py-2.5">
+            <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              Importati <strong>{result.imported}</strong> turni —{' '}
+              Mese: <strong>{MONTH_NAMES_IT[result.month - 1]} {result.year}</strong> — Bloccato
+            </span>
+          </div>
+
+          {/* Turni saltati */}
+          {result.skipped > 0 && (
+            <p className="text-sm text-gray-500 px-4">
+              {result.skipped} {result.skipped === 1 ? 'turno già presente, saltato' : 'turni già presenti, saltati'}
+            </p>
+          )}
+
+          {/* Nomi non riconosciuti */}
+          {result.unmatched.length > 0 && (
+            <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
+              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="font-medium">Nomi non riconosciuti (ignorati):</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {result.unmatched.map((name) => (
+                    <span
+                      key={name}
+                      className="inline-block px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Nomi ambigui */}
+          {result.ambiguous.length > 0 && (
+            <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
+              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="font-medium">Nomi ambigui — più dipendenti con stesso cognome (ignorati):</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {result.ambiguous.map((name) => (
+                    <span
+                      key={name}
+                      className="inline-block px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pulsante import */}
       <div className="mt-4">
         <button
-          onClick={handleUpload}
-          disabled={!selectedFile || uploading}
+          onClick={handleImport}
+          disabled={!selectedFile || importing}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium
             hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
             transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
-          aria-busy={uploading}
+          aria-busy={importing}
         >
-          {uploading && (
+          {importing && (
             <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
           )}
-          {uploading ? 'Caricamento...' : 'Carica template'}
+          {importing ? 'Importazione...' : 'Importa turni'}
         </button>
       </div>
     </div>

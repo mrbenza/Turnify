@@ -23,8 +23,13 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
+interface TemplateFile {
+  name: string
+}
+
 interface ExportFormProps {
   users: User[]
+  templates: TemplateFile[]
 }
 
 interface PreviewData {
@@ -33,10 +38,11 @@ interface PreviewData {
   rows: { date: string; userName: string; shiftType: string }[]
 }
 
-export default function ExportForm({ users }: ExportFormProps) {
+export default function ExportForm({ users, templates }: ExportFormProps) {
   const now = new Date()
   const [filterMonth, setFilterMonth] = useState(now.getMonth())
   const [filterYear, setFilterYear] = useState(now.getFullYear())
+  const [selectedTemplate, setSelectedTemplate] = useState<string>(templates[0]?.name ?? '')
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -96,7 +102,8 @@ export default function ExportForm({ users }: ExportFormProps) {
     setErrorMsg(null)
     try {
       // month API è 1-based
-      const res = await fetch(`/api/export?month=${filterMonth + 1}&year=${filterYear}`)
+      const templateParam = selectedTemplate ? `&template=${encodeURIComponent(selectedTemplate)}` : ''
+      const res = await fetch(`/api/export?month=${filterMonth + 1}&year=${filterYear}${templateParam}`)
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? `Errore HTTP ${res.status}`)
@@ -155,6 +162,26 @@ export default function ExportForm({ users }: ExportFormProps) {
           </select>
         </div>
       </section>
+
+      {/* Template selector — visibile solo se ci sono più template */}
+      {templates.length > 1 && (
+        <section aria-labelledby="template-heading">
+          <h2 id="template-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">2</span>
+            Seleziona template
+          </h2>
+          <select
+            value={selectedTemplate}
+            onChange={(e) => setSelectedTemplate(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-label="Template da usare per l'export"
+          >
+            {templates.map((t) => (
+              <option key={t.name} value={t.name}>{t.name}</option>
+            ))}
+          </select>
+        </section>
+      )}
 
       {/* Step 2: Preview */}
       <section aria-labelledby="step2-heading">

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   const serviceClient = createServiceClient() as any
   const { error: storageError } = await serviceClient.storage
     .from('templates')
-    .upload('AREA4.xlsx', buffer, {
+    .upload(file.name, buffer, {
       upsert: true,
       contentType: XLSX_MIME,
     })

@@ -146,13 +146,26 @@ export async function GET(request: NextRequest) {
   }
 
   // Download template from Supabase Storage
+  // Usa il template specificato nel parametro, oppure il primo file disponibile nel bucket
   const serviceClient = createServiceClient()
-  const { data: blob, error: storageError } = await serviceClient.storage
-    .from('templates').download('AREA4.xlsx')
+  const templateParam = searchParams.get('template')
+
+  let templateName = templateParam
+  if (!templateName) {
+    const { data: fileList } = await (serviceClient as any).storage.from('templates').list()
+    const xlsxFiles = (fileList ?? []).filter((f: { name: string }) => f.name.endsWith('.xlsx'))
+    if (xlsxFiles.length === 0) {
+      return NextResponse.json({ error: 'Nessun template Excel trovato nello storage' }, { status: 500 })
+    }
+    templateName = xlsxFiles[0].name
+  }
+
+  const { data: blob, error: storageError } = await (serviceClient as any).storage
+    .from('templates').download(templateName)
 
   if (storageError || !blob) {
     console.error('Template non trovato:', storageError)
-    return NextResponse.json({ error: 'Template Excel non trovato nello storage' }, { status: 500 })
+    return NextResponse.json({ error: `Template "${templateName}" non trovato nello storage` }, { status: 500 })
   }
 
   const templateBuf = await blob.arrayBuffer()
