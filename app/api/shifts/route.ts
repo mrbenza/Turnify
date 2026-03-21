@@ -53,11 +53,11 @@ export async function POST(request: Request) {
   // Check if date is a holiday
   const { data: holiday } = await supabase
     .from('holidays')
-    .select('id')
+    .select('id, mandatory')
     .eq('date', date)
     .maybeSingle()
 
-  const isHoliday = holiday !== null
+  const isHoliday = holiday !== null && holiday.mandatory === true
   const isWeekend = isWeekendDay(year, month - 1, day)
 
   const shiftType: ShiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'

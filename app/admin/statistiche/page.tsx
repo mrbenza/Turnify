@@ -68,12 +68,8 @@ export default async function StatistichePage() {
                         <td className="py-1">Weekend (Sab o Dom)</td>
                         <td className="py-1 text-right font-mono font-medium text-gray-900">×1</td>
                       </tr>
-                      <tr className="border-b border-gray-100">
-                        <td className="py-1">Festivo</td>
-                        <td className="py-1 text-right font-mono font-medium text-gray-900">×2</td>
-                      </tr>
                       <tr>
-                        <td className="py-1">Festivo comandato</td>
+                        <td className="py-1">Festivo attivo</td>
                         <td className="py-1 text-right font-mono font-medium text-gray-900">×3</td>
                       </tr>
                     </tbody>

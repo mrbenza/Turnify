@@ -58,7 +58,6 @@ export interface EquityScore {
   nome: string
   turni_totali: number
   festivi: number
-  fest_comandate: number
   score: number
 }
 

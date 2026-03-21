@@ -145,12 +145,14 @@ export async function POST(request: NextRequest) {
 
   const { data: holidaysData } = await serviceClient
     .from('holidays')
-    .select('date')
+    .select('date, mandatory')
     .gte('date', fromDate)
     .lte('date', toDate)
 
   const holidayDates = new Set<string>(
-    (holidaysData ?? []).map((h: { date: string }) => h.date)
+    (holidaysData ?? [])
+      .filter((h: { date: string; mandatory: boolean }) => h.mandatory)
+      .map((h: { date: string }) => h.date)
   )
 
   // Itera righe 10-40 (giorni 1-31)

@@ -300,12 +300,12 @@ export default function AggiornamentoCalendario({ initialHolidays }: Aggiornamen
                   <button
                     onClick={() => handleToggleMandatory(holiday)}
                     disabled={togglingId === holiday.id}
-                    title="Rimuovi flag comandata"
+                    title="Disattiva festività"
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
                       bg-green-50 text-green-700 border border-green-200
                       hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed
                       focus:outline-none focus:ring-2 focus:ring-green-400"
-                    aria-label={`${holiday.name} — comandata. Clicca per rimuovere`}
+                    aria-label={`${holiday.name} — attiva. Clicca per disattivare`}
                   >
                     {togglingId === holiday.id ? (
                       <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -315,18 +315,18 @@ export default function AggiornamentoCalendario({ initialHolidays }: Aggiornamen
                     ) : (
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500" aria-hidden="true" />
                     )}
-                    Comandata
+                    Attiva
                   </button>
                 ) : (
                   <button
                     onClick={() => handleToggleMandatory(holiday)}
                     disabled={togglingId === holiday.id}
-                    title="Segna come comandata"
+                    title="Attiva festività"
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
                       bg-gray-100 text-gray-500 border border-gray-200
                       hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed
                       focus:outline-none focus:ring-2 focus:ring-gray-400"
-                    aria-label={`${holiday.name} — non comandata. Clicca per attivare`}
+                    aria-label={`${holiday.name} — non attiva. Clicca per attivare`}
                   >
                     {togglingId === holiday.id ? (
                       <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -336,7 +336,7 @@ export default function AggiornamentoCalendario({ initialHolidays }: Aggiornamen
                     ) : (
                       <span className="w-1.5 h-1.5 rounded-full bg-gray-300" aria-hidden="true" />
                     )}
-                    Non comandata
+                    Non attiva
                   </button>
                 )}
 

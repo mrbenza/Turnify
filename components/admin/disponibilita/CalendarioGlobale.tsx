@@ -188,7 +188,7 @@ export default function CalendarioGlobale({
 
   const holidayMap = useMemo(() => {
     const m = new Map<string, Holiday>()
-    holidays.forEach((h) => m.set(h.date, h))
+    holidays.filter((h) => h.mandatory).forEach((h) => m.set(h.date, h))
     return m
   }, [holidays])
 

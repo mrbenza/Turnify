@@ -181,10 +181,6 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
                     <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Festivi</p>
                     <p className="font-semibold text-gray-700">{s.festivi}</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Fest. cmd.</p>
-                    <p className="font-semibold text-gray-700">{s.fest_comandate}</p>
-                  </div>
                 </div>
 
                 {/* Distribution bar */}
@@ -213,7 +209,6 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
                 <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Nome</th>
                 <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Turni tot.</th>
                 <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Festivi</th>
-                <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Fest. cmd.</th>
                 <th scope="col" className="text-left py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Score</th>
                 <th scope="col" className="py-2.5 px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide text-left">Distribuzione</th>
               </tr>
@@ -241,7 +236,6 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
                     </td>
                     <td className="py-3 px-2 text-gray-700 font-semibold">{s.turni_totali}</td>
                     <td className="py-3 px-2 text-gray-500">{s.festivi}</td>
-                    <td className="py-3 px-2 text-gray-500">{s.fest_comandate}</td>
                     <td className="py-3 px-2">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
                         isPriority ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
