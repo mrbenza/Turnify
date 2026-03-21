@@ -37,7 +37,7 @@ interface ListaUtentiProps {
 }
 
 export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }: ListaUtentiProps) {
-  const [users, setUsers] = useState<User[]>(initialUsers)
+  const [dipendentes, setUsers] = useState<User[]>(initialUsers)
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [changingRole, setChangingRole] = useState<string | null>(null)
@@ -50,12 +50,12 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
   )
 
   /* ---- Toggle active/inactive ---- */
-  async function handleToggleActive(user: User) {
-    setToggling(user.id)
+  async function handleToggleActive(dipendente: User) {
+    setToggling(dipendente.id)
     setErrorMsg(null)
     try {
-      const newValue = !user.attivo
-      const res = await fetch(`/api/users/${user.id}`, {
+      const newValue = !dipendente.attivo
+      const res = await fetch(`/api/dipendentes/${dipendente.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attivo: newValue }),
@@ -64,7 +64,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? 'Errore sconosciuto')
       }
-      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, attivo: newValue } : u))
+      setUsers((prev) => prev.map((u) => u.id === dipendente.id ? { ...u, attivo: newValue } : u))
     } catch (err) {
       console.error('Errore toggle utente:', err)
       setErrorMsg('Errore durante l\'aggiornamento dell\'utente.')
@@ -74,11 +74,11 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
   }
 
   /* ---- Change role inline ---- */
-  async function handleRoleChange(user: User, newRole: UserRole) {
-    setChangingRole(user.id)
+  async function handleRoleChange(dipendente: User, newRole: UserRole) {
+    setChangingRole(dipendente.id)
     setErrorMsg(null)
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
+      const res = await fetch(`/api/dipendentes/${dipendente.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ruolo: newRole }),
@@ -87,7 +87,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? 'Errore sconosciuto')
       }
-      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, ruolo: newRole } : u))
+      setUsers((prev) => prev.map((u) => u.id === dipendente.id ? { ...u, ruolo: newRole } : u))
     } catch (err) {
       console.error('Errore cambio ruolo:', err)
       setErrorMsg(err instanceof Error ? err.message : 'Errore durante il cambio ruolo.')
@@ -96,18 +96,18 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
     }
   }
 
-  /* ---- Delete user ---- */
-  async function handleDelete(user: User) {
-    if (!confirm(`Sei sicuro di voler eliminare l'utente "${user.nome}"? Questa azione è irreversibile.`)) return
-    setDeleting(user.id)
+  /* ---- Delete dipendente ---- */
+  async function handleDelete(dipendente: User) {
+    if (!confirm(`Sei sicuro di voler eliminare l'utente "${dipendente.nome}"? Questa azione è irreversibile.`)) return
+    setDeleting(dipendente.id)
     setErrorMsg(null)
     try {
-      const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/dipendentes/${dipendente.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? 'Errore sconosciuto')
       }
-      setUsers((prev) => prev.filter((u) => u.id !== user.id))
+      setUsers((prev) => prev.filter((u) => u.id !== dipendente.id))
     } catch (err) {
       console.error('Errore eliminazione utente:', err)
       setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'eliminazione dell\'utente.')
@@ -147,7 +147,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
       )}
 
       {/* Table */}
-      {users.length === 0 ? (
+      {dipendentes.length === 0 ? (
         <p className="text-sm text-gray-500 py-8 text-center">Nessun utente trovato.</p>
       ) : (
         <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -162,29 +162,29 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {users.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+              {dipendentes.map((dipendente) => (
+                <tr key={dipendente.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-3 px-4 sm:px-0">
-                    <div className="font-medium text-gray-800">{user.nome}</div>
-                    <div className="text-xs text-gray-400 sm:hidden">{user.email}</div>
+                    <div className="font-medium text-gray-800">{dipendente.nome}</div>
+                    <div className="text-xs text-gray-400 sm:hidden">{dipendente.email}</div>
                   </td>
-                  <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell">{user.email}</td>
+                  <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell">{dipendente.email}</td>
                   <td className="py-3 px-4 sm:px-2">
                     {/* Inline role select */}
-                    {changingRole === user.id ? (
+                    {changingRole === dipendente.id ? (
                       <span className="text-gray-400"><Spinner /></span>
                     ) : (
                       <select
-                        value={user.ruolo}
-                        onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
-                        disabled={user.id === currentUserId}
-                        aria-label={`Ruolo di ${user.nome}`}
-                        title={user.id === currentUserId ? 'Non puoi modificare il tuo ruolo' : undefined}
+                        value={dipendente.ruolo}
+                        onChange={(e) => handleRoleChange(dipendente, e.target.value as UserRole)}
+                        disabled={dipendente.id === currentUserId}
+                        aria-label={`Ruolo di ${dipendente.nome}`}
+                        title={dipendente.id === currentUserId ? 'Non puoi modificare il tuo ruolo' : undefined}
                         className={`
                           text-xs font-medium rounded-full px-2 py-0.5 border-0 cursor-pointer
                           focus:outline-none focus:ring-2 focus:ring-blue-400
-                          ${ROLE_STYLES[user.ruolo]}
-                          ${user.id === currentUserId ? 'cursor-not-allowed opacity-60' : ''}
+                          ${ROLE_STYLES[dipendente.ruolo]}
+                          ${dipendente.id === currentUserId ? 'cursor-not-allowed opacity-60' : ''}
                         `}
                       >
                         <option value="dipendente">ATC</option>
@@ -194,45 +194,45 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
                     )}
                   </td>
                   <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell text-xs">
-                    {formatDate(lastLoginMap.get(user.id) ?? null)}
+                    {formatDate(lastLoginMap.get(dipendente.id) ?? null)}
                   </td>
                   <td className="py-3 px-4 sm:px-2">
                     <div className="flex items-center gap-2">
-                      {toggling === user.id ? (
+                      {toggling === dipendente.id ? (
                         <span className="text-gray-400"><Spinner /></span>
                       ) : (
                         <button
                           role="switch"
-                          aria-checked={user.attivo}
-                          aria-label={`${user.attivo ? 'Disattiva' : 'Attiva'} utente ${user.nome}`}
-                          title={user.id === currentUserId ? 'Non puoi disattivare il tuo account' : undefined}
-                          onClick={() => handleToggleActive(user)}
-                          disabled={user.id === currentUserId}
+                          aria-checked={dipendente.attivo}
+                          aria-label={`${dipendente.attivo ? 'Disattiva' : 'Attiva'} utente ${dipendente.nome}`}
+                          title={dipendente.id === currentUserId ? 'Non puoi disattivare il tuo account' : undefined}
+                          onClick={() => handleToggleActive(dipendente)}
+                          disabled={dipendente.id === currentUserId}
                           className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                            user.id === currentUserId
+                            dipendente.id === currentUserId
                               ? 'cursor-not-allowed opacity-50'
                               : 'cursor-pointer'
-                          } ${user.attivo ? 'bg-green-500' : 'bg-gray-200'}`}
+                          } ${dipendente.attivo ? 'bg-green-500' : 'bg-gray-200'}`}
                         >
                           <span
                             className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${
-                              user.attivo ? 'translate-x-4' : 'translate-x-0.5'
+                              dipendente.attivo ? 'translate-x-4' : 'translate-x-0.5'
                             }`}
                             aria-hidden="true"
                           />
                         </button>
                       )}
-                      <span className={`text-xs ${user.attivo ? 'text-green-600' : 'text-gray-400'}`}>
-                        {user.attivo ? 'Attivo' : 'Inattivo'}
+                      <span className={`text-xs ${dipendente.attivo ? 'text-green-600' : 'text-gray-400'}`}>
+                        {dipendente.attivo ? 'Attivo' : 'Inattivo'}
                       </span>
-                      {!user.attivo && user.id !== currentUserId && (
+                      {!dipendente.attivo && dipendente.id !== currentUserId && (
                         <button
-                          onClick={() => handleDelete(user)}
-                          disabled={deleting === user.id}
-                          aria-label={`Elimina utente ${user.nome}`}
+                          onClick={() => handleDelete(dipendente)}
+                          disabled={deleting === dipendente.id}
+                          aria-label={`Elimina utente ${dipendente.nome}`}
                           className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-2 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {deleting === user.id ? '...' : 'Elimina'}
+                          {deleting === dipendente.id ? '...' : 'Elimina'}
                         </button>
                       )}
                     </div>
@@ -244,7 +244,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
         </div>
       )}
 
-      {/* Add user modal */}
+      {/* Add dipendente modal */}
       {showAddModal && (
         <AddUserModal onClose={() => setShowAddModal(false)} onAdded={(newUser) => {
           setUsers((prev) => [...prev, newUser])
@@ -261,7 +261,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
 
 interface AddUserModalProps {
   onClose: () => void
-  onAdded: (user: User) => void
+  onAdded: (dipendente: User) => void
 }
 
 function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
@@ -283,7 +283,7 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
     setError(null)
     setSuccessMsg(null)
     try {
-      const res = await fetch('/api/users', {
+      const res = await fetch('/api/dipendentes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo }),
@@ -307,11 +307,11 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="add-user-modal-title"
+      aria-labelledby="add-dipendente-modal-title"
     >
       <div className="absolute inset-0 bg-black/20" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-white rounded-2xl shadow-xl border border-gray-100 p-6 max-w-md w-full z-10">
-        <h2 id="add-user-modal-title" className="text-base font-semibold text-gray-900 mb-4">
+        <h2 id="add-dipendente-modal-title" className="text-base font-semibold text-gray-900 mb-4">
           Aggiungi utente
         </h2>
 

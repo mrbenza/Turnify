@@ -16,6 +16,18 @@ interface ImportResult {
   ambiguous: string[]
 }
 
+interface FileEntry {
+  id: number
+  file: File
+}
+
+interface FileResult {
+  id: number
+  fileName: string
+  result?: ImportResult
+  error?: string
+}
+
 function formatBytes(bytes?: number): string {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -23,33 +35,47 @@ function formatBytes(bytes?: number): string {
 }
 
 export default function ImportaStorico() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<FileEntry[]>([])
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<ImportResult | null>(null)
+  const [currentId, setCurrentId] = useState<number | null>(null)
+  const [results, setResults] = useState<FileResult[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const nextId = useRef(0)
 
-  function handleFile(file: File | null) {
-    if (!file) return
-    if (!file.name.endsWith('.xlsx')) {
-      setErrorMsg('Seleziona un file .xlsx valido.')
-      setSelectedFile(null)
-      return
+  function handleFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return
+    const valid: FileEntry[] = []
+    const invalid: string[] = []
+    for (const f of Array.from(fileList)) {
+      if (f.name.endsWith('.xlsx')) valid.push({ id: nextId.current++, file: f })
+      else invalid.push(f.name)
     }
-    setSelectedFile(file)
-    setErrorMsg(null)
-    setResult(null)
+    if (invalid.length > 0) {
+      setErrorMsg(`File non validi (solo .xlsx): ${invalid.join(', ')}`)
+    } else {
+      setErrorMsg(null)
+    }
+    if (valid.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...valid])
+      setResults([])
+    }
+  }
+
+  function removeFile(id: number) {
+    setSelectedFiles((prev) => prev.filter((f) => f.id !== id))
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    handleFile(e.target.files?.[0] ?? null)
+    handleFiles(e.target.files)
+    e.target.value = ''
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault()
     setDragging(false)
-    handleFile(e.dataTransfer.files?.[0] ?? null)
+    handleFiles(e.dataTransfer.files)
   }
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
@@ -62,49 +88,54 @@ export default function ImportaStorico() {
   }
 
   async function handleImport() {
-    if (!selectedFile) return
+    if (selectedFiles.length === 0) return
     setImporting(true)
     setErrorMsg(null)
-    setResult(null)
+    setResults([])
 
-    try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
+    const fileResults: FileResult[] = []
 
-      const res = await fetch('/api/import-shifts', {
-        method: 'POST',
-        body: formData,
-      })
+    for (const entry of selectedFiles) {
+      setCurrentId(entry.id)
+      try {
+        const formData = new FormData()
+        formData.append('file', entry.file)
 
-      const json = await res.json().catch(() => ({}))
+        const res = await fetch('/api/import-shifts', {
+          method: 'POST',
+          body: formData,
+        })
 
-      if (!res.ok) {
-        throw new Error(json.error ?? 'Errore durante l\'importazione.')
+        const json = await res.json().catch(() => ({}))
+
+        if (!res.ok) {
+          fileResults.push({ id: entry.id, fileName: entry.file.name, error: json.error ?? 'Errore durante l\'importazione.' })
+        } else {
+          fileResults.push({ id: entry.id, fileName: entry.file.name, result: json as ImportResult })
+        }
+      } catch {
+        fileResults.push({ id: entry.id, fileName: entry.file.name, error: 'Errore di rete.' })
       }
-
-      setResult(json as ImportResult)
-      setSelectedFile(null)
-      if (inputRef.current) inputRef.current.value = ''
-    } catch (err) {
-      console.error('Errore import storico:', err)
-      setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'importazione.')
-    } finally {
-      setImporting(false)
     }
+
+    setResults(fileResults)
+    setSelectedFiles([])
+    setCurrentId(null)
+    setImporting(false)
   }
 
   return (
     <div>
       <h2 className="text-base font-semibold text-gray-900 mb-1">Importa storico reperibilità</h2>
       <p className="text-sm text-gray-500 mb-5">
-        Carica un file Excel con il formato del template per importare turni passati
+        Carica uno o più file Excel con il formato del template per importare turni passati
       </p>
 
       {/* Drop zone */}
       <div
         role="button"
         tabIndex={0}
-        aria-label="Area di caricamento file. Trascina un file .xlsx o premi Invio per selezionarlo"
+        aria-label="Area di caricamento file. Trascina i file .xlsx o premi Invio per selezionarli"
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click() }}
         onDrop={handleDrop}
@@ -125,24 +156,17 @@ export default function ImportaStorico() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
         </span>
-
-        {selectedFile ? (
-          <div className="text-center">
-            <p className="text-sm font-medium text-gray-800">{selectedFile.name}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{formatBytes(selectedFile.size)}</p>
-          </div>
-        ) : (
-          <div className="text-center">
-            <p className="text-sm font-medium text-gray-700">
-              Trascina il file qui o <span className="text-blue-600">seleziona dal computer</span>
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Solo file .xlsx — stesso formato del template export</p>
-          </div>
-        )}
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-700">
+            Trascina i file qui o <span className="text-blue-600">seleziona dal computer</span>
+          </p>
+          <p className="text-xs text-gray-400 mt-1">Solo file .xlsx — puoi selezionarne più di uno</p>
+        </div>
 
         <input
           ref={inputRef}
           type="file"
+          multiple
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={handleInputChange}
           className="sr-only"
@@ -151,77 +175,112 @@ export default function ImportaStorico() {
         />
       </div>
 
-      {/* Messaggio errore */}
+      {/* Lista file selezionati */}
+      {selectedFiles.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {selectedFiles.map((entry) => (
+            <div key={entry.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-xl">
+              <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span className="flex-1 min-w-0 text-sm text-gray-800 truncate">{entry.file.name}</span>
+              <span className="text-xs text-gray-400 shrink-0">{formatBytes(entry.file.size)}</span>
+              {!importing && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeFile(entry.id) }}
+                  className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  aria-label={`Rimuovi ${entry.file.name}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              {importing && currentId === entry.id && (
+                <svg className="w-4 h-4 animate-spin text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Messaggio errore selezione */}
       {errorMsg && (
         <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5" role="alert">
           {errorMsg}
         </p>
       )}
 
-      {/* Risultato importazione */}
-      {result && (
-        <div className="mt-3 space-y-2" role="status">
-          {/* Riga principale — successo */}
-          <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-4 py-2.5">
-            <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>
-              Importati <strong>{result.imported}</strong> turni —{' '}
-              Mese: <strong>{MONTH_NAMES_IT[result.month - 1]} {result.year}</strong> — Bloccato
-            </span>
-          </div>
-
-          {/* Turni saltati */}
-          {result.skipped > 0 && (
-            <p className="text-sm text-gray-500 px-4">
-              {result.skipped} {result.skipped === 1 ? 'turno già presente, saltato' : 'turni già presenti, saltati'}
-            </p>
-          )}
-
-          {/* Nomi non riconosciuti */}
-          {result.unmatched.length > 0 && (
-            <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
-              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="font-medium">Nomi non riconosciuti (ignorati):</p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {result.unmatched.map((name) => (
-                    <span
-                      key={name}
-                      className="inline-block px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium"
-                    >
-                      {name}
-                    </span>
-                  ))}
+      {/* Risultati importazione */}
+      {results.length > 0 && (
+        <div className="mt-3 space-y-3" role="status">
+          {results.map((fr) => (
+            <div key={fr.fileName}>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{fr.fileName}</p>
+              {fr.error ? (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {fr.error}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Nomi ambigui */}
-          {result.ambiguous.length > 0 && (
-            <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
-              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="font-medium">Nomi ambigui — più dipendenti con stesso cognome (ignorati):</p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {result.ambiguous.map((name) => (
-                    <span
-                      key={name}
-                      className="inline-block px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium"
-                    >
-                      {name}
+              ) : fr.result && (
+                <div className="space-y-1.5">
+                  <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-4 py-2.5">
+                    <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>
+                      Importati <strong>{fr.result.imported}</strong> turni —{' '}
+                      <strong>{MONTH_NAMES_IT[fr.result.month - 1]} {fr.result.year}</strong> — Bloccato
                     </span>
-                  ))}
+                  </div>
+                  {fr.result.skipped > 0 && (
+                    <p className="text-sm text-gray-500 px-4">
+                      {fr.result.skipped} {fr.result.skipped === 1 ? 'turno già presente, saltato' : 'turni già presenti, saltati'}
+                    </p>
+                  )}
+                  {fr.result.unmatched.length > 0 && (
+                    <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
+                      <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="font-medium">Nomi non riconosciuti (ignorati):</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {fr.result.unmatched.map((name) => (
+                            <span key={name} className="inline-block px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {fr.result.ambiguous.length > 0 && (
+                    <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
+                      <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="font-medium">Nomi ambigui — più dipendenti con stesso cognome (ignorati):</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {fr.result.ambiguous.map((name) => (
+                            <span key={name} className="inline-block px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -229,7 +288,7 @@ export default function ImportaStorico() {
       <div className="mt-4">
         <button
           onClick={handleImport}
-          disabled={!selectedFile || importing}
+          disabled={selectedFiles.length === 0 || importing}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium
             hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
             transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -241,7 +300,12 @@ export default function ImportaStorico() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
           )}
-          {importing ? 'Importazione...' : 'Importa turni'}
+          {importing
+            ? `Importazione ${selectedFiles.find(e => e.id === currentId)?.file.name ?? ''}...`
+            : selectedFiles.length > 1
+              ? `Importa ${selectedFiles.length} file`
+              : 'Importa turni'
+          }
         </button>
       </div>
     </div>
