@@ -238,7 +238,6 @@ export default async function AdminDashboardPage() {
       .from('users')
       .select('*')
       .eq('ruolo', 'dipendente')
-      .eq('attivo', true)
       .order('nome', { ascending: true }),
   ])
 
@@ -249,6 +248,7 @@ export default async function AdminDashboardPage() {
   const nextShiftCount = nextCountRes.count ?? 0
   const initialShifts  = (shiftsRes.data ?? []) as Shift[]
   const users          = (usersRes.data ?? []) as User[]
+  const utentiAttiviCount = users.filter((u) => u.attivo).length
 
   const monthCards = [
     { isCurrent: true,  month: currMonth, year: currYear, shiftCount: currShiftCount, status: computeCardStatus(currStatus?.status ?? null, currShiftCount) },
@@ -329,7 +329,7 @@ export default async function AdminDashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 id="dipendenti-heading" className="text-base font-semibold text-gray-900">Dipendenti</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{users.length} attivi</p>
+                <p className="text-xs text-gray-400 mt-0.5">{utentiAttiviCount} attivi</p>
               </div>
               <a href="/admin/utenti" className="text-xs text-blue-600 hover:underline font-medium">
                 Gestisci →

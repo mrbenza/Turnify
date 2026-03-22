@@ -1,6 +1,6 @@
 # Logica di Turnazione — Turnify
 
-Questo documento descrive il funzionamento del sistema di assegnazione turni di reperibilità.
+Questo documento descrive il funzionamento del sistema di assegnazione turni di reperibilita.
 
 ---
 
@@ -9,45 +9,45 @@ Questo documento descrive il funzionamento del sistema di assegnazione turni di 
 | `shift_type` | Quando si applica |
 |---|---|
 | `weekend` | Sabato o domenica non festivi |
-| `festivo` | Qualsiasi giorno presente in tabella `holidays` |
+| `festivo` | Giorno presente in `holidays` con `mandatory = true` (festivita attiva). Giorni con `mandatory = false` sono ignorati e trattati come giorni normali. |
 | `reperibilita` | Feriale non festivo (raro, uso futuro) |
 
 ---
 
 ## Regola fondamentale: max 1 turno speciale al mese
 
-Un dipendente non può lavorare più di **un turno speciale** (weekend o festivo) per mese.
-Un weekend conta come unità unica: sabato + domenica insieme.
+Un dipendente non puo lavorare piu di **un turno speciale** (weekend o festivo attivo) per mese.
+Un weekend conta come unita unica: sabato + domenica insieme.
 
 ```
-Turni speciali = weekend (Sab+Dom) + festivi
+Turni speciali = weekend (Sab+Dom) + festivi attivi (mandatory=true)
 Max per mese per dipendente = 1
 ```
 
 ---
 
-## Flusso assegnazione turno (admin)
+## Flusso assegnazione turno (manager)
 
 ```mermaid
 flowchart TD
-    A([Admin clicca su un giorno]) --> B{Il giorno è\nweekend o festivo?}
+    A([Manager clicca su un giorno]) --> B{Il giorno e\nweekend o festivo attivo?}
     B -- No --> Z([Nessuna azione])
-    B -- Sì --> C[Apre pannello laterale]
+    B -- Si --> C[Apre pannello laterale]
 
     C --> D[Carica lista utenti\ncon stato per quel giorno]
 
     D --> E1[Sezione: ASSEGNATI\nsfondo rosso]
     D --> E2[Sezione: DISPONIBILI\nsfondo verde/giallo/rosso]
-    D --> E3[Sezione: GIÀ IN TURNO\nsfondo ambra]
+    D --> E3[Sezione: GIA IN TURNO\nsfondo ambra]
     D --> E4[Sezione: NON DISPONIBILI\ncollassabile]
 
-    E2 --> F[Admin sceglie utente\ne clicca Assegna]
+    E2 --> F[Manager sceglie utente\ne clicca Assegna]
     F --> G[Dialog di conferma]
     G -- Annulla --> C
     G -- Conferma --> H[POST /api/shifts]
 
     H --> I{Validazione\nAPI}
-    I -- Utente già ha\nun turno speciale\nnel mese --> J([Errore 409\nMessaggio all'admin])
+    I -- Utente gia ha\nun turno speciale\nnel mese --> J([Errore 409\nMessaggio al manager])
     I -- OK --> K[Inserisce turno in DB]
     K --> L[Aggiorna UI + ricalcola\nequity scores]
 ```
@@ -58,16 +58,16 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    U([Utente]) --> A{Ha già un turno\nsu QUESTA data?}
-    A -- Sì --> R1[ASSEGNATI 🔴]
+    U([Utente]) --> A{Ha gia un turno\nsu QUESTA data?}
+    A -- Si --> R1[ASSEGNATI]
 
-    A -- No --> B{Ha disponibilità\nsu questa data?}
-    B -- No --> R4[NON DISPONIBILI ⚫]
+    A -- No --> B{Ha disponibilita\nsu questa data?}
+    B -- No --> R4[NON DISPONIBILI]
 
-    B -- Sì --> C{Ha già un turno\nspeciale in un ALTRO\nweekend/festivo\ndi questo mese?}
-    C -- Sì --> R3[GIÀ IN TURNO 🟡]
+    B -- Si --> C{Ha gia un turno\nspeciale in un ALTRO\nweekend/festivo\ndi questo mese?}
+    C -- Si --> R3[GIA IN TURNO]
 
-    C -- No --> R2[DISPONIBILI 🟢]
+    C -- No --> R2[DISPONIBILI]
     R2 --> D[Calcolo badge raccomandazione]
 ```
 
@@ -75,17 +75,17 @@ flowchart TD
 
 ## Calcolo badge raccomandazione (sezione Disponibili)
 
-I badge indicano se un utente ha lavorato di recente. Sono sempre visibili, anche se nessuno è ancora stato assegnato al giorno.
+I badge indicano se un utente ha lavorato di recente. Sono sempre visibili, anche se nessuno e ancora stato assegnato al giorno.
 
 ```mermaid
 flowchart TD
     U([Utente disponibile]) --> A{Ha lavorato\nil mese precedente?}
     A -- No --> B{Ha lavorato\nil weekend precedente\na questo?}
-    B -- No --> G1["✓ ottimo\n(sfondo verde)"]
-    B -- Sì --> G2["⚠ recente\n(sfondo giallo)"]
-    A -- Sì --> C{Ha lavorato\nanche il weekend\nprecedente?}
+    B -- No --> G1["ottimo\n(sfondo verde)"]
+    B -- Si --> G2["recente\n(sfondo giallo)"]
+    A -- Si --> C{Ha lavorato\nanche il weekend\nprecedente?}
     C -- No --> G2
-    C -- Sì --> G3["✕ evita\n(sfondo rosso)"]
+    C -- Si --> G3["evita\n(sfondo rosso)"]
 ```
 
 **Mese precedente**: turni nel mese prima di quello visualizzato.
@@ -93,7 +93,7 @@ flowchart TD
 
 ---
 
-## Utente Suggerito (★)
+## Utente Suggerito
 
 Il sistema indica automaticamente l'utente ottimale per ogni giorno.
 
@@ -101,29 +101,32 @@ Il sistema indica automaticamente l'utente ottimale per ogni giorno.
 flowchart TD
     A([Calcolo suggerito\nper una data]) --> X{Weekend a cavallo\ndi mese?\nes. Dom 1 feb}
 
-    X -- Sì --> X1{Esiste un utente\nche ha lavorato\nil sabato nel mese prec?}
-    X1 -- Sì --> X2([★ Suggerito = quel sabato-worker\npriorità assoluta])
+    X -- Si --> X1{Esiste un utente\nche ha lavorato\nil sabato nel mese prec?}
+    X1 -- Si --> X2([Suggerito = quel sabato-worker\npriorita assoluta])
     X1 -- No --> B
 
-    X -- No --> B[Filtra candidati:\n- disponibile sul giorno\n- non già assegnato\n- non già in turno nel mese]
+    X -- No --> B[Filtra candidati:\n- disponibile sul giorno\n- non gia assegnato\n- non gia in turno nel mese]
 
     B --> C{Esistono candidati\nche NON hanno lavorato\nil mese precedente?}
 
-    C -- Sì --> D[Pool: solo chi\nnon ha lavorato\nil mese prec.]
-    C -- No\ntutti hanno lavorato --> E[Pool: tutti i\ncandidati disponibili\ncome fallback]
+    C -- Si --> D[Pool: solo chi\nnon ha lavorato\nil mese prec.]
+    C -- No tutti hanno lavorato --> E[Pool: tutti i\ncandidati disponibili\ncome fallback]
 
-    D --> F[Ordina per score\nequità effettivo ↑]
+    D --> F[Ordina per score\nequita effettivo]
     E --> F
 
-    F --> G([★ Suggerito = primo\ndella lista])
+    F --> G([Suggerito = primo\ndella lista])
 ```
 
-### Score equità
+### Score equita (formula aggiornata — migration 010)
 
 ```
-score_storico  = turni_totali + (festivi × 2) + (fest_comandate × 3)
+score_storico   = turni_totali + (festivi_attivi x 2)
 score_effettivo = score_storico + turni_assegnati_in_questa_sessione
 ```
+
+Dove `festivi_attivi` = turni su giorni con `holidays.mandatory = true`.
+Ogni turno su festivita attiva vale 3 pt in totale (1 base + 2 extra dal moltiplicatore).
 
 Lo **score effettivo** combina due fonti:
 
@@ -132,17 +135,17 @@ Lo **score effettivo** combina due fonti:
 | `score_storico` (dal DB via RPC) | Ad ogni navigazione di mese | Conta tutti i turni dell'anno, inclusi mesi non confermati |
 | `sessionCounts` (in memoria) | Ad ogni assegnazione nel mese corrente | Corregge il suggerito tra slot dello stesso mese senza rileggere il DB |
 
-**Perché due fonti?**
-`fetchAuxData` richiama il DB solo quando si naviga a un altro mese. Se si assegnano più slot nello stesso mese senza navigare, `score_storico` resta invariato e il sistema suggerirebbe sempre lo stesso utente. `sessionCounts` risolve questo contando i turni già presenti in `shifts` (aggiornati ottimisticamente dopo ogni click).
+**Perche due fonti?**
+`fetchAuxData` richiama il DB solo quando si naviga a un altro mese. Se si assegnano piu slot nello stesso mese senza navigare, `score_storico` resta invariato e il sistema suggerirebbe sempre lo stesso utente. `sessionCounts` risolve questo contando i turni gia presenti in `shifts` (aggiornati ottimisticamente dopo ogni click).
 
 ### Consistenza cross-mese
 
-Poiché ogni assegnazione viene salvata immediatamente in DB via `POST /api/shifts` (indipendentemente dalla conferma del mese), quando si naviga al mese successivo `fetchAuxData` legge già i turni appena inseriti. Il suggerito del nuovo mese è quindi sempre coerente, anche se il mese precedente non è ancora stato confermato/locked.
+Poiche ogni assegnazione viene salvata immediatamente in DB via `POST /api/shifts` (indipendentemente dalla conferma del mese), quando si naviga al mese successivo `fetchAuxData` legge gia i turni appena inseriti. Il suggerito del nuovo mese e quindi sempre coerente, anche se il mese precedente non e ancora stato confermato/locked.
 
 ```
 Mese A: assegno turni (entrano in DB) → non confermo
          ↓ navigo a Mese B
-Mese B: fetchAuxData → get_equity_scores conta già i turni di Mese A ✓
+Mese B: fetchAuxData → get_equity_scores conta gia i turni di Mese A
 ```
 
 ---
@@ -150,29 +153,35 @@ Mese B: fetchAuxData → get_equity_scores conta già i turni di Mese A ✓
 ## Ordine di visualizzazione nella sezione Disponibili
 
 ```
-1. ★ Suggerito       → score annuale più basso tra chi non ha lavorato il mese prec.
-2. ✓ ottimo          → non ha lavorato né il mese scorso né il w.e. precedente
-3. ⚠ recente         → ha lavorato il mese scorso O il w.e. precedente
-4. ✕ evita           → ha lavorato sia il mese scorso che il w.e. precedente
+1. Suggerito       → score annuale piu basso tra chi non ha lavorato il mese prec.
+2. ottimo          → non ha lavorato ne il mese scorso ne il w.e. precedente
+3. recente         → ha lavorato il mese scorso O il w.e. precedente
+4. evita           → ha lavorato sia il mese scorso che il w.e. precedente
 ```
 
 ---
 
-## Flusso conferma mese (lock)
+## Flusso conferma mese (lock → confirmed)
 
 ```mermaid
 flowchart TD
-    A([Admin clicca\nConferma mese]) --> B{Tutti i giorni\nweekend e festivi\nhanno almeno 1 turno?}
+    A([Manager clicca\nConferma mese]) --> B{Tutti i giorni\nweekend e festivi attivi\nhanno almeno 1 turno?}
 
     B -- No --> C[Errore:\nlista giorni scoperti]
-    B -- Sì --> D[POST /api/month\naction: lock]
+    B -- Si --> D[POST /api/month\naction: lock]
 
-    D --> E[month_status → locked]
+    D --> E[month_status → 'locked']
     E --> F[Mese immutabile:\nnessuna aggiunta/rimozione\npossibile]
-    F --> G[Export Excel disponibile]
+    F --> G[Manager va su Invio turni]
+
+    G --> H[GET /api/export\nGenera Excel da template]
+    H --> I[Download file XLSX]
+    I --> J[month_status → 'confirmed'\nimpostato automaticamente]
 ```
 
-**Un mese locked non può essere modificato.** Può essere sbloccato dall'admin tramite il pulsante Annulla conferma, che riporta lo stato a `open`.
+**Un mese locked non puo essere modificato.** Puo essere sbloccato dal manager tramite il pulsante "Annulla conferma", che riporta lo stato a `open`.
+
+**Stato `confirmed`**: impostato automaticamente dall'API `/api/export` quando il manager scarica il file Excel. Indica che il mese e stato esportato. Le colonne `email_inviata` e `email_inviata_at` su `month_status` sono presenti ma non ancora usate (in attesa dell'integrazione Resend).
 
 ---
 
@@ -184,12 +193,15 @@ No. `get_equity_scores` legge dalla tabella `shifts` senza filtrare su `month_st
 **Quando si aggiornano gli equity scores?**
 In due momenti distinti:
 1. **Cambio mese** (navigazione nel calendario) → `fetchAuxData` richiama il DB → `score_storico` aggiornato
-2. **Intra-mese** (più assegnazioni nello stesso mese senza navigare) → `sessionCounts` in memoria → `score_effettivo` aggiornato localmente
+2. **Intra-mese** (piu assegnazioni nello stesso mese senza navigare) → `sessionCounts` in memoria → `score_effettivo` aggiornato localmente
 
-Non c'è nessuna chiamata al DB aggiuntiva dopo ogni singola assegnazione.
+Non c'e nessuna chiamata al DB aggiuntiva dopo ogni singola assegnazione.
 
-**Cosa succede se 1° maggio (festivo) è subito prima del weekend 2-3 maggio?**
-Chi lavora il 1° maggio finisce nella sezione "Già in turno" per il weekend successivo, e non può essere riassegnato. La regola vale anche in direzione inversa.
+**Cosa succede se 1 maggio (festivo attivo) e subito prima del weekend 2-3 maggio?**
+Chi lavora il 1 maggio finisce nella sezione "Gia in turno" per il weekend successivo, e non puo essere riassegnato. La regola vale anche in direzione inversa.
 
-**Il sistema può suggerire chi ha già lavorato il mese precedente?**
-Solo come fallback, se tutti gli utenti disponibili hanno lavorato il mese precedente. In quel caso viene indicato il badge ⚠ o ✕ per avvisare l'admin.
+**Il sistema puo suggerire chi ha gia lavorato il mese precedente?**
+Solo come fallback, se tutti gli utenti disponibili hanno lavorato il mese precedente. In quel caso viene indicato il badge "recente" o "evita" per avvisare il manager.
+
+**Cosa si intende per "festivita attiva"?**
+Una festivita e attiva quando il campo `mandatory` nella tabella `holidays` e `true`. Solo queste festivita compaiono sul calendario come giorni speciali, possono ricevere un turno di tipo `festivo`, e incidono sullo score equita. Le festivita con `mandatory = false` sono invisibili al sistema operativo.

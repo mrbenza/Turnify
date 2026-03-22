@@ -26,6 +26,20 @@ function formatDate(iso: string | null): string {
   })
 }
 
+function inactivityLabel(disattivatoAt: string | null): { label: string; isOld: boolean } {
+  if (!disattivatoAt) return { label: '', isOld: false }
+  const ms = Date.now() - new Date(disattivatoAt).getTime()
+  const days = Math.floor(ms / 86400000)
+  const months = Math.floor(days / 30)
+  const years = Math.floor(days / 365)
+  const isOld = days >= 365
+  let label: string
+  if (years >= 1) label = `${years} ${years === 1 ? 'anno' : 'anni'}`
+  else if (months >= 1) label = `${months} ${months === 1 ? 'mese' : 'mesi'}`
+  else label = `${days} ${days === 1 ? 'giorno' : 'giorni'}`
+  return { label, isOld }
+}
+
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
@@ -56,7 +70,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
     setErrorMsg(null)
     try {
       const newValue = !dipendente.attivo
-      const res = await fetch(`/api/dipendentes/${dipendente.id}`, {
+      const res = await fetch(`/api/users/${dipendente.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attivo: newValue }),
@@ -79,7 +93,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
     setChangingRole(dipendente.id)
     setErrorMsg(null)
     try {
-      const res = await fetch(`/api/dipendentes/${dipendente.id}`, {
+      const res = await fetch(`/api/users/${dipendente.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ruolo: newRole }),
@@ -103,7 +117,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
     setDeleting(dipendente.id)
     setErrorMsg(null)
     try {
-      const res = await fetch(`/api/dipendentes/${dipendente.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/users/${dipendente.id}`, { method: 'DELETE' })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? 'Errore sconosciuto')
@@ -230,16 +244,30 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
                       <span className={`text-xs ${dipendente.attivo ? 'text-green-600' : 'text-gray-400'}`}>
                         {dipendente.attivo ? 'Attivo' : 'Inattivo'}
                       </span>
-                      {!dipendente.attivo && dipendente.id !== currentUserId && (
-                        <button
-                          onClick={() => handleDelete(dipendente)}
-                          disabled={deleting === dipendente.id}
-                          aria-label={`Elimina utente ${dipendente.nome}`}
-                          className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-2 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {deleting === dipendente.id ? '...' : 'Elimina'}
-                        </button>
-                      )}
+                      {!isManager && !dipendente.attivo && dipendente.id !== currentUserId && (() => {
+                        const { label, isOld } = inactivityLabel(dipendente.disattivato_at)
+                        return (
+                          <div className="flex flex-col items-start gap-0.5">
+                            {label && (
+                              <span className={`text-[10px] leading-tight ${isOld ? 'text-red-400 font-medium' : 'text-gray-400'}`}>
+                                inattivo da {label}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleDelete(dipendente)}
+                              disabled={deleting === dipendente.id}
+                              aria-label={`Elimina utente ${dipendente.nome}`}
+                              className={`text-xs border rounded px-2 py-0.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isOld
+                                  ? 'text-red-600 hover:text-red-800 border-red-300 hover:border-red-500 bg-red-50'
+                                  : 'text-red-500 hover:text-red-700 border-red-200 hover:border-red-400'
+                              }`}
+                            >
+                              {deleting === dipendente.id ? '...' : 'Elimina'}
+                            </button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </td>
                 </tr>
@@ -293,7 +321,7 @@ function AddUserModal({ onClose, onAdded, isManager = false }: AddUserModalProps
     setError(null)
     setSuccessMsg(null)
     try {
-      const res = await fetch('/api/dipendentes', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo }),

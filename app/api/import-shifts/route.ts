@@ -122,7 +122,6 @@ export async function POST(request: NextRequest) {
     .from('users')
     .select('id, nome')
     .eq('ruolo', 'dipendente')
-    .eq('attivo', true)
 
   if (usersError) {
     console.error('Errore fetch utenti:', usersError)
@@ -160,11 +159,13 @@ export async function POST(request: NextRequest) {
   const shiftsToInsert: {
     date: string
     user_id: string
+    user_nome: string
     shift_type: 'reperibilita' | 'weekend' | 'festivo'
     created_by: string
   }[] = []
   const unmatched: string[] = []
   const ambiguous: string[] = []
+  const pendingShifts: Record<string, { date: string; shift_type: string }[]> = {}
 
   for (let day = 1; day <= 31; day++) {
     const row = DATA_START + day - 1
@@ -185,6 +186,8 @@ export async function POST(request: NextRequest) {
 
       const matches = cognomeMap.get(cognome)
       if (!matches || matches.length === 0) {
+        if (!pendingShifts[cognome]) pendingShifts[cognome] = []
+        pendingShifts[cognome].push({ date: dateStr, shift_type: shiftType })
         unmatched.push(cognome)
         continue
       }
@@ -198,6 +201,7 @@ export async function POST(request: NextRequest) {
       shiftsToInsert.push({
         date: dateStr,
         user_id: foundUser.id,
+        user_nome: foundUser.nome,
         shift_type: shiftType,
         created_by: user.id,
       })
@@ -246,5 +250,6 @@ export async function POST(request: NextRequest) {
     skipped: shiftsToInsert.length - inserted.length,
     unmatched: [...new Set(unmatched)],
     ambiguous: [...new Set(ambiguous)],
+    pendingShifts,
   })
 }

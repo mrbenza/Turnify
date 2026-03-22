@@ -103,9 +103,16 @@ export async function PATCH(
       )
     }
 
+    const update: Record<string, unknown> = { attivo: body.attivo }
+    if (!body.attivo) {
+      update.disattivato_at = new Date().toISOString()
+    } else {
+      update.disattivato_at = null
+    }
+
     const { data, error } = await supabase
       .from('users')
-      .update({ attivo: body.attivo })
+      .update(update)
       .eq('id', id)
       .select()
       .single()
@@ -140,15 +147,15 @@ export async function DELETE(
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
 
-  // Admin/manager check
+  // Solo admin può eliminare
   const { data: profile } = await supabase
     .from('users')
     .select('ruolo')
     .eq('id', user.id)
     .single()
 
-  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
-    return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  if (profile?.ruolo !== 'admin') {
+    return NextResponse.json({ error: 'Solo l\'amministratore può eliminare utenti.' }, { status: 403 })
   }
 
   const { id } = await params

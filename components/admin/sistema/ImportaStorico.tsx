@@ -14,6 +14,7 @@ interface ImportResult {
   skipped: number
   unmatched: string[]
   ambiguous: string[]
+  pendingShifts: Record<string, { date: string; shift_type: string }[]>
 }
 
 interface FileEntry {
@@ -26,6 +27,12 @@ interface FileResult {
   fileName: string
   result?: ImportResult
   error?: string
+}
+
+interface CreateModalState {
+  fileResultId: number
+  cognome: string
+  pendingShifts: { date: string; shift_type: string }[]
 }
 
 function formatBytes(bytes?: number): string {
@@ -41,6 +48,8 @@ export default function ImportaStorico() {
   const [results, setResults] = useState<FileResult[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [createModal, setCreateModal] = useState<CreateModalState | null>(null)
+  const [resolved, setResolved] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
   const nextId = useRef(0)
 
@@ -92,6 +101,7 @@ export default function ImportaStorico() {
     setImporting(true)
     setErrorMsg(null)
     setResults([])
+    setResolved(new Set())
 
     const fileResults: FileResult[] = []
 
@@ -122,6 +132,11 @@ export default function ImportaStorico() {
     setSelectedFiles([])
     setCurrentId(null)
     setImporting(false)
+  }
+
+  function handleCreated(cognome: string) {
+    setResolved((prev) => new Set([...prev, cognome]))
+    setCreateModal(null)
   }
 
   return (
@@ -249,13 +264,37 @@ export default function ImportaStorico() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <div>
-                        <p className="font-medium">Nomi non riconosciuti (ignorati):</p>
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {fr.result.unmatched.map((name) => (
-                            <span key={name} className="inline-block px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">
-                              {name}
-                            </span>
-                          ))}
+                        <p className="font-medium">Nomi non riconosciuti — puoi creare i dipendenti mancanti:</p>
+                        <div className="mt-2 flex flex-col gap-1.5">
+                          {fr.result.unmatched.map((cognome) =>
+                            resolved.has(cognome) ? (
+                              <span
+                                key={cognome}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium w-fit"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                                {cognome} — creato
+                              </span>
+                            ) : (
+                              <div key={cognome} className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-amber-800 bg-amber-100 rounded-full px-2.5 py-1">
+                                  {cognome}
+                                </span>
+                                <button
+                                  onClick={() => setCreateModal({
+                                    fileResultId: fr.id,
+                                    cognome,
+                                    pendingShifts: fr.result!.pendingShifts[cognome] ?? [],
+                                  })}
+                                  className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+                                >
+                                  + Crea dipendente
+                                </button>
+                              </div>
+                            )
+                          )}
                         </div>
                       </div>
                     </div>
@@ -307,6 +346,207 @@ export default function ImportaStorico() {
               : 'Importa turni'
           }
         </button>
+      </div>
+
+      {/* Modal creazione dipendente */}
+      {createModal && (
+        <CreaUtenteModal
+          cognome={createModal.cognome}
+          pendingShifts={createModal.pendingShifts}
+          onClose={() => setCreateModal(null)}
+          onCreated={handleCreated}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Modal: crea dipendente e importa i suoi turni in sospeso            */
+/* ------------------------------------------------------------------ */
+
+interface CreaUtenteModalProps {
+  cognome: string
+  pendingShifts: { date: string; shift_type: string }[]
+  onClose: () => void
+  onCreated: (cognome: string) => void
+}
+
+function CreaUtenteModal({ cognome, pendingShifts, onClose, onCreated }: CreaUtenteModalProps) {
+  const [nome, setNome] = useState(cognome)
+  const [email, setEmail] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nome.trim() || !email.trim()) {
+      setError('Compila tutti i campi.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      // 1. Crea utente
+      const userRes = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo: 'dipendente' }),
+      })
+      const userJson = await userRes.json().catch(() => ({}))
+      if (!userRes.ok) throw new Error(userJson.error ?? 'Errore creazione utente')
+
+      // 2. Inserisci i turni in sospeso (se presenti)
+      if (pendingShifts.length > 0) {
+        const resolveRes = await fetch('/api/import-shifts/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userJson.id, user_nome: userJson.nome, shifts: pendingShifts }),
+        })
+        const resolveJson = await resolveRes.json().catch(() => ({}))
+        if (!resolveRes.ok) throw new Error(resolveJson.error ?? 'Errore inserimento turni')
+      }
+
+      onCreated(cognome)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Errore imprevisto')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    /* Overlay */
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div className="relative bg-white rounded-2xl shadow-xl border border-gray-100 p-6 w-full max-w-md">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 id="modal-title" className="text-base font-semibold text-gray-900">
+              Crea dipendente
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Cognome rilevato dal file: <strong className="text-gray-700">{cognome}</strong>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-label="Chiudi"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Info turni in sospeso */}
+        {pendingShifts.length > 0 ? (
+          <div className="mb-5 flex items-start gap-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-3.5 py-2.5">
+            <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              Verranno importati <strong>{pendingShifts.length}</strong>{' '}
+              {pendingShifts.length === 1 ? 'turno storico' : 'turni storici'} per questo dipendente.
+            </span>
+          </div>
+        ) : (
+          <div className="mb-5 flex items-start gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3.5 py-2.5">
+            <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Nessun turno da importare per questo dipendente.</span>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} noValidate>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="modal-nome" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Nome completo
+              </label>
+              <input
+                id="modal-nome"
+                type="text"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Es. Mario Rossi"
+                disabled={saving}
+                className="w-full rounded-lg border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900
+                  placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400
+                  disabled:opacity-60 disabled:bg-gray-50 transition"
+              />
+            </div>
+            <div>
+              <label htmlFor="modal-email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Email
+              </label>
+              <input
+                id="modal-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="dipendente@esempio.it"
+                disabled={saving}
+                className="w-full rounded-lg border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900
+                  placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400
+                  disabled:opacity-60 disabled:bg-gray-50 transition"
+              />
+            </div>
+          </div>
+
+          {/* Errore */}
+          {error && (
+            <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3.5 py-2.5" role="alert">
+              {error}
+            </p>
+          )}
+
+          {/* Footer */}
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600
+                hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Annulla
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 text-white
+                text-sm font-medium hover:bg-blue-700 transition-colors
+                focus:outline-none focus:ring-2 focus:ring-blue-400
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving && (
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+              {saving ? 'Salvataggio...' : 'Crea dipendente'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

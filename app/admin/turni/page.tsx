@@ -42,13 +42,13 @@ export default async function TurniPage() {
   const users = (usersRes.data ?? []) as User[]
   const rawShifts = (shiftsRes.data ?? []) as Shift[]
   const monthStatus = monthStatusRes.data as MonthStatus | null
-  const isLocked = monthStatus?.status === 'locked'
+  const isLocked = monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed'
 
   const userMap = new Map<string, string>(users.map((u) => [u.id, u.nome]))
 
   const shifts: ShiftWithUser[] = rawShifts.map((s) => ({
     ...s,
-    userName: userMap.get(s.user_id) ?? s.user_id,
+    userName: userMap.get(s.user_id) ?? s.user_nome ?? s.user_id,
     createdByName: userMap.get(s.created_by) ?? s.created_by,
   }))
 

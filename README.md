@@ -1,6 +1,10 @@
-# Turnify — Gestione Turni di Reperibilità
+# Turnify — Gestione Turni di Reperibilita
 
-Web app per la gestione dei turni di reperibilità dei dipendenti. Permette ai dipendenti di segnare la propria disponibilità su un calendario e all'amministratore di assegnare i turni garantendo una rotazione equa, con export Excel e notifiche email.
+Web app per la gestione dei turni di reperibilita dei dipendenti.
+Permette ai dipendenti di segnare la propria disponibilita su un calendario,
+al manager di assegnare i turni garantendo una rotazione equa e di esportare
+il mese confermato in formato Excel, e all'admin di gestire utenti, template
+e calendario festivita.
 
 ---
 
@@ -8,206 +12,330 @@ Web app per la gestione dei turni di reperibilità dei dipendenti. Permette ai d
 
 | Layer | Tecnologia | Note |
 |-------|-----------|------|
-| Frontend | Next.js 15 + React 19 + Tailwind CSS | Hosted su Vercel (free) |
+| Frontend | Next.js 15 App Router + React 19 + Tailwind CSS | Hosting: Vercel |
 | Database | Supabase PostgreSQL | Free tier |
 | Auth | Supabase Auth | Email + password |
-| Email | Resend | Da implementare — 3000 email/mese gratis |
-| Export | libreria `xlsx` | Template Excel da definire |
+| Export Excel | API route Next.js + JSZip | Modifica solo `xl/worksheets/sheet1.xml` del template; logo, firma e conditional formatting rimangono intatti |
+| Email | Resend | Da implementare |
 
 ---
 
-## Struttura del progetto
+## Struttura cartelle
 
 ```
 turnify/
-├── README.md                        ← questo file
-├── CLAUDE.md                        ← istruzioni per gli agenti AI
-│
-├── docs/                            ← documentazione agenti e schema DB
-│   ├── AGENTS.md                    ← ruoli e regole degli agenti
-│   └── SHEET_SCHEMA.md              ← schema database Supabase
-│
-├── app/                             ← Next.js App Router
+├── README.md
+├── CLAUDE.md
+├── docs/
+│   ├── AGENTS.md
+│   ├── SHEET_SCHEMA.md
+│   ├── LOGICA_TURNI.md
+│   └── TODO.md
+├── app/
 │   ├── page.tsx                     ← redirect a /login
-│   ├── layout.tsx                   ← layout globale
+│   ├── layout.tsx
 │   ├── globals.css
-│   ├── login/
-│   │   └── page.tsx                 ← pagina login
-│   ├── user/
-│   │   └── page.tsx                 ← dashboard dipendente
+│   ├── login/page.tsx
+│   ├── user/page.tsx                ← dashboard dipendente
 │   ├── admin/
-│   │   ├── page.tsx                 ← dashboard admin (panoramica)
-│   │   ├── disponibilita/page.tsx   ← calendario globale + assegnazione
-│   │   ├── turni/page.tsx           ← lista turni assegnati
-│   │   ├── statistiche/page.tsx     ← grafici equità
-│   │   ├── export/page.tsx          ← scarica Excel/CSV
-│   │   ├── utenti/page.tsx          ← gestione dipendenti
-│   │   └── impostazioni/page.tsx    ← email e configurazioni
-│   └── api/                         ← backend server-side (API routes)
-│       ├── shifts/
-│       │   ├── route.ts             ← GET lista turni, POST assegna turno
-│       │   └── [id]/route.ts        ← DELETE rimuovi turno
-│       ├── availability/
-│       │   └── route.ts             ← GET/POST disponibilità dipendente
-│       ├── month/
-│       │   └── route.ts             ← GET/POST stato mese (lock, approve)
-│       ├── email-settings/
-│       │   ├── route.ts             ← GET lista email, POST aggiungi
-│       │   └── [id]/route.ts        ← DELETE rimuovi email
-│       └── users/
-│           └── [id]/route.ts        ← PATCH aggiorna utente (attivo/ruolo)
-│
+│   │   ├── page.tsx                 ← dashboard admin/manager
+│   │   ├── disponibilita/page.tsx   ← calendario globale (manager)
+│   │   ├── turni/page.tsx           ← lista turni (non in navbar manager)
+│   │   ├── statistiche/page.tsx     ← score equita (manager only)
+│   │   ├── export/page.tsx          ← "Invio turni" — genera Excel (manager)
+│   │   ├── utenti/page.tsx          ← gestione utenti (admin + manager)
+│   │   ├── sistema/page.tsx         ← template, festivita, import storico (admin only)
+│   │   └── impostazioni/page.tsx    ← email notifiche (manager)
+│   └── api/
+│       ├── shifts/route.ts          ← GET lista turni, POST assegna
+│       ├── shifts/[id]/route.ts     ← DELETE rimuovi turno
+│       ├── availability/route.ts    ← GET/POST disponibilita
+│       ├── month/route.ts           ← GET/POST stato mese (lock/unlock)
+│       ├── export/route.ts          ← GET genera XLSX da template + imposta status 'confirmed'
+│       ├── import-shifts/route.ts   ← POST importa storico da XLSX (JSZip)
+│       ├── holidays/route.ts        ← GET/POST/DELETE gestione festivita
+│       ├── email-settings/route.ts  ← GET/POST indirizzi email extra
+│       ├── email-settings/[id]/route.ts ← DELETE
+│       ├── dipendentes/route.ts     ← POST crea nuovo utente
+│       └── dipendentes/[id]/route.ts ← PATCH (attivo/ruolo), DELETE
 ├── components/
+│   ├── auth/AuthGuard.tsx           ← timeout sessione automatico
 │   ├── user/
-│   │   ├── NavbarUtente.tsx         ← header + logout
-│   │   ├── CalendarioDisponibilita.tsx  ← calendario interattivo utente
-│   │   └── StoricoTurni.tsx         ← storico turni personale
+│   │   ├── NavbarUtente.tsx
+│   │   ├── CalendarioDisponibilita.tsx
+│   │   └── StoricoTurni.tsx
 │   └── admin/
-│       ├── NavbarAdmin.tsx          ← sidebar navigazione admin
+│       ├── NavbarAdmin.tsx          ← sidebar desktop + bottom bar mobile; nav diversa per admin vs manager
+│       ├── dashboard/
+│       │   └── TurniCollapsibili.tsx ← sezione turni collassabile nella dashboard manager
 │       ├── disponibilita/
-│       │   └── CalendarioGlobale.tsx    ← griglia tutti dipendenti
+│       │   └── CalendarioGlobale.tsx
 │       ├── turni/
-│       │   └── ListaTurni.tsx
+│       │   └── ListaTurni.tsx       ← weekend Sab+Dom raggruppati in una riga
 │       ├── statistiche/
 │       │   └── GraficoEquita.tsx
 │       ├── export/
-│       │   └── ExportForm.tsx
+│       │   └── ExportForm.tsx       ← anteprima grafica + genera Excel
 │       ├── utenti/
-│       │   └── ListaUtenti.tsx
-│       └── impostazioni/
-│           └── GestioneEmail.tsx
-│
+│       │   └── ListaUtenti.tsx      ← prop isManager: se true, ruolo non modificabile
+│       ├── impostazioni/
+│       │   └── GestioneEmail.tsx
+│       └── sistema/
+│           ├── GestioneTemplate.tsx
+│           ├── AggiornamentoCalendario.tsx  ← anni collassabili, toggle Attiva/Non attiva
+│           └── ImportaStorico.tsx           ← upload multi-file sequenziale
 ├── lib/
 │   ├── supabase/
-│   │   ├── client.ts                ← Supabase browser client
-│   │   ├── server.ts                ← Supabase server client + service role
-│   │   └── types.ts                 ← tipi TypeScript dello schema DB
+│   │   ├── client.ts
+│   │   ├── server.ts
+│   │   └── types.ts
 │   └── utils/
-│       └── dates.ts                 ← utility condivise per date
-│
 └── supabase/
     └── migrations/
-        ├── 001_initial_schema.sql   ← schema completo + RLS + festività 2026
-        ├── 002_fix_month_status_rls.sql  ← fix policy INSERT
-        └── 003_fix_equity_scores.sql    ← fix filtro mese RPC
+        ├── 001_initial_schema.sql
+        ├── 002_fix_month_status_rls.sql
+        ├── 003_fix_equity_scores.sql
+        ├── 004_holidays_year_column.sql
+        ├── 005_month_status_confirmed.sql
+        ├── 006_manager_role_rls.sql
+        ├── 007_equity_scores_lower_weights.sql
+        ├── 008_equity_scores_fix_role.sql
+        ├── 009_fix_users_role_constraint.sql
+        └── 010_simplify_equity_scores.sql
 ```
 
 ---
 
 ## Ruoli utente
 
-| Ruolo | Accesso | Permessi |
-|-------|---------|---------|
-| `user` | `/user` | Segna disponibilità, vede storico turni personali |
-| `admin` | `/admin/*` | Assegna turni, conferma mesi, gestisce utenti, esporta dati |
+| Ruolo | Accesso | Permessi principali |
+|-------|---------|---------------------|
+| `admin` | `/admin` | Gestisce utenti (manager + dipendenti), carica template Excel, gestisce calendario festivita, importa storico reperibilita. Non gestisce turni operativi. |
+| `manager` | `/admin` | Assegna turni, visualizza disponibilita, verifica equita, esporta Excel mensile, gestisce email notifiche, aggiunge/disattiva dipendenti. |
+| `dipendente` | `/user` | Inserisce disponibilita per il mese corrente e il prossimo, visualizza i propri turni assegnati. |
+
+---
+
+## Pagine per ruolo
+
+### Admin
+
+| Pagina | Descrizione |
+|--------|-------------|
+| `/admin` | Dashboard: contatori utenti (manager + dipendenti, esclusi admin), stato template Excel, accesso rapido a Utenti e Sistema. |
+| `/admin/utenti` | Gestione utenti: vede tutti tranne altri admin (manager + dipendenti). Puo aggiungere, cambiare ruolo, attivare/disattivare, eliminare. |
+| `/admin/sistema` | Layout a 2 colonne: upload template Excel, importazione storico reperibilita da XLSX, calendario festivita (import da Nager.Date, toggle Attiva/Non attiva, aggiunta manuale, elimina). |
+
+Navbar admin (sidebar desktop): Dashboard — Utenti — Sistema
+
+### Manager
+
+| Pagina | Descrizione |
+|--------|-------------|
+| `/admin` | Dashboard: card mese corrente + prossimo con stato colorato, sezione turni collassata di default, contatore dipendenti. Stati card: "Da completare" (grigio), "In corso" (ambra), "Pronto per invio" (blu), "Confermato" (verde). |
+| `/admin/disponibilita` | Calendario globale: righe = dipendenti, colonne = giorni, click su un giorno per assegnare turno con suggerimento per equita. |
+| `/admin/statistiche` | Score equita per dipendente, filtro per mese o tutti i tempi. |
+| `/admin/export` (UI: "Invio turni") | Anteprima turni con grafico distribuzione, genera Excel da template aziendale. Imposta il mese a `confirmed` dopo il download. |
+| `/admin/utenti` | Solo dipendenti: puo aggiungere nuovi (ruolo fisso = dipendente), attivare/disattivare, eliminare. Non puo cambiare ruolo. |
+| `/admin/impostazioni` | Indirizzi email extra per notifiche. |
+
+Navbar manager (sidebar desktop + bottom bar mobile):
+- Principale: Dashboard, Disponibilita, Statistiche
+- Sezione "Altro": Invio turni (`/admin/export`), Impostazioni
+
+### Dipendente
+
+| Pagina | Descrizione |
+|--------|-------------|
+| `/user` | Calendario disponibilita (mese corrente + prossimo) e storico turni assegnati. |
 
 ---
 
 ## Flusso operativo
 
 ```
-1. Dipendente accede a /user
-   └─ Segna disponibilità su calendario (Sab/Dom/Festività)
-      └─ Può modificare fino a quando il mese non è confermato
+1. Dipendente → /user
+   Segna disponibilita (mese corrente e prossimo).
+   Puo modificare fino a quando il mese non e locked.
 
-2. Admin accede a /admin/disponibilita
-   └─ Vede calendario globale con disponibilità di tutti
-   └─ Clicca su una cella per aprire drawer e assegnare turno
-   └─ Controlla statistiche equità su /admin/statistiche
+2. Manager → /admin/disponibilita
+   Visualizza il calendario globale con la disponibilita di tutti i dipendenti.
+   Clicca su un giorno (weekend o festivo attivo) per assegnare un turno.
+   Il sistema suggerisce il dipendente con score piu basso (equita).
 
-3. Admin conferma il mese
-   └─ Validazione: tutti i weekend devono avere almeno 1 turno
-   └─ Month status → "locked"
-   └─ I dipendenti non possono più modificare la disponibilità
+3. Manager → /admin/statistiche
+   Verifica la distribuzione equa dei turni per mese o storico.
 
-4. [TODO] Admin invia email
-   └─ Notifica a tutti i dipendenti + indirizzi in email_settings
-   └─ Dopo invio: rollback non più possibile
+4. Manager → /admin/disponibilita → Conferma mese
+   Validazione: tutti i weekend e i festivi attivi devono avere almeno 1 turno.
+   month_status → 'locked' (mese immutabile, disponibilita bloccate).
 
-5. Admin scarica Excel
-   └─ /admin/export → CSV del mese (template personalizzato da implementare)
+5. Manager → /admin/export ("Invio turni")
+   Seleziona il mese, carica l'anteprima grafica (distribuzione turni).
+   Genera Excel dal template aziendale (JSZip, preserva logo/firma/formatting).
+   Download → month_status → 'confirmed'.
+   [TODO] Invio email automatico via Resend.
+
+6. Admin → /admin/sistema (separato dal flusso operativo)
+   Carica il template Excel.
+   Importa storico reperibilita da file XLSX precedenti.
+   Gestisce il calendario festivita (import Nager.Date, attiva/disattiva).
 ```
 
 ---
 
-## Database — Tabelle principali
+## Schema DB — tabelle principali
 
-| Tabella | Descrizione |
-|---------|-------------|
-| `users` | Anagrafica utenti (id = Supabase Auth UUID) |
-| `availability` | Disponibilità segnate dai dipendenti |
-| `shifts` | Turni assegnati dall'admin |
-| `holidays` | Festività (mandatory = da distribuire equamente) |
-| `month_status` | Stato del mese (open / approved / locked) |
-| `email_settings` | Indirizzi email aggiuntivi per notifiche |
+### `users`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK, generato da Supabase Auth |
+| nome | text | nome e cognome |
+| email | text | unique |
+| ruolo | text | `admin` \| `manager` \| `dipendente` |
+| attivo | boolean | default true |
+| data_creazione | timestamptz | default now() |
 
-Vedi `SHEET_SCHEMA.md` per lo schema completo con tipi, RLS e constraint.
+### `availability`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| user_id | uuid | FK → users.id |
+| date | date | giorno di disponibilita |
+| available | boolean | |
+| status | text | `pending` \| `approved` \| `locked` |
+
+### `shifts`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| date | date | giorno del turno |
+| user_id | uuid | FK → users.id |
+| shift_type | text | `weekend` \| `festivo` \| `reperibilita` |
+| created_by | uuid | FK → users.id |
+
+`shift_type = 'festivo'` viene usato solo se il giorno e una festivita con `mandatory = true`.
+
+### `holidays`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| date | date | data della festivita |
+| name | text | es. "Natale" |
+| mandatory | boolean | `true` = attiva (visibile, assegnabile, vale 3 pt nello score); `false` = ignorata completamente |
+| year | integer | anno (colonna computed) |
+
+### `month_status`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| month | integer | 1–12 |
+| year | integer | |
+| status | text | `open` \| `locked` \| `confirmed` |
+| locked_by | uuid | FK → users.id |
+| locked_at | timestamptz | |
+| email_inviata | boolean | default false |
+| email_inviata_at | timestamptz | nullable |
+
+Status:
+- `open` — in lavorazione
+- `locked` — confermato dal manager, pronto per export
+- `confirmed` — Excel generato/scaricato (impostato automaticamente da `/api/export`)
+
+### `email_settings`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| email | text | unique |
+| descrizione | text | nullable |
+| attivo | boolean | default true |
+
+---
+
+## Algoritmo equita
+
+Formula score (migration 010):
+```
+score = turni_totali + (festivi_attivi x 2)
+```
+
+- Ogni turno normale vale 1 pt
+- Ogni turno su festivita attiva (`mandatory = true`) vale 3 pt (1 base + 2 extra)
+- Score piu basso = priorita piu alta
+
+Funzione RPC: `get_equity_scores(p_month integer, p_year integer)`
+- `p_month = 0` → score su tutti i tempi
+- `p_month > 0` → score filtrato per mese/anno specificato
+
+Suggerimento assegnazione in `CalendarioGlobale`:
+- Ordinato per `turni_totali` grezzo (non score ponderato) + delta sessione (`sessionCounts`)
+- Cross-month Saturday: chi ha lavorato il sabato del mese precedente ha priorita sul primo sabato del mese nuovo
+- Same-month Sab+Dom: la domenica suggerisce automaticamente chi ha lavorato il sabato della stessa settimana
 
 ---
 
 ## Sicurezza
 
-- **Row Level Security (RLS)** attiva su tutte le tabelle Supabase
-- I dipendenti vedono e modificano **solo i propri dati**
-- Solo gli admin possono scrivere su `shifts`, `month_status`, `email_settings`
-- Le chiavi `NEXT_PUBLIC_*` sono visibili al browser — la sicurezza è garantita da RLS
-- La `SUPABASE_SERVICE_ROLE_KEY` è usata **solo server-side** e non è mai esposta al client
-- Tutte le operazioni di scrittura passano per API routes server-side in `app/api/`
-- `userId` e `adminId` non transitano mai dal browser — vengono letti dalla sessione server-side
+- Row Level Security (RLS) abilitata su tutte le tabelle Supabase
+- `is_admin_or_manager()` — funzione SQL usata nelle policy per operazioni che richiedono ruolo elevato
+- Il frontend usa il client Supabase con chiave `anon`; le operazioni privilegiate usano la `service_role` key solo nelle API route server-side Next.js
+- `AuthGuard.tsx` gestisce il timeout automatico della sessione lato frontend
+- `userId` e ruolo non transitano mai dal browser — vengono letti dalla sessione server-side
 
 ---
 
 ## Variabili d'ambiente
 
-```bash
-# .env.local (mai committare)
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...          # pubblica, protetta da RLS
-SUPABASE_SERVICE_ROLE_KEY=eyJ...              # solo server-side
-# RESEND_API_KEY=re_...                       # da aggiungere quando si implementa email
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+RESEND_API_KEY=          # da aggiungere quando si implementa l'email
 ```
 
 ---
 
-## Setup iniziale (nuovo ambiente)
+## Setup iniziale
 
-1. Crea progetto su [supabase.com](https://supabase.com)
-2. Esegui le migration in ordine su **SQL Editor**:
-   - `supabase/migrations/001_initial_schema.sql`
-   - `supabase/migrations/002_fix_month_status_rls.sql`
-   - `supabase/migrations/003_fix_equity_scores.sql`
-3. Crea il primo admin: **Authentication → Users → Add user**, poi inserisci riga in `users` con `ruolo = 'admin'`
-4. Copia le chiavi API in `.env.local`
+1. Creare un progetto Supabase
+2. Eseguire le migration in ordine tramite SQL Editor:
+
+| Migration | Contenuto |
+|-----------|-----------|
+| `001_initial_schema.sql` | Schema iniziale, RLS, festivita 2026 |
+| `002_fix_month_status_rls.sql` | Fix RLS month_status (policy INSERT separata) |
+| `003_fix_equity_scores.sql` | Fix get_equity_scores filtro mese, aggiunta email_settings, colonne month_status |
+| `004_holidays_year_column.sql` | Colonna year su holidays (computed) |
+| `005_month_status_confirmed.sql` | Status 'confirmed' su month_status |
+| `006_manager_role_rls.sql` | Ruolo manager: RLS is_admin_or_manager() |
+| `007_equity_scores_lower_weights.sql` | Score equita pesi ridotti |
+| `008_equity_scores_fix_role.sql` | Fix ruolo 'user' → 'dipendente' nella funzione SQL |
+| `009_fix_users_role_constraint.sql` | Fix constraint users.ruolo (admin\|manager\|dipendente) |
+| `010_simplify_equity_scores.sql` | Semplifica score: solo festivi_attivi×2, rimuove fest_comandate |
+
+3. Configurare le variabili d'ambiente (`.env.local` in sviluppo, pannello Vercel in produzione)
+4. Creare il primo admin: Authentication → Users → Add user, poi inserire riga in `users` con `ruolo = 'admin'`
 5. `npm install && npm run dev`
 
 ---
 
-## Deploy (Vercel)
+## Deploy Vercel
 
-- Collega repo GitHub al progetto Vercel
-- Framework Preset: **Next.js**
-- Root Directory: vuoto (app è nella root del repo)
-- Aggiungi le 3 variabili d'ambiente nel pannello Vercel
-- Ogni push su `main` triggera il deploy automatico
+1. Importare il repository su Vercel
+2. Framework Preset: Next.js; Root Directory: vuoto
+3. Aggiungere le variabili d'ambiente nel pannello Vercel
+4. Ogni push su `main` triggera un deploy automatico
 
 ---
 
 ## TODO
 
-- [ ] Integrare **Resend** per invio email "mese confermato" (API key: `RESEND_API_KEY`)
-- [ ] Export Excel su **template aziendale** (l'utente deve fornire il modello)
-- [ ] Aggiungere festività per anni successivi al 2026
-- [ ] Gestione festività da UI admin
+### Alta priorita
+- Email notifica mese confermato via Resend: `email_settings` gia pronta, colonne `email_inviata`/`email_inviata_at` gia su `month_status`, aggiungere `RESEND_API_KEY`
 
----
+### Media priorita
+- Multi-area: tabella `areas` (nome, scheduling_mode, template_path, manager_id) + `area_id` su users/shifts/availability/month_status. Scheduling modes: `weekend_full` (attuale), `single_day`, `sun_next_sat`
 
-## Algoritmo equità turni
-
-```
-score = turni_totali + (festivi × 2) + (festività_comandate × 3)
-```
-
-Chi ha **score più basso** ha priorità nell'assegnazione del prossimo turno.
-La funzione RPC `get_equity_scores(p_month, p_year)` calcola lo score:
-- `p_month = 0` → su tutti i tempi
-- `p_month > 0` → solo per il mese specificato
+### Bassa priorita
+- Festivita anni futuri (attualmente solo 2026)
+- Rotazione festivi comandati (chi lavora Natale non lo riprende per ~10 anni)

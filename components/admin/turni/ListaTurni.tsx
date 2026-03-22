@@ -123,10 +123,10 @@ export default function ListaTurni({
       const rawShifts = (shiftsRes.data ?? []) as Shift[]
       setShifts(rawShifts.map((s) => ({
         ...s,
-        userName: userMap.get(s.user_id) ?? s.user_id,
+        userName: userMap.get(s.user_id) ?? s.user_nome ?? s.user_id,
         createdByName: userMap.get(s.created_by) ?? s.created_by,
       })))
-      setLocked(statusRes.data?.status === 'locked')
+      setLocked(statusRes.data?.status === 'locked' || statusRes.data?.status === 'confirmed')
     } catch (err) {
       console.error('Errore caricamento turni:', err)
       setErrorMsg('Impossibile caricare i turni.')

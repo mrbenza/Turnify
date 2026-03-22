@@ -116,12 +116,20 @@ export async function POST(request: Request) {
     )
   }
 
+  // Fetch nome dipendente per denormalizzarlo nel turno
+  const { data: targetUser } = await supabase
+    .from('users')
+    .select('nome')
+    .eq('id', user_id)
+    .single()
+
   // Insert shift — adminId comes from session, not from client
   const { data, error } = await supabase
     .from('shifts')
     .insert({
       date,
       user_id,
+      user_nome: targetUser?.nome ?? null,
       shift_type: shiftType,
       created_by: user.id,
     })

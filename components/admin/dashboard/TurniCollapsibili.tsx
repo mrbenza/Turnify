@@ -26,7 +26,7 @@ export default function TurniCollapsibili({
   const userMap = new Map<string, string>(users.map((u) => [u.id, u.nome]))
   const enriched = initialShifts.map((s) => ({
     ...s,
-    userName: userMap.get(s.user_id) ?? s.user_id,
+    userName: userMap.get(s.user_id) ?? s.user_nome ?? s.user_id,
     createdByName: userMap.get(s.created_by) ?? s.created_by,
   }))
 

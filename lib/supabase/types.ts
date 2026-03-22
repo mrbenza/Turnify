@@ -13,6 +13,7 @@ export interface User {
   ruolo: UserRole
   attivo: boolean
   data_creazione: string
+  disattivato_at: string | null
 }
 
 export interface Holiday {
@@ -48,6 +49,7 @@ export interface Shift {
   id: string
   date: string
   user_id: string
+  user_nome: string | null
   shift_type: ShiftType
   created_by: string
   created_at: string
