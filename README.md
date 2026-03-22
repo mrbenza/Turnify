@@ -1,5 +1,5 @@
 # Turnify — Gestione Turni di Reperibilita
-**v1.1.0**
+**v1.2.0**
 
 Web app per la gestione dei turni di reperibilita dei dipendenti.
 Permette ai dipendenti di segnare la propria disponibilita su un calendario,
@@ -38,16 +38,36 @@ turnify/
 │   ├── layout.tsx
 │   ├── globals.css
 │   ├── login/page.tsx
-│   ├── user/page.tsx                ← dashboard dipendente
+│   ├── user/
+│   │   ├── page.tsx                 ← dashboard dipendente (SSR: availability, holidays, shifts, month_status, storico in Promise.all)
+│   │   ├── loading.tsx              ← skeleton calendario + storico turni
+│   │   └── impostazioni/
+│   │       ├── page.tsx
+│   │       └── loading.tsx          ← skeleton inline (layout user, non admin)
 │   ├── admin/
 │   │   ├── page.tsx                 ← dashboard admin/manager
-│   │   ├── disponibilita/page.tsx   ← calendario globale (manager)
-│   │   ├── turni/page.tsx           ← lista turni (non in navbar manager)
-│   │   ├── statistiche/page.tsx     ← score equita (manager only)
-│   │   ├── export/page.tsx          ← "Invio turni" — genera Excel (manager)
-│   │   ├── utenti/page.tsx          ← gestione utenti (admin + manager)
-│   │   ├── sistema/page.tsx         ← template, festivita, import storico (admin only)
-│   │   └── impostazioni/page.tsx    ← email notifiche (manager)
+│   │   ├── loading.tsx              ← skeleton generico (3 card)
+│   │   ├── disponibilita/
+│   │   │   ├── page.tsx             ← calendario globale (manager)
+│   │   │   └── loading.tsx          ← skeleton 2 card a griglia
+│   │   ├── turni/
+│   │   │   ├── page.tsx             ← lista turni (non in navbar manager)
+│   │   │   └── loading.tsx          ← skeleton 4 card
+│   │   ├── statistiche/
+│   │   │   ├── page.tsx             ← score equita (manager only)
+│   │   │   └── loading.tsx          ← skeleton 2 card
+│   │   ├── export/
+│   │   │   ├── page.tsx             ← "Invio turni" — genera Excel (manager)
+│   │   │   └── loading.tsx          ← skeleton 2 card
+│   │   ├── utenti/
+│   │   │   ├── page.tsx             ← gestione utenti (admin + manager)
+│   │   │   └── loading.tsx          ← skeleton 4 card
+│   │   ├── sistema/
+│   │   │   ├── page.tsx             ← template, festivita, import storico (admin only)
+│   │   │   └── loading.tsx          ← skeleton 4 card a griglia
+│   │   └── impostazioni/
+│   │       ├── page.tsx             ← email notifiche (manager)
+│   │       └── loading.tsx          ← skeleton 3 card
 │   └── api/
 │       ├── shifts/route.ts          ← GET lista turni, POST assegna
 │       ├── shifts/[id]/route.ts     ← DELETE rimuovi turno
@@ -62,12 +82,13 @@ turnify/
 │       └── dipendentes/[id]/route.ts ← PATCH (attivo/ruolo), DELETE
 ├── components/
 │   ├── auth/AuthGuard.tsx           ← timeout sessione automatico
+│   ├── AdminPageSkeleton.tsx        ← skeleton condiviso (sidebar + content) usato da tutti i loading.tsx admin; props: rows, grid
 │   ├── user/
 │   │   ├── NavbarUtente.tsx
 │   │   ├── CalendarioDisponibilita.tsx
-│   │   └── StoricoTurni.tsx
+│   │   └── StoricoTurni.tsx         ← server component puro; riceve turni: ShiftRow[] come prop; vista mobile (card) + desktop (table)
 │   └── admin/
-│       ├── NavbarAdmin.tsx          ← sidebar desktop + bottom bar mobile; nav diversa per admin vs manager
+│       ├── NavbarAdmin.tsx          ← sidebar desktop + bottom bar mobile; nav diversa per admin vs manager; "Altro" sempre visibile su mobile per accesso logout
 │       ├── dashboard/
 │       │   └── TurniCollapsibili.tsx ← sezione turni collassabile nella dashboard manager
 │       ├── disponibilita/
@@ -345,6 +366,46 @@ RESEND_API_KEY=          # da aggiungere quando si implementa l'email
 ---
 
 ## Changelog
+
+### [2026-03-22] — UI AGENT — Fix: Logout admin su mobile + Performance: loading skeleton + SSR StoricoTurni
+
+**Versione:** 1.1.0 → 1.2.0
+
+**File modificati:**
+- `components/admin/NavbarAdmin.tsx`
+- `components/AdminPageSkeleton.tsx` (nuovo)
+- `app/admin/loading.tsx` (nuovo)
+- `app/admin/disponibilita/loading.tsx` (nuovo)
+- `app/admin/turni/loading.tsx` (nuovo)
+- `app/admin/utenti/loading.tsx` (nuovo)
+- `app/admin/statistiche/loading.tsx` (nuovo)
+- `app/admin/sistema/loading.tsx` (nuovo)
+- `app/admin/export/loading.tsx` (nuovo)
+- `app/admin/impostazioni/loading.tsx` (nuovo)
+- `app/user/loading.tsx` (nuovo)
+- `app/user/impostazioni/loading.tsx` (nuovo)
+- `components/user/StoricoTurni.tsx`
+- `app/user/page.tsx`
+
+**Sommario:** Fix logout mobile per il ruolo admin; aggiunta copertura skeleton loading su tutte le pagine SSR; conversione StoricoTurni da client component a server component.
+
+**Dettagli:**
+
+1. `NavbarAdmin.tsx` — Bug fix: il pulsante "Altro" nella bottom bar mobile era condizionalmente nascosto quando `moreItems` era un array vuoto (caso admin). Il pulsante e ora sempre renderizzato, garantendo accesso al logout anche per il ruolo admin che non ha voci secondarie nel menu overflow.
+
+2. `AdminPageSkeleton.tsx` — Nuovo componente condiviso che riproduce l'intera struttura layout (sidebar desktop 224px, content area, bottom nav mobile) con blocchi `animate-pulse`. Accetta due prop: `rows` (numero di card skeleton, default 3) e `grid` (layout a 2 colonne invece di lista verticale, default false).
+
+3. `loading.tsx` per tutte le pagine admin — Ogni route admin ora ha un `loading.tsx` che Next.js mostra istantaneamente durante il caricamento SSR, eliminando la pagina bianca. Le pagine con layout a 2 colonne (disponibilita, sistema) usano `grid={true}`; le altre usano il default verticale con `rows` calibrato sulla densita di contenuto della pagina.
+
+4. `app/user/loading.tsx` e `app/user/impostazioni/loading.tsx` — Skeleton inline per le pagine utente (layout diverso da admin: navbar top + niente sidebar). Lo skeleton di `/user` include una griglia calendario 7 colonne x 5 righe piu la sezione storico.
+
+5. `StoricoTurni.tsx` — Convertito da client component (con `useEffect` + `fetch` verso API) a server component puro. Il componente riceve `turni: ShiftRow[]` come prop da `app/user/page.tsx`. Mantiene vista mobile (card) e vista desktop (table) con le stesse informazioni: data, tipo turno, stato mese.
+
+6. `app/user/page.tsx` — Aggiunta quinta query nel `Promise.all` esistente: shifts degli ultimi 12 mesi ordinati per data decrescente. Il join con `month_status` avviene in memoria tramite una `statusMap` (chiave `"anno-mese"` → status). `allMonthStatuses` e riutilizzato sia per il calcolo `lockedMonths` (calendario) che per il join storico, evitando query duplicate.
+
+**Status:** Completato
+
+---
 
 ### [2026-03-22] — CODE AGENT — Refactor: Type Safety
 

@@ -18,6 +18,7 @@ const MONTH_STATUS_DISPLAY: Record<string, { label: string; classes: string }> =
   open: { label: 'Aperto', classes: 'bg-blue-50 text-blue-700' },
   approved: { label: 'Approvato', classes: 'bg-yellow-50 text-yellow-700' },
   locked: { label: 'Chiuso', classes: 'bg-gray-100 text-gray-600' },
+  confirmed: { label: 'Confermato', classes: 'bg-green-50 text-green-700' },
 }
 
 /* ------------------------------------------------------------------ */
