@@ -266,9 +266,8 @@ export default function NavbarAdmin({ nomeAdmin, ruolo }: NavbarAdminProps) {
             )
           })}
 
-          {/* "Altro" button — only shown when there are overflow items */}
-          {moreItems.length > 0 && (
-            <button
+          {/* "Altro" button — always shown for logout access on mobile */}
+          <button
               onClick={() => setMoreOpen((v) => !v)}
               className={`
                 flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px]
@@ -293,14 +292,13 @@ export default function NavbarAdmin({ nomeAdmin, ruolo }: NavbarAdminProps) {
               </svg>
               <span>Altro</span>
             </button>
-          )}
         </div>
       </nav>
 
       {/* ============================================================ */}
       {/* Mobile overflow sheet for secondary items                    */}
       {/* ============================================================ */}
-      {moreOpen && moreItems.length > 0 && (
+      {moreOpen && (
         <>
           {/* Backdrop */}
           <div

@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { User, MonthStatus } from '@/lib/supabase/types'
+import type { User } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
 import CalendarioDisponibilita from '@/components/user/CalendarioDisponibilita'
-import StoricoTurni from '@/components/user/StoricoTurni'
+import StoricoTurni, { type ShiftRow } from '@/components/user/StoricoTurni'
 
 export default async function UserPage() {
   const supabase = await createClient()
@@ -22,16 +22,18 @@ export default async function UserPage() {
     .eq('id', authUser.id)
     .single<User>()
 
-  // Date range: current month + next month
   const now = new Date()
-  const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0) // last day of next month
 
-  const fromStr = startOfCurrentMonth.toISOString().slice(0, 10)
-  const toStr = endOfNextMonth.toISOString().slice(0, 10)
+  // Calendar range: current month + next month
+  const fromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+  const toStr = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10)
 
-  // Parallel fetches for performance
-  const [availabilityRes, holidaysRes, shiftsRes, monthStatusRes] = await Promise.all([
+  // Storico range: last 12 months
+  const storicoFromStr = new Date(now.getFullYear() - 1, now.getMonth(), 1).toISOString().slice(0, 10)
+  const storicoToStr = now.toISOString().slice(0, 10)
+
+  // All fetches in parallel
+  const [availabilityRes, holidaysRes, shiftsRes, monthStatusRes, storicoShiftsRes] = await Promise.all([
     supabase
       .from('availability')
       .select('*')
@@ -54,21 +56,40 @@ export default async function UserPage() {
 
     supabase
       .from('month_status')
+      .select('*'),
+
+    supabase
+      .from('shifts')
       .select('*')
-      .eq('status', 'locked'),
+      .eq('user_id', authUser.id)
+      .gte('date', storicoFromStr)
+      .lte('date', storicoToStr)
+      .order('date', { ascending: false }),
   ])
 
+  // Calendar data
   const availabilityList = availabilityRes.data ?? []
   const holidays = holidaysRes.data ?? []
   const shifts = shiftsRes.data ?? []
 
-  // Build a Set of locked months in "YYYY-MM" format
-  const rawMonthStatuses = monthStatusRes.data ?? []
+  const allMonthStatuses = monthStatusRes.data ?? []
+
   const lockedMonths = new Set<string>(
-    rawMonthStatuses.map(
-      (m) => `${m.year}-${String(m.month).padStart(2, '0')}`
-    )
+    allMonthStatuses
+      .filter((m) => m.status === 'locked')
+      .map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`)
   )
+
+  // Storico data — join con month_status già in memoria
+  const statusMap: Record<string, string> = {}
+  for (const ms of allMonthStatuses) {
+    statusMap[`${ms.year}-${ms.month}`] = ms.status
+  }
+
+  const storicoTurni: ShiftRow[] = (storicoShiftsRes.data ?? []).map((s) => {
+    const [year, month] = s.date.split('-').map(Number)
+    return { ...s, month_status_value: statusMap[`${year}-${month}`] ?? null }
+  })
 
   const nomeUtente = profile?.nome ?? authUser.email ?? 'Utente'
 
@@ -118,7 +139,7 @@ export default async function UserPage() {
           >
             Storico turni assegnati
           </h2>
-          <StoricoTurni userId={authUser.id} />
+          <StoricoTurni turni={storicoTurni} />
         </section>
       </main>
     </div>
