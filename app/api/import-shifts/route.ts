@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import type { MonthStatusValue } from '@/lib/supabase/types'
 import JSZip from 'jszip'
 
 /** Excel serial date → oggetto Date UTC */
@@ -227,24 +228,34 @@ export async function POST(request: NextRequest) {
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
   const isPast = year < currentYear || (year === currentYear && month < currentMonth)
-  const finalStatus = isPast ? 'confirmed' : 'locked'
+  const finalStatus = isPast ? 'confirmed' : ('locked' as const)
 
-  const { error: lockError } = await serviceClient
+  const lockPayload = {
+    status: finalStatus as MonthStatusValue,
+    locked_by: user.id,
+    locked_at: new Date().toISOString(),
+  }
+
+  // Prova update prima (record già esistente), poi insert se non esiste
+  const { data: existingStatus } = await serviceClient
     .from('month_status')
-    .upsert(
-      {
-        month,
-        year,
-        status: finalStatus,
-        locked_by: user.id,
-        locked_at: new Date().toISOString(),
-      },
-      { onConflict: 'month,year' }
-    )
+    .select('id')
+    .eq('month', month)
+    .eq('year', year)
+    .single()
 
-  if (lockError) {
-    console.error('Errore lock mese:', lockError)
-    // Non bloccante — i turni sono già stati inseriti
+  if (existingStatus) {
+    const { error: updateError } = await serviceClient
+      .from('month_status')
+      .update(lockPayload)
+      .eq('month', month)
+      .eq('year', year)
+    if (updateError) console.error('Errore update month_status:', updateError)
+  } else {
+    const { error: insertError } = await serviceClient
+      .from('month_status')
+      .insert({ month, year, ...lockPayload })
+    if (insertError) console.error('Errore insert month_status:', insertError)
   }
 
   return NextResponse.json({
