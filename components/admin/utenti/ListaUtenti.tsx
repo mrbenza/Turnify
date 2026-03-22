@@ -34,9 +34,10 @@ interface ListaUtentiProps {
   initialUsers: User[]
   currentUserId: string
   lastLogins: { id: string; last_sign_in_at: string | null }[]
+  isManager?: boolean
 }
 
-export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }: ListaUtentiProps) {
+export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, isManager = false }: ListaUtentiProps) {
   const [dipendentes, setUsers] = useState<User[]>(initialUsers)
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -170,8 +171,12 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
                   </td>
                   <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell">{dipendente.email}</td>
                   <td className="py-3 px-4 sm:px-2">
-                    {/* Inline role select */}
-                    {changingRole === dipendente.id ? (
+                    {isManager ? (
+                      /* Manager: ruolo non modificabile — solo badge statico */
+                      <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${ROLE_STYLES[dipendente.ruolo]}`}>
+                        {dipendente.ruolo === 'dipendente' ? 'ATC' : dipendente.ruolo === 'manager' ? 'Area Manager' : 'Administrator'}
+                      </span>
+                    ) : changingRole === dipendente.id ? (
                       <span className="text-gray-400"><Spinner /></span>
                     ) : (
                       <select
@@ -246,10 +251,14 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
 
       {/* Add dipendente modal */}
       {showAddModal && (
-        <AddUserModal onClose={() => setShowAddModal(false)} onAdded={(newUser) => {
-          setUsers((prev) => [...prev, newUser])
-          setShowAddModal(false)
-        }} />
+        <AddUserModal
+          isManager={isManager}
+          onClose={() => setShowAddModal(false)}
+          onAdded={(newUser) => {
+            setUsers((prev) => [...prev, newUser])
+            setShowAddModal(false)
+          }}
+        />
       )}
     </div>
   )
@@ -262,9 +271,10 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins }:
 interface AddUserModalProps {
   onClose: () => void
   onAdded: (dipendente: User) => void
+  isManager?: boolean
 }
 
-function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
+function AddUserModal({ onClose, onAdded, isManager = false }: AddUserModalProps) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [ruolo, setRuolo] = useState<UserRole>('dipendente')
@@ -348,20 +358,22 @@ function AddUserModal({ onClose, onAdded }: AddUserModalProps) {
             />
           </div>
 
-          {/* Ruolo */}
-          <div>
-            <label htmlFor="add-ruolo" className="block text-xs font-medium text-gray-700 mb-1">Ruolo</label>
-            <select
-              id="add-ruolo"
-              value={ruolo}
-              onChange={(e) => setRuolo(e.target.value as UserRole)}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="dipendente">ATC</option>
-              <option value="manager">Area Manager</option>
-              <option value="admin">Administrator</option>
-            </select>
-          </div>
+          {/* Ruolo — manager può creare solo dipendenti */}
+          {!isManager && (
+            <div>
+              <label htmlFor="add-ruolo" className="block text-xs font-medium text-gray-700 mb-1">Ruolo</label>
+              <select
+                id="add-ruolo"
+                value={ruolo}
+                onChange={(e) => setRuolo(e.target.value as UserRole)}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="dipendente">ATC</option>
+                <option value="manager">Area Manager</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+          )}
 
           {/* Success */}
           {successMsg && (

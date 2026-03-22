@@ -19,7 +19,8 @@ export default async function UtentiPage() {
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
-  const isAdmin = profile?.ruolo === 'admin'
+  const isAdmin  = profile?.ruolo === 'admin'
+  const isManager = profile?.ruolo === 'manager'
 
   /* ---- Users filtrati per ruolo ----
      Admin: vede manager + dipendenti (non altri admin)
@@ -71,6 +72,7 @@ export default async function UtentiPage() {
               initialUsers={users}
               currentUserId={authUser.id}
               lastLogins={lastLogins}
+              isManager={isManager}
             />
           </section>
         </main>

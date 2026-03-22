@@ -39,9 +39,9 @@ export default async function ExportPage() {
         <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Export dati</h1>
+            <h1 className="text-xl font-semibold text-gray-900">Invio turni</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Scarica i turni del mese in formato Excel
+              Verifica, genera e invia il file Excel del mese
             </p>
           </div>
 
@@ -49,9 +49,7 @@ export default async function ExportPage() {
             aria-labelledby="export-form-heading"
             className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
           >
-            <h2 id="export-form-heading" className="text-base font-semibold text-gray-900 mb-6">
-              Esporta turni
-            </h2>
+            <h2 id="export-form-heading" className="sr-only">Invio turni</h2>
             <ExportForm users={users} templates={templates} />
           </section>
         </main>
