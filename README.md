@@ -1,4 +1,5 @@
 # Turnify — Gestione Turni di Reperibilita
+**v1.1.0**
 
 Web app per la gestione dei turni di reperibilita dei dipendenti.
 Permette ai dipendenti di segnare la propria disponibilita su un calendario,
@@ -16,6 +17,7 @@ e calendario festivita.
 | Database | Supabase PostgreSQL | Free tier |
 | Auth | Supabase Auth | Email + password |
 | Export Excel | API route Next.js + JSZip | Modifica solo `xl/worksheets/sheet1.xml` del template; logo, firma e conditional formatting rimangono intatti |
+| Type Safety | TypeScript 5 + Supabase JS v2 | `lib/supabase/types.ts` generato da Supabase CLI; zero `any` cast nel codebase |
 | Email | Resend | Da implementare |
 
 ---
@@ -88,7 +90,7 @@ turnify/
 │   ├── supabase/
 │   │   ├── client.ts
 │   │   ├── server.ts
-│   │   └── types.ts
+│   │   └── types.ts             ← tipi generati da Supabase CLI; export type (non interface); zero any
 │   └── utils/
 └── supabase/
     └── migrations/
@@ -339,3 +341,34 @@ RESEND_API_KEY=          # da aggiungere quando si implementa l'email
 ### Bassa priorita
 - Festivita anni futuri (attualmente solo 2026)
 - Rotazione festivi comandati (chi lavora Natale non lo riprende per ~10 anni)
+
+---
+
+## Changelog
+
+### [2026-03-22] — CODE AGENT — Refactor: Type Safety
+
+**Versione:** 1.0.x → 1.1.0
+
+**File modificati:**
+- `lib/supabase/types.ts`
+- `app/api/month/route.ts`
+- `app/api/export/route.ts`
+- `components/admin/sistema/GestioneTemplate.tsx`
+- tutte le API route (`app/api/**/*.ts`)
+- `components/admin/NavbarAdmin.tsx`
+- `package.json`
+
+**Sommario:** Refactor completo della type safety su tutto il codebase per compatibilita con TypeScript 5.9 + Supabase JS v2.
+
+**Dettagli:**
+
+1. `lib/supabase/types.ts` — tutti gli `export interface` convertiti in `export type`; aggiunti `Relationships` a ogni tabella; aggiunti `Views`, `Enums`, `CompositeTypes` al tipo `Database` (struttura richiesta da Supabase JS v2).
+2. Rimossi 38 commenti `eslint-disable-next-line @typescript-eslint/no-explicit-any` dalle API route.
+3. Rimossi tutti i cast `as any` dal codebase.
+4. Rimossi ~40 cast ridondanti `as Type` su risultati di query Supabase (es. `(data ?? []) as Shift[]` diventa `data ?? []` grazie ai tipi inferiti correttamente).
+5. Corretti 4 bug reali emersi dopo la rimozione dei cast:
+   - `month/route.ts`: status literals narrowati con `as const` per soddisfare il tipo union
+   - `export/route.ts`: `.upsert()` sostituito con `.update()` — il metodo corretto per aggiornare un record esistente con tipizzazione stretta
+   - `GestioneTemplate.tsx`: valori `null` convertiti in `undefined` tramite `?? undefined` per compatibilita con le prop dei componenti React
+6. Versione aggiornata a `1.1.0` in `package.json`; la versione viene ora letta da `package.json` e mostrata nella sidebar admin (`NavbarAdmin.tsx`).

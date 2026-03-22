@@ -62,6 +62,13 @@ Vedi `docs/AGENTS.md` per i ruoli dettagliati.
 5. L'export Excel legge SEMPRE dal database, mai dallo stato UI.
 6. Un mese LOCKED è immutabile — nessuna eccezione.
 
+## Convenzioni TypeScript (v1.1.0+)
+- `lib/supabase/types.ts` usa `export type`, non `export interface` — richiesto da Supabase JS v2 per l'inferenza automatica dei tipi di ritorno delle query.
+- **Zero `any`**: nessun `as any`, nessun `eslint-disable @typescript-eslint/no-explicit-any` nelle API route. Se TypeScript non inferisce il tipo corretto, il problema va risolto a monte (tipo mancante, struttura `Database` incompleta, o logica da correggere).
+- **Zero cast ridondanti su query Supabase**: non usare `(data ?? []) as Tipo[]` se `types.ts` è aggiornato — il tipo viene inferito automaticamente.
+- Usare `as const` per narroware status literals su union type (es. `{ status: 'locked' as const }`).
+- Convertire `null` in `undefined` con `?? undefined` nelle prop React quando il tipo atteso è `T | undefined`.
+
 ## Flusso operativo standard
 ```
 Richiesta → ORCHESTRATOR
