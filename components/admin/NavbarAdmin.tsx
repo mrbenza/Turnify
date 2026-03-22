@@ -67,16 +67,6 @@ const MANAGER_NAV_ITEMS = [
     ),
   },
   {
-    href: '/admin/turni',
-    label: 'Turni',
-    shortLabel: 'Turni',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-      </svg>
-    ),
-  },
-  {
     href: '/admin/statistiche',
     label: 'Statistiche',
     shortLabel: 'Statistiche',
@@ -92,7 +82,7 @@ const MANAGER_NAV_ITEMS = [
 const MANAGER_MORE_ITEMS = [
   {
     href: '/admin/export',
-    label: 'Export',
+    label: 'Invio turni',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
