@@ -139,6 +139,13 @@ export default function ImportaStorico() {
     setCreateModal(null)
   }
 
+  function handleReset() {
+    setResults([])
+    setSelectedFiles([])
+    setResolved(new Set())
+    setErrorMsg(null)
+  }
+
   return (
     <div>
       <h2 className="text-base font-semibold text-gray-900 mb-1">Importa storico reperibilità</h2>
@@ -250,7 +257,13 @@ export default function ImportaStorico() {
                     </svg>
                     <span>
                       Importati <strong>{fr.result.imported}</strong> turni —{' '}
-                      <strong>{MONTH_NAMES_IT[fr.result.month - 1]} {fr.result.year}</strong> — Bloccato
+                      <strong>{MONTH_NAMES_IT[fr.result.month - 1]} {fr.result.year}</strong> —{' '}
+                      {(() => {
+                        const now = new Date()
+                        const isPast = fr.result.year < now.getFullYear() ||
+                          (fr.result.year === now.getFullYear() && fr.result.month < now.getMonth() + 1)
+                        return isPast ? 'Confermato' : 'Bloccato'
+                      })()}
                     </span>
                   </div>
                   {fr.result.skipped > 0 && (
@@ -323,29 +336,47 @@ export default function ImportaStorico() {
         </div>
       )}
 
-      {/* Pulsante import */}
-      <div className="mt-4">
-        <button
-          onClick={handleImport}
-          disabled={selectedFiles.length === 0 || importing}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium
-            hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
-            transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
-          aria-busy={importing}
-        >
-          {importing && (
-            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-          )}
-          {importing
-            ? `Importazione ${selectedFiles.find(e => e.id === currentId)?.file.name ?? ''}...`
-            : selectedFiles.length > 1
-              ? `Importa ${selectedFiles.length} file`
-              : 'Importa turni'
-          }
-        </button>
+      {/* Pulsante import / completato */}
+      <div className="mt-4 flex items-center gap-3">
+        {results.length > 0 && !importing ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 text-sm text-green-700 font-medium">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Importazione completata
+            </span>
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-200
+                hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              Nuova importazione
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={handleImport}
+            disabled={selectedFiles.length === 0 || importing}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium
+              hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
+              transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-busy={importing}
+          >
+            {importing && (
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            )}
+            {importing
+              ? `Importazione ${selectedFiles.find(e => e.id === currentId)?.file.name ?? ''}...`
+              : selectedFiles.length > 1
+                ? `Importa ${selectedFiles.length} file`
+                : 'Importa turni'
+            }
+          </button>
+        )}
       </div>
 
       {/* Modal creazione dipendente */}

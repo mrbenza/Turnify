@@ -222,14 +222,20 @@ export async function POST(request: NextRequest) {
     inserted = insertedData ?? []
   }
 
-  // Lock il mese
+  // Chiudi il mese: confirmed se passato, locked se mese corrente
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const isPast = year < currentYear || (year === currentYear && month < currentMonth)
+  const finalStatus = isPast ? 'confirmed' : 'locked'
+
   const { error: lockError } = await serviceClient
     .from('month_status')
     .upsert(
       {
         month,
         year,
-        status: 'locked',
+        status: finalStatus,
         locked_by: user.id,
         locked_at: new Date().toISOString(),
       },

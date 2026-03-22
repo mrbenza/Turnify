@@ -31,6 +31,14 @@ Funzionalita da implementare in ordine di priorita.
 - **Frontend**: selettore area in navbar, `CalendarioGlobale` con logica dinamica per mode
 - **Da chiarire prima dell'implementazione**: per `sun_next_sat`, cosa succede se il Sab successivo e gia occupato?
 
+### Import storico — 2° reperibile (backup) e selezione per area
+- Il foglio Excel ha gia la colonna E **"Nominativo 2° reperibile"** (backup), attualmente non usata dalla logica turni ordinaria
+- Con il multi-area, il manager dovra poter **scegliere quale dei due reperibili** assegnare in base alla modalita di turnazione dell'area
+- Modifiche necessarie (da pianificare insieme al multi-area):
+  - `import-shifts/route.ts`: distinguere 1° e 2° reperibile invece di trattarli alla pari; restituire entrambi al frontend per la scelta
+  - `ImportaStorico.tsx`: UI di selezione post-import ("per questo giorno: 1° Ferretti / 2° Bianchi — scegli")
+  - Possibile colonna aggiuntiva su `shifts`: `reperibile_order` (1 o 2) per tracciare il ruolo storico
+
 ---
 
 ## Bassa priorita
