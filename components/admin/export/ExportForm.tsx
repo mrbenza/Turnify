@@ -66,8 +66,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     setErrorMsg(null)
     setPreview(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
+      const supabase = createClient()
       const daysInMonth = new Date(year, month + 1, 0).getDate()
       const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
       const to   = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
@@ -81,7 +80,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
 
       if (error) throw error
 
-      const shifts = (rawShifts ?? []) as Shift[]
+      const shifts = rawShifts ?? []
       const rows = shifts.map((s) => ({
         date: s.date,
         shiftType: s.shift_type,

@@ -20,14 +20,13 @@ export default async function ExportPage() {
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
   /* ---- Users list + template list ---- */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
   const [usersRes, templatesRes] = await Promise.all([
     supabase.from('users').select('*'),
     serviceClient.storage.from('templates').list(),
   ])
 
-  const users = (usersRes.data ?? []) as User[]
+  const users = usersRes.data ?? []
   const templates = ((templatesRes.data ?? []) as { name: string }[])
     .filter((f) => f.name.endsWith('.xlsx'))
 

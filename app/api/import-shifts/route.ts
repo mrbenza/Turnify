@@ -46,8 +46,7 @@ async function getDatiSheetPath(zip: JSZip): Promise<string | null> {
 }
 
 export async function POST(request: NextRequest) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   // Auth: solo admin
   const { data: { user } } = await supabase.auth.getUser()
@@ -115,8 +114,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Build cognome → user map (solo dipendenti attivi)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
 
   const { data: usersData, error: usersError } = await serviceClient
     .from('users')

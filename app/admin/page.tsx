@@ -59,8 +59,7 @@ export default async function AdminDashboardPage() {
   /* ADMIN branch                                                      */
   /* ================================================================ */
   if (isAdmin) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const serviceClient = createServiceClient() as any
+    const serviceClient = createServiceClient()
 
     const [usersRes, authListRes, templateRes] = await Promise.all([
       supabase.from('users').select('ruolo, attivo'),
@@ -241,13 +240,13 @@ export default async function AdminDashboardPage() {
       .order('nome', { ascending: true }),
   ])
 
-  const monthStatuses = (monthStatusRes.data ?? []) as MonthStatus[]
+  const monthStatuses = monthStatusRes.data ?? []
   const currStatus = monthStatuses.find((m) => m.month === currMonth && m.year === currYear) ?? null
   const nextStatus = monthStatuses.find((m) => m.month === nextMonth && m.year === nextYear) ?? null
   const currShiftCount = currCountRes.count ?? 0
   const nextShiftCount = nextCountRes.count ?? 0
-  const initialShifts  = (shiftsRes.data ?? []) as Shift[]
-  const users          = (usersRes.data ?? []) as User[]
+  const initialShifts  = shiftsRes.data ?? []
+  const users          = usersRes.data ?? []
   const utentiAttiviCount = users.filter((u) => u.attivo).length
 
   const monthCards = [

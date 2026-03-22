@@ -13,8 +13,7 @@ import type { User } from '@/lib/supabase/types'
  */
 export async function POST(request: Request) {
   // --- 1. Verifica autenticazione con il client anon (cookie-based) ---
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -58,8 +57,7 @@ export async function POST(request: Request) {
   }
 
   // --- 4. Crea auth user con service role (la service key non lascia mai il server) ---
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
 
   const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
     email,
@@ -95,5 +93,5 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json(newUser as User, { status: 201 })
+  return NextResponse.json(newUser, { status: 201 })
 }

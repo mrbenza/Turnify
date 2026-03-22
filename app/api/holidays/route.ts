@@ -25,8 +25,7 @@ interface NagerHoliday {
  * Richiede autenticazione admin o manager.
  */
 export async function GET() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -53,7 +52,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Errore durante il recupero delle festività' }, { status: 500 })
   }
 
-  return NextResponse.json(data as Holiday[])
+  return NextResponse.json(data)
 }
 
 /**
@@ -64,8 +63,7 @@ export async function GET() {
  *   { date: string, name: string, mandatory: boolean } → inserimento manuale (admin only)
  */
 export async function POST(request: Request) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -116,7 +114,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Errore durante l\'inserimento della festività' }, { status: 500 })
     }
 
-    return NextResponse.json(data as Holiday, { status: 201 })
+    return NextResponse.json(data, { status: 201 })
   }
 
   /* ---------------------------------------------------------------- */
@@ -186,7 +184,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         inserted: 0,
         skipped,
-        holidays: (currentHolidays ?? []) as Holiday[],
+        holidays: currentHolidays ?? [],
       })
     }
 
@@ -203,7 +201,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       inserted: newRecords.length,
       skipped,
-      holidays: (upserted ?? []) as Holiday[],
+      holidays: upserted ?? [],
     })
   }
 

@@ -145,8 +145,7 @@ export default function CalendarioGlobale({
   /* ---- Fetch turni mese precedente + equity scores ---- */
   async function fetchAuxData(month: number, year: number) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
+      const supabase = createClient()
       const prevMonth = month === 0 ? 11 : month - 1
       const prevYear = month === 0 ? year - 1 : year
       const prevFrom = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`
@@ -243,8 +242,7 @@ export default function CalendarioGlobale({
     sessionShiftIdsRef.current = new Set() // reset turni di sessione al cambio mese
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
+      const supabase = createClient()
       const from = toDateString(newYear, newMonth, 1)
       const to = toDateString(newYear, newMonth, new Date(newYear, newMonth + 1, 0).getDate())
 
@@ -255,9 +253,9 @@ export default function CalendarioGlobale({
         supabase.from('month_status').select('*').eq('month', newMonth + 1).eq('year', newYear).maybeSingle(),
       ])
 
-      setAvailability((availRes.data as Availability[]) ?? [])
-      setShifts((shiftsRes.data as Shift[]) ?? [])
-      setHolidays((holRes.data as Holiday[]) ?? [])
+      setAvailability(availRes.data ?? [])
+      setShifts(shiftsRes.data ?? [])
+      setHolidays(holRes.data ?? [])
       setLocked(statusRes.data?.status === 'locked')
       fetchAuxData(newMonth, newYear)
     } catch (err) {

@@ -25,14 +25,12 @@ export default async function StatistichePage() {
   const month = now.getMonth()
   const year = now.getFullYear()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabaseAny = supabase as any
-  const { data: initialScores } = await supabaseAny.rpc('get_equity_scores', {
+  const { data: initialScores } = await supabase.rpc('get_equity_scores', {
     p_month: month + 1,
     p_year: year,
   })
 
-  const scores = (initialScores ?? []) as EquityScore[]
+  const scores = initialScores ?? []
 
   return (
     <div className="min-h-screen bg-gray-50">

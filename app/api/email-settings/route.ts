@@ -3,8 +3,7 @@ import { NextResponse } from 'next/server'
 import type { EmailSetting } from '@/lib/supabase/types'
 
 export async function POST(request: Request) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   // Auth check
   const { data: { user } } = await supabase.auth.getUser()
@@ -61,5 +60,5 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json(data as EmailSetting, { status: 201 })
+  return NextResponse.json(data, { status: 201 })
 }

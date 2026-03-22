@@ -8,8 +8,7 @@ function isWeekendDay(year: number, month: number, day: number): boolean {
 }
 
 export async function POST(request: Request) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   // Auth check
   const { data: { user } } = await supabase.auth.getUser()
@@ -141,5 +140,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Errore durante l\'assegnazione del turno.' }, { status: 500 })
   }
 
-  return NextResponse.json(data as Shift, { status: 201 })
+  return NextResponse.json(data, { status: 201 })
 }

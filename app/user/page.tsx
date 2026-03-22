@@ -63,7 +63,7 @@ export default async function UserPage() {
   const shifts = shiftsRes.data ?? []
 
   // Build a Set of locked months in "YYYY-MM" format
-  const rawMonthStatuses = (monthStatusRes.data ?? []) as MonthStatus[]
+  const rawMonthStatuses = monthStatusRes.data ?? []
   const lockedMonths = new Set<string>(
     rawMonthStatuses.map(
       (m) => `${m.year}-${String(m.month).padStart(2, '0')}`

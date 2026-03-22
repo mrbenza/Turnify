@@ -36,11 +36,11 @@ export default async function DisponibilitaPage() {
     supabase.from('month_status').select('*').eq('month', month + 1).eq('year', year).single<MonthStatus>(),
   ])
 
-  const users = (usersRes.data ?? []) as User[]
-  const availability = (availRes.data ?? []) as Availability[]
-  const shifts = (shiftsRes.data ?? []) as Shift[]
-  const holidays = (holidaysRes.data ?? []) as Holiday[]
-  const monthStatus = monthStatusRes.data as MonthStatus | null
+  const users = usersRes.data ?? []
+  const availability = availRes.data ?? []
+  const shifts = shiftsRes.data ?? []
+  const holidays = holidaysRes.data ?? []
+  const monthStatus = monthStatusRes.data
   const isLocked = monthStatus?.status === 'locked'
 
   return (

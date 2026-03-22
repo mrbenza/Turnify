@@ -109,8 +109,7 @@ export default function ListaTurni({
     setLoading(true)
     setErrorMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
+      const supabase = createClient()
       const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
       const daysInMonth = new Date(year, month + 1, 0).getDate()
       const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
@@ -120,7 +119,7 @@ export default function ListaTurni({
         supabase.from('month_status').select('status').eq('month', month + 1).eq('year', year).maybeSingle(),
       ])
 
-      const rawShifts = (shiftsRes.data ?? []) as Shift[]
+      const rawShifts = shiftsRes.data ?? []
       setShifts(rawShifts.map((s) => ({
         ...s,
         userName: userMap.get(s.user_id) ?? s.user_nome ?? s.user_id,

@@ -35,13 +35,12 @@ export default async function ImpostazioniPage() {
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
   /* ---- Email settings ---- */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: emailSettingsData } = await (supabase as any)
+  const { data: emailSettingsData } = await supabase
     .from('email_settings')
     .select('*')
     .order('created_at', { ascending: true })
 
-  const emailSettings = (emailSettingsData ?? []) as EmailSetting[]
+  const emailSettings = emailSettingsData ?? []
 
   return (
     <div className="min-h-screen bg-gray-50">

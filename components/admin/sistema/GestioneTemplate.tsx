@@ -115,7 +115,7 @@ export default function GestioneTemplate({ initialTemplates }: GestioneTemplateP
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{t.name}</p>
                 <p className="text-xs text-gray-400">
-                  {[formatBytes(t.size), formatDate(t.updated_at)].filter(Boolean).join(' · ')}
+                  {[formatBytes(t.size ?? undefined), formatDate(t.updated_at ?? undefined)].filter(Boolean).join(' · ')}
                 </p>
               </div>
             </div>

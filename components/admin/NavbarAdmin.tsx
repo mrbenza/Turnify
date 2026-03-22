@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { version } from '@/package.json'
 
 /* ------------------------------------------------------------------ */
 /* Navigation item definitions                                         */
@@ -127,6 +128,7 @@ function SidebarContent({ pathname, nomeAdmin, allNavItems, onLinkClick, onLogou
         <div className="flex items-center gap-2">
           <span className="text-base font-bold text-blue-600 tracking-tight select-none">Turnify</span>
           <span className="text-xs text-gray-400">Admin Panel</span>
+          <span className="text-[10px] text-gray-300 ml-auto">v{version}</span>
         </div>
       </div>
 

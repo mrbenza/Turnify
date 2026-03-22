@@ -8,8 +8,8 @@ import type { Holiday } from '@/lib/supabase/types'
 
 export interface TemplateFile {
   name: string
-  updated_at?: string
-  size?: number
+  updated_at?: string | null
+  size?: number | null
 }
 
 export default async function SistemaPage() {
@@ -30,11 +30,10 @@ export default async function SistemaPage() {
   if (profile?.ruolo === 'manager') redirect('/admin/disponibilita')
 
   /* ---- Lista template dallo storage ---- */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
   const { data: fileList } = await serviceClient.storage.from('templates').list()
   const templates: TemplateFile[] = (fileList ?? [])
-    .filter((f: TemplateFile) => f.name.endsWith('.xlsx'))
+    .filter((f) => f.name.endsWith('.xlsx'))
 
   /* ---- Festività ---- */
   const { data: holidaysData } = await supabase

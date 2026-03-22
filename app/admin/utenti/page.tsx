@@ -33,11 +33,10 @@ export default async function UtentiPage() {
   }
   const { data: usersData } = await query
 
-  const users = (usersData ?? []) as User[]
+  const users = usersData ?? []
 
   /* ---- Last login via service client ---- */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
   const { data: authList } = await serviceClient.auth.admin.listUsers({ perPage: 1000 })
   const lastLoginMap = new Map<string, string | null>()
   for (const authUser of authList?.users ?? []) {

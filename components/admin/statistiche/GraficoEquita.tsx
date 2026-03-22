@@ -36,14 +36,13 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
     setLoading(true)
     setErrorMsg(null)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createClient() as any
+      const supabase = createClient()
       const { data, error } = await supabase.rpc('get_equity_scores', {
         p_month: mode === 'month' ? month + 1 : 0,
         p_year: year,
       })
       if (error) throw error
-      setScores((data as EquityScore[]) ?? [])
+      setScores(data ?? [])
     } catch (err) {
       console.error('Errore caricamento statistiche:', err)
       setErrorMsg('Impossibile caricare le statistiche di equità.')

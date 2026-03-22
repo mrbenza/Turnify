@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { EmailSetting } from '@/lib/supabase/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database, EmailSetting } from '@/lib/supabase/types'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getAdminOrError(supabase: any): Promise<{ user: { id: string } } | NextResponse> {
+async function getAdminOrError(supabase: SupabaseClient<Database>): Promise<{ user: { id: string } } | NextResponse> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
@@ -26,8 +26,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
   const authResult = await getAdminOrError(supabase)
   if (authResult instanceof NextResponse) return authResult
 
@@ -60,15 +59,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'Errore durante l\'aggiornamento.' }, { status: 500 })
   }
 
-  return NextResponse.json(data as EmailSetting)
+  return NextResponse.json(data)
 }
 
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
   const authResult = await getAdminOrError(supabase)
   if (authResult instanceof NextResponse) return authResult
 

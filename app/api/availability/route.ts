@@ -3,8 +3,7 @@ import { NextResponse } from 'next/server'
 import type { Availability } from '@/lib/supabase/types'
 
 export async function POST(request: Request) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   // Auth check — user_id comes from session, not from body
   const { data: { user } } = await supabase.auth.getUser()
@@ -79,10 +78,8 @@ export async function POST(request: Request) {
   }
 
   if (existing) {
-    const existingRow = existing as { id: string; status: string }
-
     // Cannot modify if status is locked or approved
-    if (existingRow.status === 'locked' || existingRow.status === 'approved') {
+    if (existing.status === 'locked' || existing.status === 'approved') {
       return NextResponse.json(
         { error: 'La disponibilità non è modificabile per questo giorno.' },
         { status: 403 }
@@ -93,7 +90,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from('availability')
       .update({ available })
-      .eq('id', existingRow.id)
+      .eq('id', existing.id)
       .select()
       .single()
 
@@ -102,7 +99,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Errore durante l\'aggiornamento della disponibilità.' }, { status: 500 })
     }
 
-    return NextResponse.json(data as Availability)
+    return NextResponse.json(data)
   } else {
     // Insert new row with status pending
     const { data, error } = await supabase
@@ -121,6 +118,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Errore durante il salvataggio della disponibilità.' }, { status: 500 })
     }
 
-    return NextResponse.json(data as Availability, { status: 201 })
+    return NextResponse.json(data, { status: 201 })
   }
 }

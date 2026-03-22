@@ -86,8 +86,7 @@ async function getDatiSheetPath(zip: JSZip): Promise<string | null> {
 }
 
 export async function GET(request: NextRequest) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
@@ -147,8 +146,7 @@ export async function GET(request: NextRequest) {
 
   // Download template from Supabase Storage
   // Usa il template specificato nel parametro, oppure il primo file disponibile nel bucket
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
   const templateParam = searchParams.get('template')
 
   let templateName = templateParam
@@ -222,20 +220,19 @@ export async function GET(request: NextRequest) {
 
   const finalBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient2 = createServiceClient() as any
-
   try {
-    await serviceClient2
+    await serviceClient
       .from('availability')
       .update({ status: 'approved' })
       .eq('status', 'pending')
       .gte('date', from)
       .lte('date', to)
 
-    await serviceClient2
+    await serviceClient
       .from('month_status')
-      .upsert({ month, year, status: 'confirmed' }, { onConflict: 'month,year' })
+      .update({ status: 'confirmed' })
+      .eq('month', month)
+      .eq('year', year)
   } catch (err) {
     console.error('Errore aggiornamento stato post-export (non bloccante):', err)
   }

@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import type { ShiftType } from '@/lib/supabase/types'
 
 /**
  * POST /api/import-shifts/resolve
@@ -12,8 +13,7 @@ import { NextResponse } from 'next/server'
  * Returns: { inserted: number }
  */
 export async function POST(request: Request) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   if (profile?.ruolo !== 'admin')
     return NextResponse.json({ error: 'Solo l\'amministratore può eseguire questa operazione.' }, { status: 403 })
 
-  let body: { user_id?: string; user_nome?: string; shifts?: { date: string; shift_type: string }[] }
+  let body: { user_id?: string; user_nome?: string; shifts?: { date: string; shift_type: ShiftType }[] }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
   }
@@ -32,8 +32,7 @@ export async function POST(request: Request) {
   if (!user_id || !user_nome || !shifts?.length)
     return NextResponse.json({ error: 'Campi obbligatori mancanti: user_id, user_nome, shifts' }, { status: 400 })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
 
   const toInsert = shifts.map((s) => ({
     date: s.date,

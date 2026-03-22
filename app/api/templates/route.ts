@@ -2,8 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   /* ---- Auth check ---- */
   const { data: { user } } = await supabase.auth.getUser()
@@ -57,8 +56,7 @@ export async function POST(request: NextRequest) {
   }
 
   /* ---- Upload to Supabase Storage ---- */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
   const { error: storageError } = await serviceClient.storage
     .from('templates')
     .upload(file.name, buffer, {

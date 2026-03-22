@@ -54,9 +54,7 @@ export default function StoricoTurni({ userId }: StoricoTurniProps) {
   useEffect(() => {
     async function fetchTurni() {
       try {
-        // Cast to any to bypass Supabase generic issues (Database type missing Relationships)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const supabase = createClient() as any
+        const supabase = createClient()
 
         const now = new Date()
         const from = new Date(now.getFullYear() - 1, now.getMonth(), 1)
@@ -73,7 +71,7 @@ export default function StoricoTurni({ userId }: StoricoTurniProps) {
 
         if (shiftsError) throw shiftsError
 
-        const shiftsData = (rawShifts ?? []) as Shift[]
+        const shiftsData = rawShifts ?? []
 
         if (shiftsData.length === 0) {
           setTurni([])
@@ -104,7 +102,7 @@ export default function StoricoTurni({ userId }: StoricoTurniProps) {
           .or(orFilters)
 
         const statusMap: Record<string, string> = {}
-        const statusData = (rawStatuses ?? []) as MonthStatus[]
+        const statusData = rawStatuses ?? []
         statusData.forEach((ms) => {
           statusMap[`${ms.year}-${ms.month}`] = ms.status
         })

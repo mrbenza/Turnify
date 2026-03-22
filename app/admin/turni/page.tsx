@@ -39,9 +39,9 @@ export default async function TurniPage() {
     supabase.from('month_status').select('*').eq('month', month + 1).eq('year', year).single<MonthStatus>(),
   ])
 
-  const users = (usersRes.data ?? []) as User[]
-  const rawShifts = (shiftsRes.data ?? []) as Shift[]
-  const monthStatus = monthStatusRes.data as MonthStatus | null
+  const users = usersRes.data ?? []
+  const rawShifts = shiftsRes.data ?? []
+  const monthStatus = monthStatusRes.data
   const isLocked = monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed'
 
   const userMap = new Map<string, string>(users.map((u) => [u.id, u.nome]))

@@ -2,8 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   // Auth check
   const { data: { user } } = await supabase.auth.getUser()
@@ -54,14 +53,14 @@ export async function POST(request: Request) {
       ? {
           month,
           year,
-          status: 'locked',
+          status: 'locked' as const,
           locked_by: user.id,
           locked_at: new Date().toISOString(),
         }
       : {
           month,
           year,
-          status: 'open',
+          status: 'open' as const,
           locked_by: null,
           locked_at: null,
         }

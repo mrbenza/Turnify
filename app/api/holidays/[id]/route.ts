@@ -11,8 +11,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -57,7 +56,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Errore durante l\'aggiornamento della festività' }, { status: 500 })
   }
 
-  return NextResponse.json(data as Holiday)
+  return NextResponse.json(data)
 }
 
 /**
@@ -70,8 +69,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {

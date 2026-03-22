@@ -1,6 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { User } from '@/lib/supabase/types'
+import type { User, UserRole } from '@/lib/supabase/types'
 
 const VALID_ROLES = ['dipendente', 'manager', 'admin'] as const
 
@@ -8,8 +8,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   // Auth check
   const { data: { user } } = await supabase.auth.getUser()
@@ -51,7 +50,7 @@ export async function PATCH(
     }
 
     // Valida il valore del ruolo
-    if (!(VALID_ROLES as readonly string[]).includes(body.ruolo)) {
+    if (!VALID_ROLES.includes(body.ruolo as UserRole)) {
       return NextResponse.json(
         { error: `Ruolo non valido. Valori ammessi: ${VALID_ROLES.join(', ')}` },
         { status: 400 }
@@ -68,7 +67,7 @@ export async function PATCH(
 
     const { data, error } = await supabase
       .from('users')
-      .update({ ruolo: body.ruolo })
+      .update({ ruolo: body.ruolo as UserRole })
       .eq('id', id)
       .select()
       .single()
@@ -78,7 +77,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Errore durante l\'aggiornamento del ruolo.' }, { status: 500 })
     }
 
-    return NextResponse.json(data as User)
+    return NextResponse.json(data)
   }
 
   /* ---------------------------------------------------------------- */
@@ -103,7 +102,7 @@ export async function PATCH(
       )
     }
 
-    const update: Record<string, unknown> = { attivo: body.attivo }
+    const update: Partial<Omit<User, 'id'>> = { attivo: body.attivo }
     if (!body.attivo) {
       update.disattivato_at = new Date().toISOString()
     } else {
@@ -122,7 +121,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Errore durante l\'aggiornamento dell\'utente.' }, { status: 500 })
     }
 
-    return NextResponse.json(data as User)
+    return NextResponse.json(data)
   }
 
   /* ---------------------------------------------------------------- */
@@ -138,8 +137,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any
+  const supabase = await createClient()
 
   // Auth check
   const { data: { user } } = await supabase.auth.getUser()
@@ -192,8 +190,7 @@ export async function DELETE(
   }
 
   // Elimina auth user tramite service client
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serviceClient = createServiceClient() as any
+  const serviceClient = createServiceClient()
   const { error: authDeleteError } = await serviceClient.auth.admin.deleteUser(id)
   if (authDeleteError) {
     console.error('Errore eliminazione auth user:', authDeleteError)
