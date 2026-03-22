@@ -212,7 +212,7 @@ export default async function AdminDashboardPage() {
   const daysInCurr = new Date(currYear, currMonth, 0).getDate()
   const daysInNext = new Date(nextYear, nextMonth, 0).getDate()
 
-  const [monthStatusRes, currCountRes, nextCountRes, shiftsRes, usersRes] = await Promise.all([
+  const [monthStatusRes, currCountRes, nextCountRes, shiftsRes, usersRes, availNextRes] = await Promise.all([
     supabase
       .from('month_status')
       .select('*')
@@ -238,6 +238,11 @@ export default async function AdminDashboardPage() {
       .select('*')
       .eq('ruolo', 'dipendente')
       .order('nome', { ascending: true }),
+    supabase
+      .from('availability')
+      .select('user_id')
+      .gte('date', `${nextYear}-${nextMonthStr}-01`)
+      .lte('date', `${nextYear}-${nextMonthStr}-${String(daysInNext).padStart(2, '0')}`),
   ])
 
   const monthStatuses = monthStatusRes.data ?? []
@@ -249,9 +254,14 @@ export default async function AdminDashboardPage() {
   const users          = usersRes.data ?? []
   const utentiAttiviCount = users.filter((u) => u.attivo).length
 
+  // Dipendenti che hanno inserito almeno un giorno di disponibilità per il mese prossimo
+  const submittedIds = new Set((availNextRes.data ?? []).map((r) => r.user_id))
+  const disponibilitaNextCount = submittedIds.size
+  const mancanoDispo = users.filter((u) => u.attivo && !submittedIds.has(u.id))
+
   const monthCards = [
-    { isCurrent: true,  month: currMonth, year: currYear, shiftCount: currShiftCount, status: computeCardStatus(currStatus?.status ?? null, currShiftCount) },
-    { isCurrent: false, month: nextMonth, year: nextYear, shiftCount: nextShiftCount, status: computeCardStatus(nextStatus?.status ?? null, nextShiftCount) },
+    { isCurrent: true,  month: currMonth, year: currYear, shiftCount: currShiftCount, status: computeCardStatus(currStatus?.status ?? null, currShiftCount), disponibilitaCount: null, mancano: [] as typeof users },
+    { isCurrent: false, month: nextMonth, year: nextYear, shiftCount: nextShiftCount, status: computeCardStatus(nextStatus?.status ?? null, nextShiftCount), disponibilitaCount: disponibilitaNextCount, mancano: mancanoDispo },
   ]
 
   return (
@@ -270,7 +280,7 @@ export default async function AdminDashboardPage() {
 
           {/* Month status cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {monthCards.map(({ isCurrent, month, year, shiftCount, status }) => {
+            {monthCards.map(({ isCurrent, month, year, shiftCount, status, disponibilitaCount, mancano }) => {
               const cfg = STATUS_CONFIG[status]
               const actionHref  = status === 'locked' || status === 'confirmed' ? '/admin/export' : '/admin/disponibilita'
               const actionLabel = status === 'locked' ? 'Invia →' : status === 'confirmed' ? 'Rivedi →' : 'Compila →'
@@ -299,6 +309,24 @@ export default async function AdminDashboardPage() {
                       <div>
                         <p className="text-4xl font-bold text-gray-900 leading-none">{shiftCount}</p>
                         <p className="text-xs text-gray-400 mt-1">turni assegnati</p>
+                        {disponibilitaCount !== null && (
+                          <div className="mt-2 space-y-1">
+                            <p className="text-xs text-gray-400">
+                              <span className={`font-semibold ${disponibilitaCount === utentiAttiviCount ? 'text-green-600' : 'text-amber-600'}`}>
+                                {disponibilitaCount}/{utentiAttiviCount}
+                              </span>
+                              {' '}hanno inserito la disponibilità
+                            </p>
+                            {mancano.length > 0 && (
+                              <p className="text-xs text-gray-400">
+                                Mancano:{' '}
+                                <span className="text-gray-600">
+                                  {mancano.map((u) => u.nome).join(', ')}
+                                </span>
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <a
                         href={actionHref}
