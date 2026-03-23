@@ -30,6 +30,7 @@ Funzionalita da implementare in ordine di priorita.
 - **Schema DB**: nuova tabella `areas` (id, name, scheduling_mode, template_path, manager_id); aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
 - **Frontend**: selettore area in navbar, `CalendarioGlobale` con logica dinamica per mode
 - **Da chiarire prima dell'implementazione**: per `sun_next_sat`, cosa succede se il Sab successivo e gia occupato?
+- **Calendario per manager**: ogni manager deve vedere e poter modificare solo il calendario della propria area (`area_id` su `users`); admin vede tutti i calendari; `month_status` deve avere `area_id` per blocchi separati per area
 
 ### Import storico — 2° reperibile (backup) e selezione per area
 - Il foglio Excel ha gia la colonna E **"Nominativo 2° reperibile"** (backup), attualmente non usata dalla logica turni ordinaria
