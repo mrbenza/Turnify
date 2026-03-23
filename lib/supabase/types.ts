@@ -5,7 +5,6 @@ export type UserRole = 'admin' | 'manager' | 'dipendente'
 export type AvailabilityStatus = 'pending' | 'approved' | 'locked'
 export type ShiftType = 'weekend' | 'festivo' | 'reperibilita'
 export type MonthStatusValue = 'open' | 'locked' | 'confirmed'
-export type SchedulingMode = 'weekend_full' | 'single_day' | 'sun_next_sat'
 
 export type User = {
   id: string
@@ -62,16 +61,6 @@ export type EquityScore = {
   turni_totali: number
   festivi: number
   score: number
-}
-
-export type Area = {
-  id: string
-  nome: string
-  scheduling_mode: SchedulingMode
-  workers_per_day: 1 | 2
-  template_path: string | null
-  manager_id: string | null
-  created_at: string
 }
 
 export type EmailSetting = {
@@ -148,12 +137,6 @@ export type Database = {
         Row: EmailSetting
         Insert: Omit<EmailSetting, 'id' | 'created_at'>
         Update: Partial<Omit<EmailSetting, 'id' | 'created_at'>>
-        Relationships: []
-      }
-      areas: {
-        Row: Area
-        Insert: Omit<Area, 'id' | 'created_at'>
-        Update: Partial<Omit<Area, 'id' | 'created_at'>>
         Relationships: []
       }
     }

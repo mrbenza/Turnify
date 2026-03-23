@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { User, Availability, Shift, Holiday, SchedulingMode } from '@/lib/supabase/types'
+import type { User, Availability, Shift, Holiday } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -29,8 +29,6 @@ interface CalendarioGlobaleProps {
   initialLocked: boolean
   initialConfirmed: boolean
   isAdmin: boolean
-  schedulingMode: SchedulingMode
-  workersPerDay: 1 | 2
 }
 
 /** Selected day for the side drawer */
@@ -71,47 +69,6 @@ function isWeekendDay(year: number, month: number, day: number): boolean {
   return dow === 0 || dow === 6
 }
 
-/**
- * Restituisce la data del giorno abbinato per l'auto-pairing, o null se non c'è abbinamento.
- * isHoliday: true se il giorno è un festivo obbligatorio.
- *
- * Logica:
- * - Per TUTTI i modi: se il giorno è un festivo su Sab o Dom → abbina con l'altro giorno dello stesso weekend
- * - weekend_full: Sab ↔ Dom della stessa settimana
- * - sun_next_sat: Dom → Sab della settimana successiva (7 giorni dopo)
- * - single_day:  nessun auto-pairing per i giorni normali
- */
-function getPairedDate(dateStr: string, mode: SchedulingMode, isHoliday: boolean): string | null {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const dow = new Date(y, m - 1, d).getDay() // 0=Dom, 6=Sab
-  const isWeekend = dow === 0 || dow === 6
-
-  // Festivi su Sab/Dom: in tutti i modi abbina con l'altro giorno dello stesso weekend
-  if (isHoliday && isWeekend) {
-    const partner = dow === 6
-      ? new Date(y, m - 1, d + 1) // Sab → Dom
-      : new Date(y, m - 1, d - 1) // Dom → Sab
-    return toDateString(partner.getFullYear(), partner.getMonth(), partner.getDate())
-  }
-
-  if (mode === 'weekend_full') {
-    if (!isWeekend) return null
-    const partner = dow === 6
-      ? new Date(y, m - 1, d + 1) // Sab → Dom
-      : new Date(y, m - 1, d - 1) // Dom → Sab
-    return toDateString(partner.getFullYear(), partner.getMonth(), partner.getDate())
-  }
-
-  if (mode === 'sun_next_sat') {
-    if (dow !== 0) return null // solo domenica genera abbinamento
-    const nextSat = new Date(y, m - 1, d + 7)
-    return toDateString(nextSat.getFullYear(), nextSat.getMonth(), nextSat.getDate())
-  }
-
-  // single_day: nessun auto-pairing
-  return null
-}
-
 function formatFullDate(day: number, month: number, year: number): string {
   const dowNames = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
   const dow = new Date(year, month, day).getDay()
@@ -148,8 +105,6 @@ export default function CalendarioGlobale({
   initialLocked,
   initialConfirmed,
   isAdmin,
-  schedulingMode,
-  workersPerDay,
 }: CalendarioGlobaleProps) {
   /* ---- Core state ---- */
   const [viewMonth, setViewMonth] = useState(initialMonth)
@@ -394,30 +349,7 @@ export default function CalendarioGlobale({
       }
       const data = await res.json() as Shift
       sessionShiftIdsRef.current.add(data.id)
-      const newShifts: Shift[] = [...prevShifts, data]
-      setShifts(newShifts)
-
-      // Auto-pairing: assegna automaticamente il giorno abbinato se non già coperto
-      const isHoliday = holidayMap.has(dateStr)
-      const pairedDate = getPairedDate(dateStr, schedulingMode, isHoliday)
-      if (pairedDate) {
-        const alreadyAssigned = newShifts.some(
-          (s) => s.date === pairedDate && s.user_id === userId
-        )
-        if (!alreadyAssigned) {
-          const pairedRes = await fetch('/api/shifts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date: pairedDate, user_id: userId }),
-          })
-          if (pairedRes.ok) {
-            const pairedData = await pairedRes.json() as Shift
-            sessionShiftIdsRef.current.add(pairedData.id)
-            setShifts((prev) => [...prev, pairedData])
-          }
-          // Se l'auto-pair fallisce (es. mese bloccato, giorno pieno) lo ignoriamo silenziosamente
-        }
-      }
+      setShifts((prev) => [...prev, data])
     } catch (err) {
       setShifts(prevShifts)
       console.error('Errore assegnazione turno:', err)
@@ -425,7 +357,7 @@ export default function CalendarioGlobale({
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingAction, shifts, schedulingMode, holidayMap])
+  }, [pendingAction, shifts])
 
   /* ---- Remove shift ---- */
   const handleRemove = useCallback(async () => {
@@ -459,56 +391,41 @@ export default function CalendarioGlobale({
 
   /* ---- Weekend/festivo conflict check ---- */
   // Restituisce true se l'utente ha già un turno speciale (weekend o festivo)
-  // in un ALTRO giorno dello stesso mese (escludendo la coppia abbinata corrente)
+  // in un ALTRO giorno dello stesso mese
   function isWeekendBlocked(userId: string, dateStr: string): boolean {
     const [y, m, d] = dateStr.split('-').map(Number)
-    const dow = new Date(y, m - 1, d).getDay() // 0=Dom, 6=Sab
+    const dow = new Date(y, m - 1, d).getDay() // 0=Sun, 6=Sat
     const isHoliday = holidayMap.has(dateStr)
+    // Esce solo se il giorno non è né weekend né festivo
     if (dow !== 0 && dow !== 6 && !isHoliday) return false
 
     const monthPrefix = `${y}-${String(m).padStart(2, '0')}`
-    const isWeekend = dow === 0 || dow === 6
 
-    // Calcola le date da escludere (la "coppia" corrente)
-    let excludeDates: string[]
-
-    if (isHoliday && isWeekend) {
-      // Festivo su weekend: escludi sempre la coppia Sab+Dom
+    if (dow === 0 || dow === 6) {
+      // Per weekend: esclude la coppia Sab+Dom corrente (stesso weekend = ok)
+      // Usa Date per gestire correttamente i weekend a cavallo di mese
       const satDate = dow === 6 ? new Date(y, m - 1, d) : new Date(y, m - 1, d - 1)
       const sunDate = new Date(satDate.getFullYear(), satDate.getMonth(), satDate.getDate() + 1)
-      excludeDates = [
-        toDateString(satDate.getFullYear(), satDate.getMonth(), satDate.getDate()),
-        toDateString(sunDate.getFullYear(), sunDate.getMonth(), sunDate.getDate()),
-      ]
-    } else if (schedulingMode === 'weekend_full' && isWeekend) {
-      const satDate = dow === 6 ? new Date(y, m - 1, d) : new Date(y, m - 1, d - 1)
-      const sunDate = new Date(satDate.getFullYear(), satDate.getMonth(), satDate.getDate() + 1)
-      excludeDates = [
-        toDateString(satDate.getFullYear(), satDate.getMonth(), satDate.getDate()),
-        toDateString(sunDate.getFullYear(), sunDate.getMonth(), sunDate.getDate()),
-      ]
-    } else if (schedulingMode === 'sun_next_sat' && isWeekend) {
-      if (dow === 0) {
-        // Domenica: coppia = Dom + Sab successivo
-        const nextSat = new Date(y, m - 1, d + 7)
-        excludeDates = [dateStr, toDateString(nextSat.getFullYear(), nextSat.getMonth(), nextSat.getDate())]
-      } else {
-        // Sabato: coppia = Dom precedente + questo Sab
-        const prevSun = new Date(y, m - 1, d - 7)
-        excludeDates = [toDateString(prevSun.getFullYear(), prevSun.getMonth(), prevSun.getDate()), dateStr]
-      }
+      const satStr = toDateString(satDate.getFullYear(), satDate.getMonth(), satDate.getDate())
+      const sunStr = toDateString(sunDate.getFullYear(), sunDate.getMonth(), sunDate.getDate())
+      return shifts.some(
+        (s) =>
+          s.user_id === userId &&
+          (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
+          s.date.startsWith(monthPrefix) &&
+          s.date !== satStr &&
+          s.date !== sunStr
+      )
     } else {
-      // single_day o festivo feriale: escludi solo la data stessa
-      excludeDates = [dateStr]
+      // Per festivi feriali: esclude solo la data stessa
+      return shifts.some(
+        (s) =>
+          s.user_id === userId &&
+          (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
+          s.date.startsWith(monthPrefix) &&
+          s.date !== dateStr
+      )
     }
-
-    return shifts.some(
-      (s) =>
-        s.user_id === userId &&
-        (s.shift_type === 'weekend' || s.shift_type === 'festivo') &&
-        s.date.startsWith(monthPrefix) &&
-        !excludeDates.includes(s.date)
-    )
   }
 
   /* ---- Suggerimenti 2° reperibile ---- */
@@ -586,36 +503,17 @@ export default function CalendarioGlobale({
       if (satWorker) return satWorker.id
     }
 
-    // Suggerimento basato su auto-pairing (secondo schedulingMode)
+    // Domenica stesso mese: se il sabato dello stesso weekend è già assegnato,
+    // suggerisci lo stesso utente per la domenica (coppia Sab+Dom coerente)
     const [y, m, d] = dateStr.split('-').map(Number)
     const dow = new Date(y, m - 1, d).getDay()
-
-    if (schedulingMode === 'weekend_full' && dow === 0) {
-      // Domenica: suggerisci chi ha fatto il sabato della stessa settimana
+    if (dow === 0) { // è domenica
       const satDate = new Date(y, m - 1, d - 1)
-      const satStr = toDateString(satDate.getFullYear(), satDate.getMonth(), satDate.getDate())
+      const satStr = `${satDate.getFullYear()}-${String(satDate.getMonth() + 1).padStart(2, '0')}-${String(satDate.getDate()).padStart(2, '0')}`
       const satShift = shifts.find((s) => s.date === satStr)
       if (satShift) {
         const satWorker = base.find((u) => u.id === satShift.user_id)
         if (satWorker) return satWorker.id
-      }
-    } else if (schedulingMode === 'weekend_full' && dow === 6) {
-      // Sabato: suggerisci chi ha fatto la domenica della stessa settimana (se già assegnata)
-      const sunDate = new Date(y, m - 1, d + 1)
-      const sunStr = toDateString(sunDate.getFullYear(), sunDate.getMonth(), sunDate.getDate())
-      const sunShift = shifts.find((s) => s.date === sunStr)
-      if (sunShift) {
-        const sunWorker = base.find((u) => u.id === sunShift.user_id)
-        if (sunWorker) return sunWorker.id
-      }
-    } else if (schedulingMode === 'sun_next_sat' && dow === 6) {
-      // Sabato: suggerisci chi ha fatto la domenica 7 giorni prima (la "causa" di questo sabato)
-      const prevSun = new Date(y, m - 1, d - 7)
-      const prevSunStr = toDateString(prevSun.getFullYear(), prevSun.getMonth(), prevSun.getDate())
-      const prevSunShift = [...shifts, ...prevMonthShifts].find((s) => s.date === prevSunStr)
-      if (prevSunShift) {
-        const prevSunWorker = base.find((u) => u.id === prevSunShift.user_id)
-        if (prevSunWorker) return prevSunWorker.id
       }
     }
 
@@ -1042,32 +940,19 @@ export default function CalendarioGlobale({
                 const suggestedId = getSuggestedUserId(dateStr)
 
                 const assigned   = users.filter(u => shiftMap.has(`${u.id}-${dateStr}`))
-                const dayFull    = assigned.length >= workersPerDay
                 const recOrder = { ideal: 0, neutral: 1, warning: 2, avoid: 3 }
-                const available  = dayFull ? [] : users
+                const available  = users
                   .filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && !isWeekendBlocked(u.id, dateStr))
                   .sort((a, b) => {
                     const sa = a.id === suggestedId ? -1 : recOrder[getRecommendationLevel(a.id, dateStr)]
                     const sb = b.id === suggestedId ? -1 : recOrder[getRecommendationLevel(b.id, dateStr)]
                     return sa - sb
                   })
-                const inTurno    = !dayFull ? users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && isWeekendBlocked(u.id, dateStr)) : []
+                const inTurno    = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && isWeekendBlocked(u.id, dateStr))
                 const notAvail   = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && !availabilityMap.get(`${u.id}-${dateStr}`)?.available)
 
                 return (
                   <>
-                    {/* ── Giorno pieno ── */}
-                    {dayFull && workersPerDay === 1 && (
-                      <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                        Giorno coperto — max {workersPerDay} reperibile per giorno.
-                      </p>
-                    )}
-                    {dayFull && workersPerDay === 2 && (
-                      <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                        Giorno completo — {workersPerDay} reperibili assegnati.
-                      </p>
-                    )}
-
                     {/* ── Assegnati oggi ── */}
                     {assigned.length > 0 && (
                       <section aria-label="Assegnati">

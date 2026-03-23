@@ -20,20 +20,17 @@ Funzionalita da implementare in ordine di priorita.
 ## Media priorita
 
 ### Multi-area con scheduling modes diversi
-- **Stato**: base implementata (fase 1 completata) — espansione a piu aree ancora da fare
-- **Gia implementato (2026-03-23)**:
-  - Tabella `areas` con `scheduling_mode` e `workers_per_day` (migration 011)
-  - API `GET/PATCH /api/config` per leggere e aggiornare la configurazione
-  - UI `GestioneArea` nella pagina Impostazioni (admin/manager)
-  - `CalendarioGlobale` legge `scheduling_mode` e `workers_per_day` e applica la logica corretta
-  - Auto-pairing turni: `weekend_full` (Sab↔Dom), `sun_next_sat` (Dom→Sab+7, Sab non ha pairing), `single_day` (nessun pairing)
-  - Check `workers_per_day` nel backend `/api/shifts` — rifiuta se il giorno e gia pieno
-  - Festivo su Sab/Dom si accoppia sempre con il partner della stessa settimana (tutti i mode)
-- **Da implementare per il vero multi-area**:
-  - Aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
-  - Selettore area in navbar (admin vede tutte, manager vede solo la sua)
-  - `CalendarioGlobale` e `month_status` filtrati per area
-  - Ogni manager gestisce solo i dipendenti della propria area
+- **Obiettivo**: supportare piu aree aziendali, ognuna con la propria logica di turnazione e i propri dipendenti
+- **Scheduling modes previsti**:
+  | Mode | Comportamento |
+  |------|--------------|
+  | `weekend_full` | Sab+Dom sempre insieme (comportamento attuale) |
+  | `single_day` | Sab e Dom indipendenti, assegnabili a persone diverse |
+  | `sun_next_sat` | Chi lavora Dom lavora anche il Sab della settimana successiva |
+- **Schema DB**: nuova tabella `areas` (id, name, scheduling_mode, template_path, manager_id); aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
+- **Frontend**: selettore area in navbar, `CalendarioGlobale` con logica dinamica per mode
+- **Da chiarire prima dell'implementazione**: per `sun_next_sat`, cosa succede se il Sab successivo e gia occupato?
+- **Calendario per manager**: ogni manager deve vedere e poter modificare solo il calendario della propria area (`area_id` su `users`); admin vede tutti i calendari; `month_status` deve avere `area_id` per blocchi separati per area
 
 ### Import storico — 2° reperibile (backup) e selezione per area
 - Il foglio Excel ha gia la colonna E **"Nominativo 2° reperibile"** (backup), attualmente non usata dalla logica turni ordinaria
@@ -62,10 +59,6 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Completato
 
-- **[v1.3.0] Configurazione area (scheduling_mode + workers_per_day)** — Tabella `areas` (migration 011), API `/api/config`, UI `GestioneArea` in Impostazioni. `CalendarioGlobale` applica auto-pairing dinamico per mode (`weekend_full`, `sun_next_sat`, `single_day`) e blocca assegnazioni quando `workers_per_day = 1` e il giorno e gia pieno.
-- **[v1.3.0] Fix mesi confirmed non modificabili** — Le API `/api/shifts` (POST) e `/api/shifts/[id]` (DELETE) ora bloccano correttamente i mesi con `status = 'confirmed'` oltre a `locked`.
-- **[v1.3.0] Fix doppio fetch in export e send-email** — `generateTurniExcel` ora restituisce `shiftsByDate` nel risultato; `export/route.ts` e `send-email/route.ts` la usano direttamente invece di rieseguire la query shifts/users.
-- **[v1.3.0] Script DB** — `supabase/reset.sql` (cancella tutti i dati), `supabase/schema.sql` (schema completo migrations 001-011), `supabase/seed_demo.sql` (16 utenti, festività 2024-2026, turni 2024-2025, mesi confirmed, disponibilità gen-mar 2026).
 - **[v1.2.0] Fix logout admin mobile** — Il pulsante "Altro" nella bottom bar mobile di `NavbarAdmin` e ora sempre visibile, garantendo accesso al logout anche per il ruolo admin che non ha voci nel menu overflow.
 - **[v1.2.0] Loading skeleton su tutte le pagine SSR** — Aggiunto `loading.tsx` per tutte le route admin e user. Componente condiviso `AdminPageSkeleton` con `rows` e `grid` props. Elimina la pagina bianca durante il caricamento SSR.
 - **[v1.2.0] StoricoTurni — conversione a server component** — `StoricoTurni.tsx` ora riceve `turni: ShiftRow[]` come prop da `app/user/page.tsx`; la query storico (ultimi 12 mesi) e aggiunta nel `Promise.all` della pagina; join con `month_status` in memoria tramite `statusMap`. Eliminato doppio round-trip client→server.

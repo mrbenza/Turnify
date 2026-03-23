@@ -1,4 +1,4 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -47,39 +47,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Valore year non valido.' }, { status: 400 })
   }
 
-  const serviceClient = createServiceClient()
-
-  const lockPayload =
+  // Build upsert payload based on action — adminId comes from session
+  const upsertPayload =
     action === 'lock'
-      ? { status: 'locked' as const, locked_by: user.id, locked_at: new Date().toISOString() }
-      : { status: 'open' as const, locked_by: null, locked_at: null, email_inviata: false, email_inviata_at: null }
+      ? {
+          month,
+          year,
+          status: 'locked' as const,
+          locked_by: user.id,
+          locked_at: new Date().toISOString(),
+        }
+      : {
+          month,
+          year,
+          status: 'open' as const,
+          locked_by: null,
+          locked_at: null,
+          email_inviata: false,
+          email_inviata_at: null,
+        }
 
-  // Verifica se il record esiste già
-  const { data: existing } = await serviceClient
+  const { error } = await supabase
     .from('month_status')
-    .select('id')
-    .eq('month', month)
-    .eq('year', year)
-    .single()
+    .upsert(upsertPayload, { onConflict: 'month,year' })
 
-  if (existing) {
-    const { error } = await serviceClient
-      .from('month_status')
-      .update(lockPayload)
-      .eq('month', month)
-      .eq('year', year)
-    if (error) {
-      console.error(`Errore ${action} mese:`, error)
-      return NextResponse.json({ error: 'Errore durante l\'operazione sul mese.' }, { status: 500 })
-    }
-  } else {
-    const { error } = await serviceClient
-      .from('month_status')
-      .insert({ month, year, ...lockPayload })
-    if (error) {
-      console.error(`Errore ${action} mese:`, error)
-      return NextResponse.json({ error: 'Errore durante l\'operazione sul mese.' }, { status: 500 })
-    }
+  if (error) {
+    console.error(`Errore ${action} mese:`, error)
+    return NextResponse.json({ error: 'Errore durante l\'operazione sul mese.' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })

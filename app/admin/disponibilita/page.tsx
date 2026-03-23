@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Availability, Shift, Holiday, MonthStatus, SchedulingMode } from '@/lib/supabase/types'
+import { createClient } from '@/lib/supabase/server'
+import type { User, Availability, Shift, Holiday, MonthStatus } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import CalendarioGlobale from '@/components/admin/disponibilita/CalendarioGlobale'
 
@@ -27,16 +27,13 @@ export default async function DisponibilitaPage() {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-  const serviceClient = createServiceClient()
-
   /* ---- Parallel fetches ---- */
-  const [usersRes, availRes, shiftsRes, holidaysRes, monthStatusRes, areaConfigRes] = await Promise.all([
+  const [usersRes, availRes, shiftsRes, holidaysRes, monthStatusRes] = await Promise.all([
     supabase.from('users').select('*').eq('ruolo', 'dipendente').eq('attivo', true).order('nome'),
     supabase.from('availability').select('*').gte('date', from).lte('date', to),
     supabase.from('shifts').select('*').gte('date', from).lte('date', to),
     supabase.from('holidays').select('*').gte('date', from).lte('date', to),
     supabase.from('month_status').select('*').eq('month', month + 1).eq('year', year).single<MonthStatus>(),
-    serviceClient.from('areas').select('scheduling_mode, workers_per_day').limit(1).single(),
   ])
 
   const users = usersRes.data ?? []
@@ -45,9 +42,6 @@ export default async function DisponibilitaPage() {
   const holidays = holidaysRes.data ?? []
   const monthStatus = monthStatusRes.data
   const isLocked = monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed'
-
-  const schedulingMode: SchedulingMode = (areaConfigRes.data?.scheduling_mode as SchedulingMode) ?? 'weekend_full'
-  const workersPerDay: 1 | 2 = (areaConfigRes.data?.workers_per_day as 1 | 2) ?? 2
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -78,8 +72,6 @@ export default async function DisponibilitaPage() {
               initialLocked={isLocked}
               initialConfirmed={monthStatus?.status === 'confirmed'}
               isAdmin={profile?.ruolo === 'admin'}
-              schedulingMode={schedulingMode}
-              workersPerDay={workersPerDay}
             />
           </section>
         </main>
