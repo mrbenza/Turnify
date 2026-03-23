@@ -55,6 +55,8 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailInviata, setEmailInviata] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const userMap = new Map<string, string>(users.map((u) => [u.id, u.nome]))
@@ -104,10 +106,22 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     }
   }
 
-  function handleFilterChange(month: number, year: number) {
+  async function handleFilterChange(month: number, year: number) {
     setFilterMonth(month)
     setFilterYear(year)
     setPreview(null)
+    setEmailInviata(false)
+    // Controlla stato email per il mese selezionato
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('month_status')
+        .select('email_inviata')
+        .eq('month', month + 1)
+        .eq('year', year)
+        .maybeSingle()
+      setEmailInviata(data?.email_inviata ?? false)
+    } catch { /* non bloccante */ }
   }
 
   /* ---- Export XLSX ---- */
@@ -133,6 +147,29 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
       setErrorMsg(err instanceof Error ? err.message : 'Errore durante la generazione del file.')
     } finally {
       setExporting(false)
+    }
+  }
+
+  /* ---- Send email ---- */
+  async function handleSendEmail() {
+    setSendingEmail(true)
+    setErrorMsg(null)
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: filterMonth + 1, year: filterYear }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? `Errore HTTP ${res.status}`)
+      }
+      setEmailInviata(true)
+    } catch (err) {
+      console.error('Errore invio email:', err)
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'invio dell\'email.')
+    } finally {
+      setSendingEmail(false)
     }
   }
 
@@ -341,19 +378,44 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
               <p className="text-xs text-gray-500 mt-0.5">
                 Genera il file Excel dal template aziendale — formattazione, logo e struttura originali preservati.
               </p>
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="mt-3 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
-                aria-label={`Genera Excel turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
-              >
-                {exporting ? <Spinner /> : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  aria-label={`Genera Excel turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
+                >
+                  {exporting ? <Spinner /> : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  )}
+                  {exporting ? 'Generazione in corso...' : 'Genera Excel'}
+                </button>
+
+                {emailInviata ? (
+                  <span className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-green-700">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Email inviata
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleSendEmail}
+                    disabled={sendingEmail}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-blue-300 text-blue-700 bg-white text-sm font-medium hover:bg-blue-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    aria-label={`Invia email turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
+                  >
+                    {sendingEmail ? <Spinner /> : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                    {sendingEmail ? 'Invio in corso...' : 'Invia email'}
+                  </button>
                 )}
-                {exporting ? 'Generazione in corso...' : 'Genera Excel'}
-              </button>
+              </div>
             </div>
           </div>
         </div>
