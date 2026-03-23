@@ -1,11 +1,9 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import type { SchedulingMode } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import GestioneEmail from '@/components/admin/impostazioni/GestioneEmail'
-
-/* ------------------------------------------------------------------ */
-/* Types                                                               */
-/* ------------------------------------------------------------------ */
+import GestioneArea from '@/components/admin/impostazioni/GestioneArea'
 
 interface EmailSetting {
   id: string
@@ -14,10 +12,6 @@ interface EmailSetting {
   attivo: boolean
   created_at: string
 }
-
-/* ------------------------------------------------------------------ */
-/* Page                                                                */
-/* ------------------------------------------------------------------ */
 
 export default async function ImpostazioniPage() {
   const supabase = await createClient()
@@ -34,13 +28,19 @@ export default async function ImpostazioniPage() {
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
-  /* ---- Email settings ---- */
-  const { data: emailSettingsData } = await supabase
-    .from('email_settings')
-    .select('*')
-    .order('created_at', { ascending: true })
+  const serviceClient = createServiceClient()
 
-  const emailSettings = emailSettingsData ?? []
+  /* ---- Parallel fetches ---- */
+  const [emailSettingsRes, areaConfigRes] = await Promise.all([
+    supabase.from('email_settings').select('*').order('created_at', { ascending: true }),
+    serviceClient.from('areas').select('scheduling_mode, workers_per_day').limit(1).single(),
+  ])
+
+  const emailSettings = (emailSettingsRes.data ?? []) as EmailSetting[]
+  const areaConfig = areaConfigRes.data
+
+  const schedulingMode: SchedulingMode = (areaConfig?.scheduling_mode as SchedulingMode) ?? 'weekend_full'
+  const workersPerDay: 1 | 2 = (areaConfig?.workers_per_day as 1 | 2) ?? 2
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -52,15 +52,32 @@ export default async function ImpostazioniPage() {
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Impostazioni</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Configura le notifiche email per i mesi confermati
+              Configura la logica di turnazione e le notifiche email
             </p>
           </div>
 
+          {/* Configurazione area */}
+          <section
+            aria-labelledby="area-config-heading"
+            className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
+          >
+            <h2 id="area-config-heading" className="text-sm font-semibold text-gray-700 mb-4">
+              Configurazione turni
+            </h2>
+            <GestioneArea
+              initialSchedulingMode={schedulingMode}
+              initialWorkersPerDay={workersPerDay}
+            />
+          </section>
+
+          {/* Email settings */}
           <section
             aria-labelledby="email-settings-heading"
             className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
           >
-            <h2 id="email-settings-heading" className="sr-only">Impostazioni email</h2>
+            <h2 id="email-settings-heading" className="text-sm font-semibold text-gray-700 mb-4">
+              Destinatari email notifiche
+            </h2>
             <GestioneEmail initialSettings={emailSettings} />
           </section>
 
