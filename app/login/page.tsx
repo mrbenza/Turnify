@@ -42,8 +42,19 @@ function LoginForm() {
     // Reset failed attempts on successful login
     setFailedAttempts(0)
 
-    // Redirect server-side: la route legge il ruolo dai cookie e reindirizza
-    window.location.href = '/auth/redirect'
+    // Legge il ruolo per decidere il redirect
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from('users')
+      .select('ruolo')
+      .eq('id', user!.id)
+      .single<{ ruolo: string }>()
+
+    if (profile?.ruolo === 'admin' || profile?.ruolo === 'manager') {
+      router.push('/admin')
+    } else {
+      router.push('/user') // dipendente o user (legacy)
+    }
   }
 
   return (

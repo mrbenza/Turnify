@@ -29,9 +29,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Route /login: se già autenticato manda alla route di redirect
+  // Route /login redirect a /user se già autenticato
   if (pathname === '/login' && user) {
-    return NextResponse.redirect(new URL('/auth/redirect', request.url))
+    return NextResponse.redirect(new URL('/user', request.url))
   }
 
   return response
