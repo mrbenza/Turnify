@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import JSZip from 'jszip'
+import { sendTurniEmail } from '@/lib/email/sendTurniEmail'
 
 const MONTH_NAMES_IT = [
   'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
 
   const { data: monthStatus } = await supabase
     .from('month_status')
-    .select('status')
+    .select('status, email_inviata')
     .eq('month', month)
     .eq('year', year)
     .maybeSingle()
@@ -235,6 +236,38 @@ export async function GET(request: NextRequest) {
       .eq('year', year)
   } catch (err) {
     console.error('Errore aggiornamento stato post-export (non bloccante):', err)
+  }
+
+  // Invia email notifica se non ancora inviata
+  if (!monthStatus?.email_inviata) {
+    try {
+      const [{ data: employees }, { data: extraEmails }] = await Promise.all([
+        serviceClient
+          .from('users')
+          .select('email, nome')
+          .eq('ruolo', 'dipendente')
+          .eq('attivo', true),
+        serviceClient
+          .from('email_settings')
+          .select('email, descrizione')
+          .eq('attivo', true),
+      ])
+
+      const recipients = [
+        ...(employees ?? []).map((u: { email: string; nome: string }) => ({ email: u.email, name: u.nome })),
+        ...(extraEmails ?? []).map((e: { email: string; descrizione: string | null }) => ({ email: e.email, name: e.descrizione ?? undefined })),
+      ]
+
+      await sendTurniEmail({ month, year, shiftsByDate, recipients })
+
+      await serviceClient
+        .from('month_status')
+        .update({ email_inviata: true, email_inviata_at: new Date().toISOString() })
+        .eq('month', month)
+        .eq('year', year)
+    } catch (err) {
+      console.error('Errore invio email turni (non bloccante):', err)
+    }
   }
 
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
