@@ -29,15 +29,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Route /login redirect alla dashboard corretta se già autenticato
+  // Route /login: se già autenticato manda alla route di redirect
   if (pathname === '/login' && user) {
-    const { data: profile } = await supabase
-      .from('users')
-      .select('ruolo')
-      .eq('id', user.id)
-      .single()
-    const dest = (profile?.ruolo === 'admin' || profile?.ruolo === 'manager') ? '/admin' : '/user'
-    return NextResponse.redirect(new URL(dest, request.url))
+    return NextResponse.redirect(new URL('/auth/redirect', request.url))
   }
 
   return response
