@@ -39,10 +39,12 @@ export async function GET(request: NextRequest) {
 
   let buffer: Buffer
   let fileName: string
+  let excelShiftsByDate: Map<string, string[]>
   try {
     const result = await generateTurniExcel(month, year, serviceClient, searchParams.get('template'))
     buffer = result.buffer
     fileName = result.fileName
+    excelShiftsByDate = result.shiftsByDate
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Errore generazione Excel'
     console.error('Errore generazione Excel:', err)
@@ -74,32 +76,17 @@ export async function GET(request: NextRequest) {
   // Invia email con allegato se non ancora inviata
   if (!monthStatus?.email_inviata) {
     try {
-      const [{ data: employees }, { data: extraEmails }, { data: shiftRows }, { data: users }] =
-        await Promise.all([
-          serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
-          serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
-          serviceClient.from('shifts').select('date, user_id').gte('date', from).lte('date', to).order('date'),
-          serviceClient.from('users').select('id, nome'),
-        ])
-
-      const userMap = new Map<string, string>(
-        (users ?? []).map((u: { id: string; nome: string }) => {
-          const idx = u.nome.indexOf(' ')
-          return [u.id, idx === -1 ? u.nome : u.nome.slice(idx + 1)]
-        })
-      )
-      const shiftsByDate = new Map<string, string[]>()
-      for (const s of shiftRows ?? []) {
-        if (!shiftsByDate.has(s.date)) shiftsByDate.set(s.date, [])
-        shiftsByDate.get(s.date)!.push(userMap.get(s.user_id) ?? s.user_id)
-      }
+      const [{ data: employees }, { data: extraEmails }] = await Promise.all([
+        serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
+        serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
+      ])
 
       const recipients = [
         ...(employees ?? []).map((u: { email: string; nome: string }) => ({ email: u.email, name: u.nome })),
         ...(extraEmails ?? []).map((e: { email: string; descrizione: string | null }) => ({ email: e.email, name: e.descrizione ?? undefined })),
       ]
 
-      await sendTurniEmail({ month, year, shiftsByDate, recipients, excelBuffer: buffer, excelFileName: fileName })
+      await sendTurniEmail({ month, year, shiftsByDate: excelShiftsByDate, recipients, excelBuffer: buffer, excelFileName: fileName })
 
       await serviceClient
         .from('month_status')

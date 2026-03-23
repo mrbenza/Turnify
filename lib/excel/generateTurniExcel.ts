@@ -68,6 +68,7 @@ async function getDatiSheetPath(zip: JSZip): Promise<string | null> {
 export type GenerateResult = {
   buffer: Buffer
   fileName: string
+  shiftsByDate: Map<string, string[]>
 }
 
 /**
@@ -149,5 +150,5 @@ export async function generateTurniExcel(
   const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
   const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
-  return { buffer, fileName }
+  return { buffer, fileName, shiftsByDate }
 }

@@ -41,36 +41,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Il mese non è ancora confermato' }, { status: 400 })
   }
 
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const from = `${year}-${String(month).padStart(2, '0')}-01`
-  const to   = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
-
-  // Fetch destinatari e turni in parallelo con generazione Excel
+  // Fetch destinatari in parallelo con generazione Excel (shifts già inclusi nel result)
   const [
     { data: employees },
     { data: extraEmails },
-    { data: shiftRows },
-    { data: users },
     excelResult,
   ] = await Promise.all([
     serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
     serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
-    serviceClient.from('shifts').select('date, user_id').gte('date', from).lte('date', to).order('date'),
-    serviceClient.from('users').select('id, nome'),
     generateTurniExcel(month, year, serviceClient),
   ])
-
-  const userMap = new Map<string, string>(
-    (users ?? []).map((u: { id: string; nome: string }) => {
-      const idx = u.nome.indexOf(' ')
-      return [u.id, idx === -1 ? u.nome : u.nome.slice(idx + 1)]
-    })
-  )
-  const shiftsByDate = new Map<string, string[]>()
-  for (const s of shiftRows ?? []) {
-    if (!shiftsByDate.has(s.date)) shiftsByDate.set(s.date, [])
-    shiftsByDate.get(s.date)!.push(userMap.get(s.user_id) ?? s.user_id)
-  }
 
   const recipients = [
     ...(employees ?? []).map((u: { email: string; nome: string }) => ({ email: u.email, name: u.nome })),
@@ -84,7 +64,7 @@ export async function POST(request: Request) {
   await sendTurniEmail({
     month,
     year,
-    shiftsByDate,
+    shiftsByDate: excelResult.shiftsByDate,
     recipients,
     excelBuffer: excelResult.buffer,
     excelFileName: excelResult.fileName,
