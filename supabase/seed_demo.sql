@@ -44,24 +44,24 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Identities (necessario per il login email+password)
-INSERT INTO auth.identities (id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+INSERT INTO auth.identities (id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
 VALUES
-  ('a0000000-0000-0000-0000-000000000000','a0000000-0000-0000-0000-000000000000','{"sub":"a0000000-0000-0000-0000-000000000000","email":"admin@turnify.test"}',           'email',now(),now(),now()),
-  ('b0000000-0000-0000-0000-000000000000','b0000000-0000-0000-0000-000000000000','{"sub":"b0000000-0000-0000-0000-000000000000","email":"manager@turnify.test"}',         'email',now(),now(),now()),
-  ('c0000001-0000-0000-0000-000000000000','c0000001-0000-0000-0000-000000000000','{"sub":"c0000001-0000-0000-0000-000000000000","email":"marco.ferretti@turnify.test"}',  'email',now(),now(),now()),
-  ('c0000002-0000-0000-0000-000000000000','c0000002-0000-0000-0000-000000000000','{"sub":"c0000002-0000-0000-0000-000000000000","email":"giulia.esposito@turnify.test"}', 'email',now(),now(),now()),
-  ('c0000003-0000-0000-0000-000000000000','c0000003-0000-0000-0000-000000000000','{"sub":"c0000003-0000-0000-0000-000000000000","email":"luca.bianchi@turnify.test"}',    'email',now(),now(),now()),
-  ('c0000004-0000-0000-0000-000000000000','c0000004-0000-0000-0000-000000000000','{"sub":"c0000004-0000-0000-0000-000000000000","email":"andrea.ricci@turnify.test"}',    'email',now(),now(),now()),
-  ('c0000005-0000-0000-0000-000000000000','c0000005-0000-0000-0000-000000000000','{"sub":"c0000005-0000-0000-0000-000000000000","email":"elena.russo@turnify.test"}',     'email',now(),now(),now()),
-  ('c0000006-0000-0000-0000-000000000000','c0000006-0000-0000-0000-000000000000','{"sub":"c0000006-0000-0000-0000-000000000000","email":"davide.marino@turnify.test"}',   'email',now(),now(),now()),
-  ('c0000007-0000-0000-0000-000000000000','c0000007-0000-0000-0000-000000000000','{"sub":"c0000007-0000-0000-0000-000000000000","email":"chiara.lombardi@turnify.test"}', 'email',now(),now(),now()),
-  ('c0000008-0000-0000-0000-000000000000','c0000008-0000-0000-0000-000000000000','{"sub":"c0000008-0000-0000-0000-000000000000","email":"matteo.deluca@turnify.test"}',   'email',now(),now(),now()),
-  ('c0000009-0000-0000-0000-000000000000','c0000009-0000-0000-0000-000000000000','{"sub":"c0000009-0000-0000-0000-000000000000","email":"roberto.gallo@turnify.test"}',   'email',now(),now(),now()),
-  ('c0000010-0000-0000-0000-000000000000','c0000010-0000-0000-0000-000000000000','{"sub":"c0000010-0000-0000-0000-000000000000","email":"francesca.bruno@turnify.test"}', 'email',now(),now(),now()),
-  ('c0000011-0000-0000-0000-000000000000','c0000011-0000-0000-0000-000000000000','{"sub":"c0000011-0000-0000-0000-000000000000","email":"sara.conti@turnify.test"}',      'email',now(),now(),now()),
-  ('c0000012-0000-0000-0000-000000000000','c0000012-0000-0000-0000-000000000000','{"sub":"c0000012-0000-0000-0000-000000000000","email":"valentina.costa@turnify.test"}', 'email',now(),now(),now()),
-  ('c0000013-0000-0000-0000-000000000000','c0000013-0000-0000-0000-000000000000','{"sub":"c0000013-0000-0000-0000-000000000000","email":"pietro.santoro@turnify.test"}',  'email',now(),now(),now()),
-  ('c0000014-0000-0000-0000-000000000000','c0000014-0000-0000-0000-000000000000','{"sub":"c0000014-0000-0000-0000-000000000000","email":"marta.ferri@turnify.test"}',     'email',now(),now(),now())
+  ('a0000000-0000-0000-0000-000000000000','admin@turnify.test',           'a0000000-0000-0000-0000-000000000000','{"sub":"a0000000-0000-0000-0000-000000000000","email":"admin@turnify.test"}',           'email',now(),now(),now()),
+  ('b0000000-0000-0000-0000-000000000000','manager@turnify.test',         'b0000000-0000-0000-0000-000000000000','{"sub":"b0000000-0000-0000-0000-000000000000","email":"manager@turnify.test"}',         'email',now(),now(),now()),
+  ('c0000001-0000-0000-0000-000000000000','marco.ferretti@turnify.test',  'c0000001-0000-0000-0000-000000000000','{"sub":"c0000001-0000-0000-0000-000000000000","email":"marco.ferretti@turnify.test"}',  'email',now(),now(),now()),
+  ('c0000002-0000-0000-0000-000000000000','giulia.esposito@turnify.test', 'c0000002-0000-0000-0000-000000000000','{"sub":"c0000002-0000-0000-0000-000000000000","email":"giulia.esposito@turnify.test"}', 'email',now(),now(),now()),
+  ('c0000003-0000-0000-0000-000000000000','luca.bianchi@turnify.test',    'c0000003-0000-0000-0000-000000000000','{"sub":"c0000003-0000-0000-0000-000000000000","email":"luca.bianchi@turnify.test"}',    'email',now(),now(),now()),
+  ('c0000004-0000-0000-0000-000000000000','andrea.ricci@turnify.test',    'c0000004-0000-0000-0000-000000000000','{"sub":"c0000004-0000-0000-0000-000000000000","email":"andrea.ricci@turnify.test"}',    'email',now(),now(),now()),
+  ('c0000005-0000-0000-0000-000000000000','elena.russo@turnify.test',     'c0000005-0000-0000-0000-000000000000','{"sub":"c0000005-0000-0000-0000-000000000000","email":"elena.russo@turnify.test"}',     'email',now(),now(),now()),
+  ('c0000006-0000-0000-0000-000000000000','davide.marino@turnify.test',   'c0000006-0000-0000-0000-000000000000','{"sub":"c0000006-0000-0000-0000-000000000000","email":"davide.marino@turnify.test"}',   'email',now(),now(),now()),
+  ('c0000007-0000-0000-0000-000000000000','chiara.lombardi@turnify.test', 'c0000007-0000-0000-0000-000000000000','{"sub":"c0000007-0000-0000-0000-000000000000","email":"chiara.lombardi@turnify.test"}', 'email',now(),now(),now()),
+  ('c0000008-0000-0000-0000-000000000000','matteo.deluca@turnify.test',   'c0000008-0000-0000-0000-000000000000','{"sub":"c0000008-0000-0000-0000-000000000000","email":"matteo.deluca@turnify.test"}',   'email',now(),now(),now()),
+  ('c0000009-0000-0000-0000-000000000000','roberto.gallo@turnify.test',   'c0000009-0000-0000-0000-000000000000','{"sub":"c0000009-0000-0000-0000-000000000000","email":"roberto.gallo@turnify.test"}',   'email',now(),now(),now()),
+  ('c0000010-0000-0000-0000-000000000000','francesca.bruno@turnify.test', 'c0000010-0000-0000-0000-000000000000','{"sub":"c0000010-0000-0000-0000-000000000000","email":"francesca.bruno@turnify.test"}', 'email',now(),now(),now()),
+  ('c0000011-0000-0000-0000-000000000000','sara.conti@turnify.test',      'c0000011-0000-0000-0000-000000000000','{"sub":"c0000011-0000-0000-0000-000000000000","email":"sara.conti@turnify.test"}',      'email',now(),now(),now()),
+  ('c0000012-0000-0000-0000-000000000000','valentina.costa@turnify.test', 'c0000012-0000-0000-0000-000000000000','{"sub":"c0000012-0000-0000-0000-000000000000","email":"valentina.costa@turnify.test"}', 'email',now(),now(),now()),
+  ('c0000013-0000-0000-0000-000000000000','pietro.santoro@turnify.test',  'c0000013-0000-0000-0000-000000000000','{"sub":"c0000013-0000-0000-0000-000000000000","email":"pietro.santoro@turnify.test"}',  'email',now(),now(),now()),
+  ('c0000014-0000-0000-0000-000000000000','marta.ferri@turnify.test',     'c0000014-0000-0000-0000-000000000000','{"sub":"c0000014-0000-0000-0000-000000000000","email":"marta.ferri@turnify.test"}',     'email',now(),now(),now())
 ON CONFLICT (id) DO NOTHING;
 
 -- ------------------------------------------------------------
