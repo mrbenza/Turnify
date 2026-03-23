@@ -11,7 +11,22 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
--- Funzioni helper per RLS
+-- Tabella: users
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.users (
+  id             uuid        PRIMARY KEY,           -- corrisponde a auth.users.id
+  nome           text        NOT NULL,
+  email          text        NOT NULL UNIQUE,
+  ruolo          text        NOT NULL DEFAULT 'dipendente'
+                             CHECK (ruolo IN ('admin', 'manager', 'dipendente')),
+  attivo         boolean     NOT NULL DEFAULT true,
+  data_creazione timestamptz NOT NULL DEFAULT now(),
+  disattivato_at timestamptz
+);
+
+-- ------------------------------------------------------------
+-- Funzioni helper per RLS (dopo users, perché la referenziano)
 -- ------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -27,21 +42,6 @@ RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE AS $$
     SELECT 1 FROM public.users WHERE id = auth.uid() AND ruolo IN ('admin', 'manager')
   );
 $$;
-
--- ------------------------------------------------------------
--- Tabella: users
--- ------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS public.users (
-  id             uuid        PRIMARY KEY,           -- corrisponde a auth.users.id
-  nome           text        NOT NULL,
-  email          text        NOT NULL UNIQUE,
-  ruolo          text        NOT NULL DEFAULT 'dipendente'
-                             CHECK (ruolo IN ('admin', 'manager', 'dipendente')),
-  attivo         boolean     NOT NULL DEFAULT true,
-  data_creazione timestamptz NOT NULL DEFAULT now(),
-  disattivato_at timestamptz
-);
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
