@@ -49,6 +49,15 @@ export async function POST(request: Request) {
   // Determine shift type from date
   const [year, month, day] = date.split('-').map(Number)
 
+  // Leggi config area (scheduling_mode, workers_per_day)
+  const { data: areaConfig } = await supabase
+    .from('areas')
+    .select('scheduling_mode, workers_per_day')
+    .limit(1)
+    .single()
+  const schedulingMode = areaConfig?.scheduling_mode ?? 'weekend_full'
+  const workersPerDay = areaConfig?.workers_per_day ?? 2
+
   // Check if date is a holiday
   const { data: holiday } = await supabase
     .from('holidays')
@@ -61,25 +70,56 @@ export async function POST(request: Request) {
 
   const shiftType: ShiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'
 
+  // Check workers_per_day: max N persone per giorno
+  if (workersPerDay === 1) {
+    const { data: existingForDay } = await supabase
+      .from('shifts')
+      .select('id')
+      .eq('date', date)
+      .limit(1)
+    if (existingForDay && existingForDay.length > 0) {
+      return NextResponse.json(
+        { error: 'Giorno già coperto (max 1 reperibile per giorno).' },
+        { status: 409 }
+      )
+    }
+  }
+
   // Regola: max 1 turno speciale (weekend o festivo) per dipendente per mese
   if (shiftType === 'weekend' || shiftType === 'festivo') {
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
 
-    // Per i weekend escludiamo la coppia Sab+Dom corrente (stesso weekend = ok).
-    // Se il festivo cade di sabato o domenica (es. Pasqua), escludiamo comunque
-    // la coppia Sab+Dom: sabato + festivo-domenica sono lo stesso weekend.
-    const dow = new Date(year, month - 1, day).getDay()
+    const dow = new Date(year, month - 1, day).getDay() // 0=Dom, 6=Sab
     const isWeekendDate = dow === 0 || dow === 6
-    const satDay = (shiftType === 'weekend' || (shiftType === 'festivo' && isWeekendDate))
-      ? (dow === 6 ? day : day - 1)
-      : null
-    const excludeSat = satDay !== null
-      ? `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
-      : date
-    const excludeSun = satDay !== null
-      ? `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
-      : date
+    const isHolidayOnWeekend = isHoliday && isWeekendDate
+
+    // Calcola la coppia da escludere in base allo scheduling_mode
+    let excludeSat: string
+    let excludeSun: string
+
+    if (isHolidayOnWeekend || schedulingMode === 'weekend_full') {
+      // Festivo su weekend (tutti i modi) o weekend_full: coppia Sab+Dom stessa settimana
+      const satDay = dow === 6 ? day : day - 1
+      excludeSat = `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
+      excludeSun = `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
+    } else if (schedulingMode === 'sun_next_sat' && isWeekendDate) {
+      if (dow === 0) {
+        // Dom: coppia = Dom + Sab+7
+        excludeSun = date
+        const nextSat = new Date(year, month - 1, day + 7)
+        excludeSat = `${nextSat.getFullYear()}-${String(nextSat.getMonth() + 1).padStart(2, '0')}-${String(nextSat.getDate()).padStart(2, '0')}`
+      } else {
+        // Sab: coppia = Dom-7 + Sab
+        excludeSat = date
+        const prevSun = new Date(year, month - 1, day - 7)
+        excludeSun = `${prevSun.getFullYear()}-${String(prevSun.getMonth() + 1).padStart(2, '0')}-${String(prevSun.getDate()).padStart(2, '0')}`
+      }
+    } else {
+      // single_day o festivo feriale: esclude solo la data stessa
+      excludeSat = date
+      excludeSun = date
+    }
 
     const { data: conflict } = await supabase
       .from('shifts')
