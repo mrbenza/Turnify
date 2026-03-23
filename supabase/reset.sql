@@ -6,7 +6,7 @@
 -- Dopo il reset eseguire: schema.sql + seed_demo.sql
 -- ============================================================
 
--- Auth (prima per le FK)
+-- Auth (la FK cascade elimina automaticamente public.users)
 DELETE FROM auth.identities;
 DELETE FROM auth.users;
 
@@ -23,3 +23,4 @@ DROP TABLE IF EXISTS public.users          CASCADE;
 DROP FUNCTION IF EXISTS public.is_admin();
 DROP FUNCTION IF EXISTS public.is_admin_or_manager();
 DROP FUNCTION IF EXISTS public.get_equity_scores(integer, integer);
+DROP FUNCTION IF EXISTS public.update_updated_at();

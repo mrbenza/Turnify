@@ -1,280 +1,274 @@
 -- ============================================================
 -- schema.sql — Schema completo Turnify (migrations 001-010)
--- Idempotente: può essere eseguito anche su un DB con schema
--- già presente (DROP POLICY IF EXISTS prima di ogni CREATE).
+-- Idempotente: DROP POLICY IF EXISTS prima di ogni CREATE.
 --
 -- Per un DB completamente vuoto: eseguire questo file.
--- Per un DB con schema esistente: eseguire solo reset.sql
--- e poi seed_demo.sql (saltare schema.sql).
---
+-- Per un DB con schema esistente: eseguire reset.sql poi seed_demo.sql.
 -- Eseguire nel SQL Editor di Supabase (service_role).
 -- ============================================================
 
--- ------------------------------------------------------------
--- Tabella: users
--- ------------------------------------------------------------
+-- ============================================================
+-- EXTENSIONS
+-- ============================================================
+create extension if not exists "uuid-ossp";
 
-CREATE TABLE IF NOT EXISTS public.users (
-  id             uuid        PRIMARY KEY,           -- corrisponde a auth.users.id
-  nome           text        NOT NULL,
-  email          text        NOT NULL UNIQUE,
-  ruolo          text        NOT NULL DEFAULT 'dipendente'
-                             CHECK (ruolo IN ('admin', 'manager', 'dipendente')),
-  attivo         boolean     NOT NULL DEFAULT true,
-  data_creazione timestamptz NOT NULL DEFAULT now(),
-  disattivato_at timestamptz
+-- ============================================================
+-- TABELLA: users
+-- ============================================================
+create table if not exists public.users (
+  id              uuid        primary key references auth.users(id) on delete cascade,
+  nome            text        not null,
+  email           text        not null unique,
+  ruolo           text        not null default 'dipendente'
+                              check (ruolo in ('admin', 'manager', 'dipendente')),
+  attivo          boolean     not null default true,
+  data_creazione  timestamptz not null default now(),
+  disattivato_at  timestamptz
 );
 
--- ------------------------------------------------------------
--- Funzioni helper per RLS (dopo users, perché la referenziano)
--- ------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.users WHERE id = auth.uid() AND ruolo = 'admin'
-  );
-$$;
-
-CREATE OR REPLACE FUNCTION public.is_admin_or_manager()
-RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.users WHERE id = auth.uid() AND ruolo IN ('admin', 'manager')
-  );
-$$;
-
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "users_select_self"      ON public.users;
-DROP POLICY IF EXISTS "users_select_admin"     ON public.users;
-DROP POLICY IF EXISTS "users_select_manager"   ON public.users;
-DROP POLICY IF EXISTS "users_insert_admin"     ON public.users;
-DROP POLICY IF EXISTS "users_update_admin"     ON public.users;
-DROP POLICY IF EXISTS "users_update_self"      ON public.users;
-DROP POLICY IF EXISTS "users_delete_admin"     ON public.users;
-
-CREATE POLICY "users_select_self"
-  ON public.users FOR SELECT USING (auth.uid() = id);
-
-CREATE POLICY "users_select_admin"
-  ON public.users FOR SELECT
-  USING (public.is_admin() AND ruolo != 'admin');
-
-CREATE POLICY "users_select_manager"
-  ON public.users FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.ruolo = 'manager')
-    AND (ruolo = 'dipendente' OR id = auth.uid())
-  );
-
-CREATE POLICY "users_insert_admin"
-  ON public.users FOR INSERT WITH CHECK (public.is_admin());
-
-CREATE POLICY "users_update_admin"
-  ON public.users FOR UPDATE
-  USING  (public.is_admin() AND id != auth.uid())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "users_update_self"
-  ON public.users FOR UPDATE
-  USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "users_delete_admin"
-  ON public.users FOR DELETE USING (public.is_admin() AND id != auth.uid());
-
--- ------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS public.holidays (
-  id        uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
-  date      date    NOT NULL UNIQUE,
-  name      text    NOT NULL,
-  mandatory boolean NOT NULL DEFAULT false,
-  year      integer GENERATED ALWAYS AS (EXTRACT(YEAR FROM date)::integer) STORED
+-- ============================================================
+-- TABELLA: holidays
+-- ============================================================
+create table if not exists public.holidays (
+  id        uuid    primary key default uuid_generate_v4(),
+  date      date    not null unique,
+  name      text    not null,
+  mandatory boolean not null default false,
+  year      integer not null generated always as (extract(year from date)::integer) stored
 );
 
-ALTER TABLE public.holidays ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "holidays_select_authenticated" ON public.holidays;
-DROP POLICY IF EXISTS "holidays_write_admin"           ON public.holidays;
-
-CREATE POLICY "holidays_select_authenticated"
-  ON public.holidays FOR SELECT USING (auth.role() = 'authenticated');
-
-CREATE POLICY "holidays_write_admin"
-  ON public.holidays FOR ALL
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
-
--- ------------------------------------------------------------
--- Tabella: month_status
--- ------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS public.month_status (
-  id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  month            integer     NOT NULL CHECK (month BETWEEN 1 AND 12),
-  year             integer     NOT NULL CHECK (year BETWEEN 2000 AND 2100),
-  status           text        NOT NULL DEFAULT 'open'
-                               CHECK (status IN ('open', 'locked', 'confirmed')),
-  locked_by        uuid        REFERENCES public.users(id) ON DELETE SET NULL,
+-- ============================================================
+-- TABELLA: month_status
+-- ============================================================
+create table if not exists public.month_status (
+  id               uuid        primary key default uuid_generate_v4(),
+  month            integer     not null check (month between 1 and 12),
+  year             integer     not null check (year >= 2024),
+  status           text        not null default 'open'
+                               check (status in ('open', 'locked', 'confirmed')),
+  locked_by        uuid        references public.users(id),
   locked_at        timestamptz,
-  email_inviata    boolean     NOT NULL DEFAULT false,
+  email_inviata    boolean     not null default false,
   email_inviata_at timestamptz,
-  UNIQUE (month, year)
+  unique (month, year)
 );
 
-ALTER TABLE public.month_status ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "month_status_select_all"             ON public.month_status;
-DROP POLICY IF EXISTS "month_status_insert_admin_manager"   ON public.month_status;
-DROP POLICY IF EXISTS "month_status_update_admin_manager"   ON public.month_status;
-
-CREATE POLICY "month_status_select_all"
-  ON public.month_status FOR SELECT USING (auth.role() = 'authenticated');
-
-CREATE POLICY "month_status_insert_admin_manager"
-  ON public.month_status FOR INSERT WITH CHECK (public.is_admin_or_manager());
-
-CREATE POLICY "month_status_update_admin_manager"
-  ON public.month_status FOR UPDATE
-  USING  (public.is_admin_or_manager())
-  WITH CHECK (public.is_admin_or_manager());
-
--- ------------------------------------------------------------
--- Tabella: availability
--- ------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS public.availability (
-  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    uuid        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  date       date        NOT NULL,
-  available  boolean     NOT NULL DEFAULT true,
-  status     text        NOT NULL DEFAULT 'pending'
-                         CHECK (status IN ('pending', 'approved', 'locked')),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (user_id, date)
+-- ============================================================
+-- TABELLA: availability
+-- ============================================================
+create table if not exists public.availability (
+  id         uuid        primary key default uuid_generate_v4(),
+  user_id    uuid        not null references public.users(id) on delete cascade,
+  date       date        not null,
+  available  boolean     not null default true,
+  status     text        not null default 'pending'
+                         check (status in ('pending', 'approved', 'locked')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, date)
 );
 
-ALTER TABLE public.availability ENABLE ROW LEVEL SECURITY;
+-- Trigger: aggiorna updated_at automaticamente
+create or replace function update_updated_at()
+returns trigger language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
 
-DROP POLICY IF EXISTS "availability_select_own"           ON public.availability;
-DROP POLICY IF EXISTS "availability_select_admin_manager" ON public.availability;
-DROP POLICY IF EXISTS "availability_insert_own"           ON public.availability;
-DROP POLICY IF EXISTS "availability_insert_admin_manager" ON public.availability;
-DROP POLICY IF EXISTS "availability_update_own"           ON public.availability;
-DROP POLICY IF EXISTS "availability_update_admin_manager" ON public.availability;
-DROP POLICY IF EXISTS "availability_delete_own"           ON public.availability;
-DROP POLICY IF EXISTS "availability_delete_admin_manager" ON public.availability;
+drop trigger if exists availability_updated_at on public.availability;
+create trigger availability_updated_at
+  before update on public.availability
+  for each row execute function update_updated_at();
 
-CREATE POLICY "availability_select_own"
-  ON public.availability FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "availability_select_admin_manager"
-  ON public.availability FOR SELECT USING (public.is_admin_or_manager());
-
-CREATE POLICY "availability_insert_own"
-  ON public.availability FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "availability_insert_admin_manager"
-  ON public.availability FOR INSERT WITH CHECK (public.is_admin_or_manager());
-
-CREATE POLICY "availability_update_own"
-  ON public.availability FOR UPDATE
-  USING  (auth.uid() = user_id AND status != 'locked')
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "availability_update_admin_manager"
-  ON public.availability FOR UPDATE
-  USING  (public.is_admin_or_manager())
-  WITH CHECK (public.is_admin_or_manager());
-
-CREATE POLICY "availability_delete_own"
-  ON public.availability FOR DELETE
-  USING (auth.uid() = user_id AND status != 'locked');
-
-CREATE POLICY "availability_delete_admin_manager"
-  ON public.availability FOR DELETE USING (public.is_admin_or_manager());
-
--- ------------------------------------------------------------
--- Tabella: shifts
--- ------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS public.shifts (
-  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  date       date        NOT NULL,
-  user_id    uuid        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+-- ============================================================
+-- TABELLA: shifts
+-- ============================================================
+create table if not exists public.shifts (
+  id         uuid        primary key default uuid_generate_v4(),
+  date       date        not null,
+  user_id    uuid        not null references public.users(id) on delete cascade,
   user_nome  text,
-  shift_type text        NOT NULL DEFAULT 'reperibilita'
-                         CHECK (shift_type IN ('weekend', 'festivo', 'reperibilita')),
-  created_by uuid        NOT NULL REFERENCES public.users(id),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (date, user_id)
+  shift_type text        not null
+                         check (shift_type in ('weekend', 'festivo', 'reperibilita')),
+  created_by uuid        not null references public.users(id),
+  created_at timestamptz not null default now(),
+  unique (date, user_id)
 );
 
-ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "shifts_select_own"          ON public.shifts;
-DROP POLICY IF EXISTS "shifts_select_admin_manager" ON public.shifts;
-DROP POLICY IF EXISTS "shifts_write_admin_manager"  ON public.shifts;
-
-CREATE POLICY "shifts_select_own"
-  ON public.shifts FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "shifts_select_admin_manager"
-  ON public.shifts FOR SELECT USING (public.is_admin_or_manager());
-
-CREATE POLICY "shifts_write_admin_manager"
-  ON public.shifts FOR ALL
-  USING  (public.is_admin_or_manager())
-  WITH CHECK (public.is_admin_or_manager());
-
--- ------------------------------------------------------------
--- Tabella: email_settings
--- ------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS public.email_settings (
-  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  email       text        NOT NULL UNIQUE,
+-- ============================================================
+-- TABELLA: email_settings
+-- ============================================================
+create table if not exists public.email_settings (
+  id          uuid        primary key default uuid_generate_v4(),
+  email       text        not null unique,
   descrizione text,
-  attivo      boolean     NOT NULL DEFAULT true,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  attivo      boolean     not null default true,
+  created_at  timestamptz not null default now()
 );
 
-ALTER TABLE public.email_settings ENABLE ROW LEVEL SECURITY;
+-- ============================================================
+-- ROW LEVEL SECURITY
+-- ============================================================
+alter table public.users          enable row level security;
+alter table public.holidays       enable row level security;
+alter table public.month_status   enable row level security;
+alter table public.availability   enable row level security;
+alter table public.shifts         enable row level security;
+alter table public.email_settings enable row level security;
 
-DROP POLICY IF EXISTS "email_settings_admin_manager" ON public.email_settings;
+-- Funzioni helper
+create or replace function public.is_admin()
+returns boolean language sql security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.users
+    where id = auth.uid() and ruolo = 'admin' and attivo = true
+  );
+$$;
 
-CREATE POLICY "email_settings_admin_manager"
-  ON public.email_settings FOR ALL
-  USING  (public.is_admin_or_manager())
-  WITH CHECK (public.is_admin_or_manager());
+create or replace function public.is_admin_or_manager()
+returns boolean language sql security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.users
+    where id = auth.uid()
+      and ruolo in ('admin', 'manager')
+      and attivo = true
+  );
+$$;
 
--- ------------------------------------------------------------
--- Funzione RPC: get_equity_scores
--- ------------------------------------------------------------
+-- ---- USERS ----
+drop policy if exists "users: legge se stesso"            on public.users;
+drop policy if exists "users: admin o manager legge tutti" on public.users;
+drop policy if exists "users: admin o manager gestisce"   on public.users;
 
-CREATE OR REPLACE FUNCTION public.get_equity_scores(p_month integer, p_year integer)
-RETURNS TABLE (
-  user_id        uuid,
-  nome           text,
-  turni_totali   bigint,
-  festivi_attivi bigint,
-  score          bigint
+create policy "users: legge se stesso" on public.users
+  for select using (id = auth.uid());
+
+create policy "users: admin o manager legge tutti" on public.users
+  for select using (public.is_admin_or_manager());
+
+create policy "users: admin o manager gestisce" on public.users
+  for all using (public.is_admin_or_manager());
+
+-- ---- HOLIDAYS ----
+drop policy if exists "holidays: tutti leggono"    on public.holidays;
+drop policy if exists "holidays: solo admin scrive" on public.holidays;
+
+create policy "holidays: tutti leggono" on public.holidays
+  for select using (true);
+
+create policy "holidays: solo admin scrive" on public.holidays
+  for all using (public.is_admin());
+
+-- ---- MONTH_STATUS ----
+drop policy if exists "month_status: tutti leggono"             on public.month_status;
+drop policy if exists "month_status: admin o manager inserisce" on public.month_status;
+drop policy if exists "month_status: admin o manager aggiorna"  on public.month_status;
+drop policy if exists "month_status: admin o manager elimina"   on public.month_status;
+
+create policy "month_status: tutti leggono" on public.month_status
+  for select using (true);
+
+create policy "month_status: admin o manager inserisce" on public.month_status
+  for insert with check (public.is_admin_or_manager());
+
+create policy "month_status: admin o manager aggiorna" on public.month_status
+  for update using (public.is_admin_or_manager());
+
+create policy "month_status: admin o manager elimina" on public.month_status
+  for delete using (public.is_admin_or_manager());
+
+-- ---- AVAILABILITY ----
+drop policy if exists "availability: utente vede le sue"          on public.availability;
+drop policy if exists "availability: utente inserisce pending"    on public.availability;
+drop policy if exists "availability: utente aggiorna se pending"  on public.availability;
+drop policy if exists "availability: admin o manager vede tutto"  on public.availability;
+drop policy if exists "availability: admin o manager gestisce tutto" on public.availability;
+
+create policy "availability: utente vede le sue" on public.availability
+  for select using (user_id = auth.uid());
+
+create policy "availability: utente inserisce pending" on public.availability
+  for insert with check (user_id = auth.uid());
+
+create policy "availability: utente aggiorna se pending" on public.availability
+  for update using (user_id = auth.uid() and status = 'pending');
+
+create policy "availability: admin o manager vede tutto" on public.availability
+  for select using (public.is_admin_or_manager());
+
+create policy "availability: admin o manager gestisce tutto" on public.availability
+  for all using (public.is_admin_or_manager());
+
+-- ---- SHIFTS ----
+drop policy if exists "shifts: utente vede i suoi"          on public.shifts;
+drop policy if exists "shifts: admin o manager gestisce tutto" on public.shifts;
+
+create policy "shifts: utente vede i suoi" on public.shifts
+  for select using (user_id = auth.uid());
+
+create policy "shifts: admin o manager gestisce tutto" on public.shifts
+  for all using (public.is_admin_or_manager());
+
+-- ---- EMAIL_SETTINGS ----
+drop policy if exists "email_settings: admin o manager legge"     on public.email_settings;
+drop policy if exists "email_settings: admin o manager inserisce" on public.email_settings;
+drop policy if exists "email_settings: admin o manager aggiorna"  on public.email_settings;
+drop policy if exists "email_settings: admin o manager elimina"   on public.email_settings;
+
+create policy "email_settings: admin o manager legge" on public.email_settings
+  for select using (public.is_admin_or_manager());
+
+create policy "email_settings: admin o manager inserisce" on public.email_settings
+  for insert with check (public.is_admin_or_manager());
+
+create policy "email_settings: admin o manager aggiorna" on public.email_settings
+  for update using (public.is_admin_or_manager());
+
+create policy "email_settings: admin o manager elimina" on public.email_settings
+  for delete using (public.is_admin_or_manager());
+
+-- ============================================================
+-- FUNZIONE: get_equity_scores
+-- normale=1pt, festivo attivo (mandatory=true)=3pt
+-- p_month=0 → tutti i tempi
+-- ============================================================
+create or replace function public.get_equity_scores(p_month integer, p_year integer)
+returns table (
+  user_id      uuid,
+  nome         text,
+  turni_totali bigint,
+  festivi      bigint,
+  score        bigint
 )
-LANGUAGE sql STABLE SECURITY DEFINER AS $$
-  SELECT
+language sql security definer
+set search_path = ''
+as $$
+  select
     u.id,
     u.nome,
-    COUNT(s.id)                                                         AS turni_totali,
-    COUNT(CASE WHEN h.mandatory = true THEN 1 END)                      AS festivi_attivi,
-    COUNT(s.id) + (COUNT(CASE WHEN h.mandatory = true THEN 1 END) * 2) AS score
-  FROM public.users u
-  LEFT JOIN public.shifts s ON u.id = s.user_id
-    AND (p_month = 0 OR (
-      EXTRACT(MONTH FROM s.date)::integer = p_month
-      AND EXTRACT(YEAR  FROM s.date)::integer = p_year
-    ))
-  LEFT JOIN public.holidays h ON s.date = h.date AND h.mandatory = true
-  WHERE u.ruolo = 'dipendente' AND u.attivo = true
-  GROUP BY u.id, u.nome
-  ORDER BY score ASC;
+    count(s.id)                                                as turni_totali,
+    count(s.id) filter (where h.mandatory = true)              as festivi,
+    count(s.id) + count(s.id) filter (where h.mandatory = true) * 2 as score
+  from public.users u
+  left join public.shifts s
+    on u.id = s.user_id
+    and (
+      p_month = 0
+      or (
+        extract(month from s.date)::integer = p_month
+        and extract(year  from s.date)::integer = p_year
+      )
+    )
+  left join public.holidays h on s.date = h.date
+  where u.ruolo = 'dipendente' and u.attivo = true
+  group by u.id, u.nome
+  order by score asc;
 $$;
