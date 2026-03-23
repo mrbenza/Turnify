@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     .eq('year', year)
     .maybeSingle()
 
-  if (monthStatus?.status === 'locked') {
+  if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
     return NextResponse.json(
       { error: 'Impossibile modificare un mese confermato.' },
       { status: 409 }

@@ -49,7 +49,7 @@ export async function DELETE(
       .eq('year', shiftYear)
       .maybeSingle()
 
-    if (monthStatus?.status === 'locked') {
+    if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
       return NextResponse.json(
         { error: 'Impossibile modificare un mese confermato.' },
         { status: 409 }
