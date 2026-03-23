@@ -51,26 +51,18 @@ export async function POST(request: Request) {
   const from = `${year}-${monthStr}-01`
   const to = `${year}-${monthStr}-${String(daysInMonth).padStart(2, '0')}`
 
-  const [{ data: shifts }, { data: usersData }, { data: employees }, { data: extraEmails }] =
+  const [{ data: shifts }, { data: employees }, { data: extraEmails }] =
     await Promise.all([
       serviceClient.from('shifts').select('date, user_nome').gte('date', from).lte('date', to).order('date'),
-      serviceClient.from('users').select('id, nome'),
       serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
       serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
     ])
 
-  // Ricostruisce shiftsByDate con cognomi
-  const userMap = new Map<string, string>(
-    (usersData ?? []).map((u: { id: string; nome: string }) => {
-      const idx = u.nome.indexOf(' ')
-      return [u.id, idx === -1 ? u.nome : u.nome.slice(idx + 1)]
-    })
-  )
-
+  // Ricostruisce shiftsByDate usando user_nome (cognome già salvato nel turno)
   const shiftsByDate = new Map<string, string[]>()
   for (const s of shifts ?? []) {
     if (!shiftsByDate.has(s.date)) shiftsByDate.set(s.date, [])
-    shiftsByDate.get(s.date)!.push(s.user_nome ?? userMap.get(s.user_id) ?? '')
+    if (s.user_nome) shiftsByDate.get(s.date)!.push(s.user_nome)
   }
 
   const recipients = [
