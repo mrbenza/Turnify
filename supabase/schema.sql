@@ -1,7 +1,13 @@
 -- ============================================================
 -- schema.sql — Schema completo Turnify (migrations 001-011)
--- Da eseguire su un database Supabase vuoto DOPO reset.sql.
--- Eseguire nel SQL Editor (service_role).
+-- Idempotente: può essere eseguito anche su un DB con schema
+-- già presente (DROP POLICY IF EXISTS prima di ogni CREATE).
+--
+-- Per un DB completamente vuoto: eseguire questo file.
+-- Per un DB con schema esistente: eseguire solo reset.sql
+-- e poi seed_demo.sql (saltare schema.sql).
+--
+-- Eseguire nel SQL Editor di Supabase (service_role).
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -39,16 +45,21 @@ CREATE TABLE IF NOT EXISTS public.users (
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
--- Ogni utente vede se stesso
+DROP POLICY IF EXISTS "users_select_self"      ON public.users;
+DROP POLICY IF EXISTS "users_select_admin"     ON public.users;
+DROP POLICY IF EXISTS "users_select_manager"   ON public.users;
+DROP POLICY IF EXISTS "users_insert_admin"     ON public.users;
+DROP POLICY IF EXISTS "users_update_admin"     ON public.users;
+DROP POLICY IF EXISTS "users_update_self"      ON public.users;
+DROP POLICY IF EXISTS "users_delete_admin"     ON public.users;
+
 CREATE POLICY "users_select_self"
   ON public.users FOR SELECT USING (auth.uid() = id);
 
--- Admin vede tutti gli utenti non-admin
 CREATE POLICY "users_select_admin"
   ON public.users FOR SELECT
   USING (public.is_admin() AND ruolo != 'admin');
 
--- Manager vede i dipendenti e se stesso
 CREATE POLICY "users_select_manager"
   ON public.users FOR SELECT
   USING (
@@ -56,7 +67,6 @@ CREATE POLICY "users_select_manager"
     AND (ruolo = 'dipendente' OR id = auth.uid())
   );
 
--- Admin crea e modifica utenti non-admin
 CREATE POLICY "users_insert_admin"
   ON public.users FOR INSERT WITH CHECK (public.is_admin());
 
@@ -65,7 +75,6 @@ CREATE POLICY "users_update_admin"
   USING  (public.is_admin() AND id != auth.uid())
   WITH CHECK (public.is_admin());
 
--- Ogni utente può aggiornare solo se stesso (es. cambio nome)
 CREATE POLICY "users_update_self"
   ON public.users FOR UPDATE
   USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
@@ -92,6 +101,8 @@ CREATE TABLE IF NOT EXISTS public.areas (
 
 ALTER TABLE public.areas ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "areas_select_authenticated" ON public.areas;
+
 CREATE POLICY "areas_select_authenticated"
   ON public.areas FOR SELECT USING (auth.role() = 'authenticated');
 
@@ -108,6 +119,9 @@ CREATE TABLE IF NOT EXISTS public.holidays (
 );
 
 ALTER TABLE public.holidays ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "holidays_select_authenticated" ON public.holidays;
+DROP POLICY IF EXISTS "holidays_write_admin"           ON public.holidays;
 
 CREATE POLICY "holidays_select_authenticated"
   ON public.holidays FOR SELECT USING (auth.role() = 'authenticated');
@@ -134,6 +148,10 @@ CREATE TABLE IF NOT EXISTS public.month_status (
 );
 
 ALTER TABLE public.month_status ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "month_status_select_all"             ON public.month_status;
+DROP POLICY IF EXISTS "month_status_insert_admin_manager"   ON public.month_status;
+DROP POLICY IF EXISTS "month_status_update_admin_manager"   ON public.month_status;
 
 CREATE POLICY "month_status_select_all"
   ON public.month_status FOR SELECT USING (auth.role() = 'authenticated');
@@ -163,6 +181,15 @@ CREATE TABLE IF NOT EXISTS public.availability (
 );
 
 ALTER TABLE public.availability ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "availability_select_own"           ON public.availability;
+DROP POLICY IF EXISTS "availability_select_admin_manager" ON public.availability;
+DROP POLICY IF EXISTS "availability_insert_own"           ON public.availability;
+DROP POLICY IF EXISTS "availability_insert_admin_manager" ON public.availability;
+DROP POLICY IF EXISTS "availability_update_own"           ON public.availability;
+DROP POLICY IF EXISTS "availability_update_admin_manager" ON public.availability;
+DROP POLICY IF EXISTS "availability_delete_own"           ON public.availability;
+DROP POLICY IF EXISTS "availability_delete_admin_manager" ON public.availability;
 
 CREATE POLICY "availability_select_own"
   ON public.availability FOR SELECT USING (auth.uid() = user_id);
@@ -211,6 +238,10 @@ CREATE TABLE IF NOT EXISTS public.shifts (
 
 ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "shifts_select_own"          ON public.shifts;
+DROP POLICY IF EXISTS "shifts_select_admin_manager" ON public.shifts;
+DROP POLICY IF EXISTS "shifts_write_admin_manager"  ON public.shifts;
+
 CREATE POLICY "shifts_select_own"
   ON public.shifts FOR SELECT USING (auth.uid() = user_id);
 
@@ -235,6 +266,8 @@ CREATE TABLE IF NOT EXISTS public.email_settings (
 );
 
 ALTER TABLE public.email_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "email_settings_admin_manager" ON public.email_settings;
 
 CREATE POLICY "email_settings_admin_manager"
   ON public.email_settings FOR ALL
