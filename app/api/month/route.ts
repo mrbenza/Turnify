@@ -63,6 +63,8 @@ export async function POST(request: Request) {
           status: 'open' as const,
           locked_by: null,
           locked_at: null,
+          email_inviata: false,
+          email_inviata_at: null,
         }
 
   const { error } = await supabase

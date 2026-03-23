@@ -28,6 +28,7 @@ interface CalendarioGlobaleProps {
   initialYear: number
   initialLocked: boolean
   initialConfirmed: boolean
+  isAdmin: boolean
 }
 
 /** Selected day for the side drawer */
@@ -103,6 +104,7 @@ export default function CalendarioGlobale({
   initialYear,
   initialLocked,
   initialConfirmed,
+  isAdmin,
 }: CalendarioGlobaleProps) {
   /* ---- Core state ---- */
   const [viewMonth, setViewMonth] = useState(initialMonth)
@@ -732,15 +734,15 @@ export default function CalendarioGlobale({
                 </svg>
                 Mese confermato
               </span>
-              {!isConfirmed && (
+              {(!isConfirmed || isAdmin) && (
                 <button
                   onClick={() => setShowUnlockDialog(true)}
                   disabled={unlockingMonth}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-1.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
-                  aria-label="Annulla conferma del mese"
+                  aria-label="Sblocca il mese"
                 >
                   {unlockingMonth ? <Spinner small /> : null}
-                  Annulla conferma
+                  {isConfirmed ? 'Sblocca' : 'Annulla conferma'}
                 </button>
               )}
             </>
@@ -1124,10 +1126,14 @@ export default function CalendarioGlobale({
               <svg className="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12A9 9 0 113 12a9 9 0 0118 0z" />
               </svg>
-              <h4 className="text-sm font-semibold text-gray-900">Annulla conferma mese?</h4>
+              <h4 className="text-sm font-semibold text-gray-900">
+                {isConfirmed ? 'Sblocca mese confermato?' : 'Annulla conferma mese?'}
+              </h4>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Sei sicuro? Il mese tornerà modificabile e potranno essere apportate nuove modifiche.
+              {isConfirmed
+                ? 'Attenzione: il mese è già stato confermato. Sbloccandolo tornerà modificabile e l\'email dovrà essere reinviata.'
+                : 'Sei sicuro? Il mese tornerà modificabile e potranno essere apportate nuove modifiche.'}
             </p>
             <div className="flex gap-2">
               <button

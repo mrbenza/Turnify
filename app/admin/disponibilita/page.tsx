@@ -71,6 +71,7 @@ export default async function DisponibilitaPage() {
               initialYear={year}
               initialLocked={isLocked}
               initialConfirmed={monthStatus?.status === 'confirmed'}
+              isAdmin={profile?.ruolo === 'admin'}
             />
           </section>
         </main>
