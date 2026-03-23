@@ -51,9 +51,9 @@ function LoginForm() {
       .single<{ ruolo: string }>()
 
     if (profile?.ruolo === 'admin' || profile?.ruolo === 'manager') {
-      router.push('/admin')
+      window.location.href = '/admin'
     } else {
-      router.push('/user') // dipendente o user (legacy)
+      window.location.href = '/user'
     }
   }
 
