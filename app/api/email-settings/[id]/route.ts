@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, EmailSetting } from '@/lib/supabase/types'
@@ -47,7 +47,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Campo obbligatorio: attivo (boolean)' }, { status: 400 })
   }
 
-  const { data, error } = await supabase
+  const serviceClient = createServiceClient()
+  const { data, error } = await serviceClient
     .from('email_settings')
     .update({ attivo: body.attivo })
     .eq('id', id)
@@ -76,7 +77,8 @@ export async function DELETE(
     return NextResponse.json({ error: 'ID mancante' }, { status: 400 })
   }
 
-  const { error } = await supabase
+  const serviceClient = createServiceClient()
+  const { error } = await serviceClient
     .from('email_settings')
     .delete()
     .eq('id', id)
