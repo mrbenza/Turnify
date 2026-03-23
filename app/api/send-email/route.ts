@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { generateTurniExcel } from '@/lib/excel/generateTurniExcel'
 import { sendTurniEmail } from '@/lib/email/sendTurniEmail'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
 
-  // Auth: solo admin/manager
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
 
   const { data: profile } = await supabase
-    .from('users')
-    .select('ruolo')
-    .eq('id', user.id)
-    .single()
+    .from('users').select('ruolo').eq('id', user.id).single()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
@@ -33,7 +30,6 @@ export async function POST(request: Request) {
 
   const serviceClient = createServiceClient()
 
-  // Verifica che il mese sia confermato
   const { data: monthStatus } = await serviceClient
     .from('month_status')
     .select('status')
@@ -45,24 +41,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Il mese non è ancora confermato' }, { status: 400 })
   }
 
-  // Fetch turni del mese
-  const monthStr = String(month).padStart(2, '0')
   const daysInMonth = new Date(year, month, 0).getDate()
-  const from = `${year}-${monthStr}-01`
-  const to = `${year}-${monthStr}-${String(daysInMonth).padStart(2, '0')}`
+  const from = `${year}-${String(month).padStart(2, '0')}-01`
+  const to   = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-  const [{ data: shifts }, { data: employees }, { data: extraEmails }] =
-    await Promise.all([
-      serviceClient.from('shifts').select('date, user_nome').gte('date', from).lte('date', to).order('date'),
-      serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
-      serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
-    ])
+  // Fetch destinatari e turni in parallelo con generazione Excel
+  const [
+    { data: employees },
+    { data: extraEmails },
+    { data: shiftRows },
+    { data: users },
+    excelResult,
+  ] = await Promise.all([
+    serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
+    serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
+    serviceClient.from('shifts').select('date, user_id').gte('date', from).lte('date', to).order('date'),
+    serviceClient.from('users').select('id, nome'),
+    generateTurniExcel(month, year, serviceClient),
+  ])
 
-  // Ricostruisce shiftsByDate usando user_nome (cognome già salvato nel turno)
+  const userMap = new Map<string, string>(
+    (users ?? []).map((u: { id: string; nome: string }) => {
+      const idx = u.nome.indexOf(' ')
+      return [u.id, idx === -1 ? u.nome : u.nome.slice(idx + 1)]
+    })
+  )
   const shiftsByDate = new Map<string, string[]>()
-  for (const s of shifts ?? []) {
+  for (const s of shiftRows ?? []) {
     if (!shiftsByDate.has(s.date)) shiftsByDate.set(s.date, [])
-    if (s.user_nome) shiftsByDate.get(s.date)!.push(s.user_nome)
+    shiftsByDate.get(s.date)!.push(userMap.get(s.user_id) ?? s.user_id)
   }
 
   const recipients = [
@@ -74,11 +81,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Nessun destinatario configurato' }, { status: 400 })
   }
 
-  await sendTurniEmail({ month, year, shiftsByDate, recipients })
+  await sendTurniEmail({
+    month,
+    year,
+    shiftsByDate,
+    recipients,
+    excelBuffer: excelResult.buffer,
+    excelFileName: excelResult.fileName,
+  })
 
+  // Setta confermato + email inviata
   await serviceClient
     .from('month_status')
-    .update({ email_inviata: true, email_inviata_at: new Date().toISOString() })
+    .update({
+      status: 'confirmed',
+      email_inviata: true,
+      email_inviata_at: new Date().toISOString(),
+    })
     .eq('month', month)
     .eq('year', year)
 

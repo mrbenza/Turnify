@@ -14,6 +14,8 @@ type SendTurniEmailParams = {
   year: number
   shiftsByDate: Map<string, string[]>
   recipients: Recipient[]
+  excelBuffer?: Buffer
+  excelFileName?: string
 }
 
 function buildHtml(month: number, year: number, shiftsByDate: Map<string, string[]>): string {
@@ -46,8 +48,6 @@ function buildHtml(month: number, year: number, shiftsByDate: Map<string, string
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;width:100%">
-
-        <!-- Header -->
         <tr>
           <td style="background:#1d4ed8;padding:24px 32px">
             <p style="margin:0;color:#bfdbfe;font-size:13px;text-transform:uppercase;letter-spacing:.05em">Turnify</p>
@@ -56,14 +56,12 @@ function buildHtml(month: number, year: number, shiftsByDate: Map<string, string
             </h1>
           </td>
         </tr>
-
-        <!-- Body -->
         <tr>
           <td style="padding:24px 32px">
             <p style="margin:0 0 20px;color:#4b5563;font-size:14px">
               Di seguito i turni di reperibilità assegnati per il mese di <strong>${monthName} ${year}</strong>.
+              ${rows.length > 0 ? "Il file Excel è allegato a questa email." : ""}
             </p>
-
             <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
               <thead>
                 <tr style="background:#f9fafb">
@@ -72,14 +70,10 @@ function buildHtml(month: number, year: number, shiftsByDate: Map<string, string
                   <th style="padding:8px 12px;border-bottom:2px solid #e5e7eb;text-align:left;color:#6b7280;font-weight:600">2° Reperibile</th>
                 </tr>
               </thead>
-              <tbody>
-                ${rows.join('')}
-              </tbody>
+              <tbody>${rows.join('')}</tbody>
             </table>
           </td>
         </tr>
-
-        <!-- Footer -->
         <tr>
           <td style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb">
             <p style="margin:0;color:#9ca3af;font-size:12px">
@@ -87,12 +81,28 @@ function buildHtml(month: number, year: number, shiftsByDate: Map<string, string
             </p>
           </td>
         </tr>
-
       </table>
     </td></tr>
   </table>
 </body>
 </html>`
+}
+
+function buildText(month: number, year: number, shiftsByDate: Map<string, string[]>): string {
+  const monthName = MONTH_NAMES_IT[month - 1]
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const lines: string[] = [`Turni di reperibilità — ${monthName} ${year}`, '']
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    const names = shiftsByDate.get(dateStr) ?? []
+    if (names.length === 0) continue
+    const dow = new Date(year, month - 1, day).getDay()
+    lines.push(`${DAY_NAMES_IT[dow]} ${day}: ${names.join(' / ')}`)
+  }
+
+  lines.push('', 'Messaggio generato automaticamente da Turnify.')
+  return lines.join('\n')
 }
 
 export async function sendTurniEmail(params: SendTurniEmailParams): Promise<void> {
@@ -102,12 +112,35 @@ export async function sendTurniEmail(params: SendTurniEmailParams): Promise<void
   const senderEmail = process.env.BREVO_SENDER_EMAIL
   if (!senderEmail) throw new Error('BREVO_SENDER_EMAIL non configurata')
 
-  const { month, year, shiftsByDate, recipients } = params
+  const { month, year, shiftsByDate, recipients, excelBuffer, excelFileName } = params
   if (recipients.length === 0) return
 
   const monthName = MONTH_NAMES_IT[month - 1]
   const subject = `Turnify — Turni di reperibilità: ${monthName} ${year}`
-  const htmlContent = buildHtml(month, year, shiftsByDate)
+
+  const body: Record<string, unknown> = {
+    sender: {
+      name: process.env.BREVO_SENDER_NAME ?? 'Turnify',
+      email: senderEmail,
+    },
+    // to richiede almeno un destinatario: usiamo il mittente stesso
+    to: [{ email: senderEmail, name: process.env.BREVO_SENDER_NAME ?? 'Turnify' }],
+    // tutti i veri destinatari in BCC (non si vedono tra loro)
+    bcc: recipients,
+    subject,
+    htmlContent: buildHtml(month, year, shiftsByDate),
+    textContent: buildText(month, year, shiftsByDate),
+  }
+
+  // Allega il file Excel se fornito
+  if (excelBuffer && excelFileName) {
+    body.attachment = [
+      {
+        content: excelBuffer.toString('base64'),
+        name: excelFileName,
+      },
+    ]
+  }
 
   const res = await fetch(BREVO_API_URL, {
     method: 'POST',
@@ -116,19 +149,11 @@ export async function sendTurniEmail(params: SendTurniEmailParams): Promise<void
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    body: JSON.stringify({
-      sender: {
-        name: process.env.BREVO_SENDER_NAME ?? 'Turnify',
-        email: senderEmail,
-      },
-      to: recipients,
-      subject,
-      htmlContent,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Brevo API error ${res.status}: ${body}`)
+    const text = await res.text()
+    throw new Error(`Brevo API error ${res.status}: ${text}`)
   }
 }
