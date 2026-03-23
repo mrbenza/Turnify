@@ -16,6 +16,7 @@ Anagrafica utenti della piattaforma.
 | ruolo | text | `admin` \| `manager` \| `dipendente` (constraint aggiornato in migration 009) |
 | attivo | boolean | default true — disattivare invece di cancellare |
 | data_creazione | timestamptz | default now() |
+| disattivato_at | timestamptz | nullable — valorizzato quando l'utente viene disattivato |
 
 **Indici:** `email` (unique)
 **RLS:**
@@ -117,6 +118,29 @@ Controlla lo stato e il lock di ogni mese.
 
 ---
 
+## Tabella: `areas`
+Configurazione dell'area (precursore del multi-area). Attualmente contiene una sola riga "Default".
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK, gen_random_uuid() |
+| nome | text | unique, es. "Default" |
+| scheduling_mode | text | `weekend_full` \| `single_day` \| `sun_next_sat` — logica di accoppiamento turni |
+| workers_per_day | integer | `1` \| `2` — numero massimo di reperibili per giorno |
+| template_path | text | nullable — nome del template Excel associato all'area |
+| manager_id | uuid | nullable — FK → users.id (manager responsabile) |
+| created_at | timestamptz | default now() |
+
+**Scheduling modes:**
+- `weekend_full` — Sab e Dom assegnati alla stessa coppia di persone
+- `single_day` — Sab e Dom assegnabili indipendentemente
+- `sun_next_sat` — chi lavora Dom lavora anche il Sab della settimana successiva
+
+**RLS:** tutti gli utenti autenticati possono leggere; solo admin può scrivere.
+**Riga default:** inserita automaticamente con `nome = 'Default'` e `scheduling_mode = 'weekend_full'`.
+
+---
+
 ## Tabella: `email_settings`
 Indirizzi email aggiuntivi che ricevono la notifica "mese confermato".
 
@@ -199,3 +223,4 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-03-20 | Fix ruolo 'user' → 'dipendente' nella funzione SQL | 008_equity_scores_fix_role.sql |
 | 2026-03-20 | Fix constraint users.ruolo (admin\|manager\|dipendente) | 009_fix_users_role_constraint.sql |
 | 2026-03-22 | Semplifica score: rimuove fest_comandate, solo festivi_attivi×2 | 010_simplify_equity_scores.sql |
+| 2026-03-23 | Tabella `areas`: scheduling_mode, workers_per_day, template_path, manager_id | 011_areas.sql |
