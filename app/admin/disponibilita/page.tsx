@@ -70,6 +70,7 @@ export default async function DisponibilitaPage() {
               initialMonth={month}
               initialYear={year}
               initialLocked={isLocked}
+              initialConfirmed={monthStatus?.status === 'confirmed'}
             />
           </section>
         </main>

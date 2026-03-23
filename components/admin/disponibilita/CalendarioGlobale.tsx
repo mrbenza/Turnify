@@ -27,6 +27,7 @@ interface CalendarioGlobaleProps {
   initialMonth: number   // 0-indexed
   initialYear: number
   initialLocked: boolean
+  initialConfirmed: boolean
 }
 
 /** Selected day for the side drawer */
@@ -101,6 +102,7 @@ export default function CalendarioGlobale({
   initialMonth,
   initialYear,
   initialLocked,
+  initialConfirmed,
 }: CalendarioGlobaleProps) {
   /* ---- Core state ---- */
   const [viewMonth, setViewMonth] = useState(initialMonth)
@@ -110,6 +112,7 @@ export default function CalendarioGlobale({
   const [holidays, setHolidays] = useState<Holiday[]>(initialHolidays)
   const [users] = useState<User[]>(initialUsers)
   const [locked, setLocked] = useState(initialLocked)
+  const [isConfirmed, setIsConfirmed] = useState(initialConfirmed)
   const [prevMonthShifts, setPrevMonthShifts] = useState<Shift[]>([])
   // turniMap: turni_totali grezzi per utente — usato dal suggerito per equità sul conteggio
   const [turniMap, setTurniMap] = useState<Map<string, number>>(new Map())
@@ -257,6 +260,7 @@ export default function CalendarioGlobale({
       setShifts(shiftsRes.data ?? [])
       setHolidays(holRes.data ?? [])
       setLocked(statusRes.data?.status === 'locked' || statusRes.data?.status === 'confirmed')
+      setIsConfirmed(statusRes.data?.status === 'confirmed')
       fetchAuxData(newMonth, newYear)
     } catch (err) {
       console.error('Errore navigazione mese:', err)
@@ -311,6 +315,7 @@ export default function CalendarioGlobale({
         throw new Error(json.error ?? 'Errore sconosciuto')
       }
       setLocked(false)
+      setIsConfirmed(false)
     } catch (err) {
       console.error('Errore annulla conferma:', err)
       setErrorMsg('Errore durante l\'annullamento della conferma.')
@@ -727,15 +732,17 @@ export default function CalendarioGlobale({
                 </svg>
                 Mese confermato
               </span>
-              <button
-                onClick={() => setShowUnlockDialog(true)}
-                disabled={unlockingMonth}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-1.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
-                aria-label="Annulla conferma del mese"
-              >
-                {unlockingMonth ? <Spinner small /> : null}
-                Annulla conferma
-              </button>
+              {!isConfirmed && (
+                <button
+                  onClick={() => setShowUnlockDialog(true)}
+                  disabled={unlockingMonth}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-1.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+                  aria-label="Annulla conferma del mese"
+                >
+                  {unlockingMonth ? <Spinner small /> : null}
+                  Annulla conferma
+                </button>
+              )}
             </>
           ) : (
             <button
