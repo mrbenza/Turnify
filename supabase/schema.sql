@@ -30,14 +30,16 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- ------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE AS $$
+RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE
+SET search_path = '' AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users WHERE id = auth.uid() AND ruolo = 'admin'
   );
 $$;
 
 CREATE OR REPLACE FUNCTION public.is_admin_or_manager()
-RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE AS $$
+RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE
+SET search_path = '' AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users WHERE id = auth.uid() AND ruolo IN ('admin', 'manager')
   );
@@ -286,7 +288,8 @@ RETURNS TABLE (
   festivi_attivi bigint,
   score          bigint
 )
-LANGUAGE sql STABLE SECURITY DEFINER AS $$
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = '' AS $$
   SELECT
     u.id,
     u.nome,
