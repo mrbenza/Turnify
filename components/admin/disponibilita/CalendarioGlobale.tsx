@@ -256,7 +256,7 @@ export default function CalendarioGlobale({
       setAvailability(availRes.data ?? [])
       setShifts(shiftsRes.data ?? [])
       setHolidays(holRes.data ?? [])
-      setLocked(statusRes.data?.status === 'locked')
+      setLocked(statusRes.data?.status === 'locked' || statusRes.data?.status === 'confirmed')
       fetchAuxData(newMonth, newYear)
     } catch (err) {
       console.error('Errore navigazione mese:', err)

@@ -41,7 +41,7 @@ export default async function DisponibilitaPage() {
   const shifts = shiftsRes.data ?? []
   const holidays = holidaysRes.data ?? []
   const monthStatus = monthStatusRes.data
-  const isLocked = monthStatus?.status === 'locked'
+  const isLocked = monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed'
 
   return (
     <div className="min-h-screen bg-gray-50">
