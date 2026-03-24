@@ -163,6 +163,8 @@ export default function CalendarioGlobale({
   const [prevMonthShifts, setPrevMonthShifts] = useState<Shift[]>([])
   // turniMap: turni_totali grezzi per utente — usato dal suggerito per equità sul conteggio
   const [turniMap, setTurniMap] = useState<Map<string, number>>(new Map())
+  // holidayHistoryMap: userId → { holidayName → anni[] } — storico festivi obbligatori anni precedenti
+  const [holidayHistoryMap, setHolidayHistoryMap] = useState<Map<string, Map<string, number[]>>>(new Map())
   // IDs dei turni aggiunti in questa sessione (dalla navigazione al mese corrente)
   const sessionShiftIdsRef = useRef<Set<string>>(new Set())
 
@@ -207,9 +209,10 @@ export default function CalendarioGlobale({
       const prevFrom = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`
       const prevTo = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(new Date(prevYear, prevMonth + 1, 0).getDate()).padStart(2, '0')}`
 
-      const [prevRes, equityRes] = await Promise.all([
+      const [prevRes, equityRes, mandatoryHolRes] = await Promise.all([
         supabase.from('shifts').select('user_id, date, shift_type').gte('date', prevFrom).lte('date', prevTo),
         supabase.rpc('get_equity_scores', { p_month: 0, p_year: year }),
+        supabase.from('holidays').select('date, name, year').eq('mandatory', true).lt('year', year),
       ])
 
       setPrevMonthShifts((prevRes.data as Shift[]) ?? [])
@@ -218,6 +221,25 @@ export default function CalendarioGlobale({
         countMap.set(row.user_id, Number(row.turni_totali ?? 0))
       }
       setTurniMap(countMap)
+
+      // Storico festivi obbligatori: carica i turni su date di festivi anni precedenti
+      const pastHols = mandatoryHolRes.data ?? []
+      if (pastHols.length > 0) {
+        const pastDates = pastHols.map(h => h.date)
+        const { data: histShifts } = await supabase.from('shifts').select('user_id, date').in('date', pastDates)
+        const dateToHol = new Map(pastHols.map(h => [h.date, { name: h.name, year: h.year }]))
+        const hMap = new Map<string, Map<string, number[]>>()
+        for (const s of histShifts ?? []) {
+          const hol = dateToHol.get(s.date)
+          if (!hol) continue
+          if (!hMap.has(s.user_id)) hMap.set(s.user_id, new Map())
+          const uMap = hMap.get(s.user_id)!
+          const arr = uMap.get(hol.name) ?? []
+          arr.push(hol.year)
+          uMap.set(hol.name, arr)
+        }
+        setHolidayHistoryMap(hMap)
+      }
     } catch (err) {
       console.error('Errore fetch dati aux:', err)
     }
@@ -669,6 +691,16 @@ export default function CalendarioGlobale({
     return pool[0].id
   }
 
+  /* ---- Nota storico festivo obbligatorio per un utente ---- */
+  const getHolidayNote = useCallback((userId: string, holidayName: string): string | null => {
+    const uMap = holidayHistoryMap.get(userId)
+    if (!uMap) return null
+    const years = uMap.get(holidayName)
+    if (!years || years.length === 0) return null
+    const labels = [...years].sort().map(y => `'${String(y).slice(2)}`).join(' ')
+    return `lavorato ${holidayName} ${labels}`
+  }, [holidayHistoryMap])
+
   /* ---- User chip status for a given date ---- */
   function getUserChipStatus(userId: string, dateStr: string): 'shift' | 'available' | 'unavailable' {
     if (shiftMap.has(`${userId}-${dateStr}`)) return 'shift'
@@ -1105,7 +1137,13 @@ export default function CalendarioGlobale({
                             <li key={u.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-red-50 border border-red-100">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                                <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
+                                <div className="min-w-0">
+                                  <span className="text-sm font-medium text-gray-800 truncate block">{u.nome}</span>
+                                  {selectedDay.holiday?.mandatory && (() => {
+                                    const note = getHolidayNote(u.id, selectedDay.holiday!.name)
+                                    return note ? <span className="text-[10px] text-orange-500">{note}</span> : null
+                                  })()}
+                                </div>
                               </div>
                               <div className="shrink-0">
                                 {loadingAction === `${u.id}-${dateStr}` ? <Spinner small /> : !locked ? (
@@ -1148,6 +1186,10 @@ export default function CalendarioGlobale({
                                     {rec === 'warning' && <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">⚠ recente</span>}
                                     {rec === 'avoid'   && <span className="text-[10px] font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded shrink-0">✕ evita</span>}
                                   </div>
+                                  {selectedDay.holiday?.mandatory && (() => {
+                                    const note = getHolidayNote(u.id, selectedDay.holiday!.name)
+                                    return note ? <p className="text-[10px] text-orange-500 mt-0.5">{note}</p> : null
+                                  })()}
                                 </div>
                                 {!locked && (
                                   <div className="shrink-0">
@@ -1173,13 +1215,19 @@ export default function CalendarioGlobale({
                           Già in turno questo mese ({inTurno.length})
                         </p>
                         <ul className="space-y-1">
-                          {inTurno.map(u => (
-                            <li key={u.id} className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-amber-50 border border-amber-100">
-                              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                              <span className="text-sm text-gray-700 truncate">{u.nome}</span>
-                              <span className="text-[10px] text-amber-500 ml-auto shrink-0">ha già un weekend assegnato</span>
-                            </li>
-                          ))}
+                          {inTurno.map(u => {
+                            const note = selectedDay.holiday?.mandatory ? getHolidayNote(u.id, selectedDay.holiday!.name) : null
+                            return (
+                              <li key={u.id} className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-amber-50 border border-amber-100">
+                                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-sm text-gray-700 truncate block">{u.nome}</span>
+                                  {note && <span className="text-[10px] text-orange-500">{note}</span>}
+                                </div>
+                                <span className="text-[10px] text-amber-500 ml-auto shrink-0">ha già un weekend assegnato</span>
+                              </li>
+                            )
+                          })}
                         </ul>
                       </section>
                     )}

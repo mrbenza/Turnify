@@ -44,16 +44,14 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Bassa priorita
 
-### Rotazione festivi comandati (es. Natale ogni 10 anni)
-- **Obiettivo**: chi lavora un festivo comandato non dovrebbe riprenderlo per ~10 anni (con 10 persone in rotazione)
-- **Situazione attuale**: lo score (festivo×3 pt totali) distribuisce i festivi attivi su base annuale, ma non garantisce una rotazione decennale
-- **Opzione A**: moltiplicatori altissimi per i festivi piu pesanti (es. Natale = 480 pt = 4 wknd/mese × 12 mesi × 10 anni)
-- **Opzione B**: blacklist per festivo specifico — chi ha lavorato Natale quest'anno non viene suggerito per Natale per N anni (tracciamento cross-anno separato)
+### ✅ Rotazione festivi comandati — COMPLETATO (2026-03-24)
+Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorato Pasqua '25" (o più anni) se ha già lavorato quel festivo in anni precedenti. Il manager decide autonomamente. Score non modificato.
 
 ---
 
 ## Completato
 
+- **[2026-03-24] Storico festivi nel drawer** — Per ogni festivo obbligatorio, sotto ogni nome utente appare "lavorato [nome] '[anno]" se ha lavorato quel festivo in anni precedenti. Query client-side su `holidays` (mandatory, year < corrente) + `shifts` su quelle date. Score non modificato.
 - **[2026-03-24] Pairing con conferma (tutti i modi)** — `weekend_full`: click Sab chiede conferma per Dom e viceversa. `sun_next_sat`: click Dom chiede conferma per Sab+7. In entrambi i casi il manager può scegliere "Solo Sab" / "Solo Dom". L'auto-pairing silenzioso è stato rimosso completamente. Dialog dinamico: testo e bottoni si adattano al giorno abbinato.
 - **[2026-03-24] Festività anni futuri** — Import manuale via bottone "Aggiorna festivita {anno}" in pagina Sistema. Usa API Nager.Date (`/api/v3/PublicHolidays/{year}/IT`) per qualsiasi anno tra 2024 e 2030. Upsert sicuro: se l'anno e gia presente, non duplica ma restituisce i record esistenti.
 - **[2026-03-23] Email notifica mese confermato** — Implementato con **Brevo** (brevo.com, free tier 300/giorno). `lib/email/sendTurniEmail.ts`: HTML + text + allegato Excel base64, BCC per tutti i destinatari. Auto-invio su export GET se `!email_inviata`; invio manuale via POST `/api/send-email`. Env vars: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`.
