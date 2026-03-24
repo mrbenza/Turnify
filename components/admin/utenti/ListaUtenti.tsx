@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { User, UserRole } from '@/lib/supabase/types'
+import type { User, UserRole, Area } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -49,15 +49,24 @@ interface ListaUtentiProps {
   currentUserId: string
   lastLogins: { id: string; last_sign_in_at: string | null }[]
   isManager?: boolean
+  areas?: Area[]
 }
 
-export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, isManager = false }: ListaUtentiProps) {
+export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, isManager = false, areas = [] }: ListaUtentiProps) {
   const [dipendentes, setUsers] = useState<User[]>(initialUsers)
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [changingRole, setChangingRole] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [filterAreaId, setFilterAreaId] = useState<string | null>(null)
+
+  const areaMap = new Map<string, string>(areas.map((a) => [a.id, a.nome]))
+  const isAdmin = areas.length > 0
+
+  const filtered = filterAreaId
+    ? dipendentes.filter((u) => u.area_id === filterAreaId)
+    : dipendentes
 
   /* Build a fast lookup map for last logins */
   const lastLoginMap = new Map<string, string | null>(
@@ -141,7 +150,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
   return (
     <div>
       {/* Header actions */}
-      <div className="flex justify-end mb-5">
+      <div className="flex justify-end mb-4">
         <button
           onClick={() => setShowAddModal(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -154,6 +163,35 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
         </button>
       </div>
 
+      {/* Filtro per area — solo admin */}
+      {isAdmin && areas.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Filtra per area">
+          <button
+            onClick={() => setFilterAreaId(null)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+              filterAreaId === null
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Tutte le aree
+          </button>
+          {areas.map((area) => (
+            <button
+              key={area.id}
+              onClick={() => setFilterAreaId(area.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                filterAreaId === area.id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {area.nome}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Error */}
       {errorMsg && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5" role="alert">
@@ -162,7 +200,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
       )}
 
       {/* Table */}
-      {dipendentes.length === 0 ? (
+      {filtered.length === 0 ? (
         <p className="text-sm text-gray-500 py-8 text-center">Nessun utente trovato.</p>
       ) : (
         <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -172,12 +210,15 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-0 font-semibold text-gray-500 text-xs uppercase tracking-wide">Nome</th>
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Email</th>
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Ruolo</th>
+                {isAdmin && (
+                  <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Area</th>
+                )}
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Ultimo login</th>
                 <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Attivo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {dipendentes.map((dipendente) => (
+              {filtered.map((dipendente) => (
                 <tr key={dipendente.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-3 px-4 sm:px-0">
                     <div className="font-medium text-gray-800">{dipendente.nome}</div>
@@ -212,6 +253,11 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
                       </select>
                     )}
                   </td>
+                  {isAdmin && (
+                    <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell text-xs">
+                      {areaMap.get(dipendente.area_id) ?? '—'}
+                    </td>
+                  )}
                   <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell text-xs">
                     {formatDate(lastLoginMap.get(dipendente.id) ?? null)}
                   </td>

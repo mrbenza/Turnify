@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User } from '@/lib/supabase/types'
+import type { User, Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import ListaUtenti from '@/components/admin/utenti/ListaUtenti'
 
@@ -35,8 +35,13 @@ export default async function UtentiPage() {
 
   const users = usersData ?? []
 
-  /* ---- Last login via service client ---- */
+  /* ---- Aree (per filtro admin) ---- */
   const serviceClient = createServiceClient()
+  const areas: Area[] = isAdmin
+    ? ((await serviceClient.from('areas').select('*').order('nome')).data ?? []) as Area[]
+    : []
+
+  /* ---- Last login via service client ---- */
   const { data: authList } = await serviceClient.auth.admin.listUsers({ perPage: 1000 })
   const lastLoginMap = new Map<string, string | null>()
   for (const authUser of authList?.users ?? []) {
@@ -72,6 +77,7 @@ export default async function UtentiPage() {
               currentUserId={authUser.id}
               lastLogins={lastLogins}
               isManager={isManager}
+              areas={areas}
             />
           </section>
         </main>
