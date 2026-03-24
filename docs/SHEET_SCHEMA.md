@@ -126,10 +126,9 @@ Aree aziendali con logica di turnazione propria (migration 011). Multi-area non 
 | id | uuid | PK |
 | nome | text | unique, es. "Default" |
 | scheduling_mode | text | `weekend_full` \| `single_day` \| `sun_next_sat` |
-| workers_per_day | smallint | `1` o `2` — numero di reperibili per giorno |
+| workers_per_day | integer | `1` o `2` — numero di reperibili per giorno; default 2 |
 | template_path | text | nullable — nome file template Excel nello storage |
 | manager_id | uuid | FK → users.id — manager responsabile dell'area |
-| description | text | nullable |
 | created_at | timestamptz | default now() |
 
 **scheduling_mode:**

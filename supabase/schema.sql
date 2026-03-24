@@ -109,11 +109,10 @@ create table if not exists public.areas (
   nome             text        not null unique,
   scheduling_mode  text        not null default 'weekend_full'
                                check (scheduling_mode in ('weekend_full', 'single_day', 'sun_next_sat')),
-  workers_per_day  smallint    not null default 1
+  workers_per_day  integer     not null default 2
                                check (workers_per_day in (1, 2)),
   template_path    text,
   manager_id       uuid        references public.users(id),
-  description      text,
   created_at       timestamptz not null default now()
 );
 
