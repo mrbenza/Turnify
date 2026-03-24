@@ -32,13 +32,11 @@ Funzionalita da implementare in ordine di priorita.
   8. Statistiche: per area
 - **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente. I dipendenti sanno che Dom → Sab+7 è la regola; il Sab solitario è accettabile solo alla prima assegnazione o se il Sab è un festivo comandato.
 
-### Import storico — 2° reperibile (backup) e selezione per area
-- Il foglio Excel ha gia la colonna E **"Nominativo 2° reperibile"** (backup), attualmente non usata dalla logica turni ordinaria
-- Con il multi-area, il manager dovra poter **scegliere quale dei due reperibili** assegnare in base alla modalita di turnazione dell'area
-- Modifiche necessarie (da pianificare insieme al multi-area):
-  - `import-shifts/route.ts`: distinguere 1° e 2° reperibile invece di trattarli alla pari; restituire entrambi al frontend per la scelta
-  - `ImportaStorico.tsx`: UI di selezione post-import ("per questo giorno: 1° Ferretti / 2° Bianchi — scegli")
-  - Possibile colonna aggiuntiva su `shifts`: `reperibile_order` (1 o 2) per tracciare il ruolo storico
+### ✅ Import storico — 2° reperibile — NESSUNA MODIFICA NECESSARIA
+- Colonna D = 1° reperibile (sempre presente), colonna E = 2° reperibile (presente solo se il manager ha assegnato 2 persone)
+- Se E è presente, entrambi hanno effettivamente lavorato → entrambi contribuiscono allo score equità
+- Il codice attuale importa già correttamente sia D che E come turni regolari (loop su `D${row}` + `E${row}`)
+- Il file Excel è sempre lo specchio fedele della logica dei turni: non può esistere un E senza che quella persona abbia lavorato
 
 ---
 
