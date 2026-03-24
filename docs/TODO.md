@@ -18,7 +18,7 @@ Funzionalita da implementare in ordine di priorita.
 - **Scheduling modes previsti**:
   | Mode | Comportamento |
   |------|--------------|
-  | `weekend_full` | Sab+Dom sempre insieme (comportamento attuale) |
+  | `weekend_full` | Sab+Dom con conferma: assegni uno, il sistema propone l'altro |
   | `single_day` | Sab e Dom indipendenti, assegnabili a persone diverse |
   | `sun_next_sat` | Chi lavora Dom lavora anche il Sab della settimana successiva |
 - **Ancora da fare**:
@@ -30,7 +30,7 @@ Funzionalita da implementare in ordine di priorita.
   6. CalendarioGlobale: logica dinamica per `scheduling_mode`
   7. Export: usa `areas.template_path` invece di template globale
   8. Statistiche: per area
-- **Da chiarire prima dell'implementazione**: per `sun_next_sat`, cosa succede se il Sab successivo e gia occupato?
+- **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente. I dipendenti sanno che Dom → Sab+7 è la regola; il Sab solitario è accettabile solo alla prima assegnazione o se il Sab è un festivo comandato.
 
 ### Import storico — 2° reperibile (backup) e selezione per area
 - Il foglio Excel ha gia la colonna E **"Nominativo 2° reperibile"** (backup), attualmente non usata dalla logica turni ordinaria
@@ -54,6 +54,7 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Completato
 
+- **[2026-03-24] Pairing con conferma (tutti i modi)** — `weekend_full`: click Sab chiede conferma per Dom e viceversa. `sun_next_sat`: click Dom chiede conferma per Sab+7. In entrambi i casi il manager può scegliere "Solo Sab" / "Solo Dom". L'auto-pairing silenzioso è stato rimosso completamente. Dialog dinamico: testo e bottoni si adattano al giorno abbinato.
 - **[2026-03-24] Festività anni futuri** — Import manuale via bottone "Aggiorna festivita {anno}" in pagina Sistema. Usa API Nager.Date (`/api/v3/PublicHolidays/{year}/IT`) per qualsiasi anno tra 2024 e 2030. Upsert sicuro: se l'anno e gia presente, non duplica ma restituisce i record esistenti.
 - **[2026-03-23] Email notifica mese confermato** — Implementato con **Brevo** (brevo.com, free tier 300/giorno). `lib/email/sendTurniEmail.ts`: HTML + text + allegato Excel base64, BCC per tutti i destinatari. Auto-invio su export GET se `!email_inviata`; invio manuale via POST `/api/send-email`. Env vars: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`.
 - **[2026-03-23] Mesi confirmed immutabili** — Manager non puo sbloccare mesi `confirmed`; solo admin puo con dialog di conferma. CalendarioGlobale: `isConfirmed` prop separata da `locked`.

@@ -175,6 +175,12 @@ export default function CalendarioGlobale({
   const [showUnlockDialog, setShowUnlockDialog] = useState(false)
   const [loadingMonth, setLoadingMonth] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // sun_next_sat: dopo assegnazione domenica, propone di assegnare anche il sab successivo
+  const [pendingSaturdayPair, setPendingSaturdayPair] = useState<{
+    userId: string
+    dateStr: string
+    userName: string
+  } | null>(null)
 
   /* ---- Drawer ref for focus trap ---- */
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -374,7 +380,7 @@ export default function CalendarioGlobale({
   /* ---- Assign shift ---- */
   const handleAssign = useCallback(async () => {
     if (!pendingAction) return
-    const { userId, dateStr } = pendingAction
+    const { userId, dateStr, userName } = pendingAction
     const cellKey = `${userId}-${dateStr}`
     setPendingAction(null)
     setLoadingAction(cellKey)
@@ -397,7 +403,7 @@ export default function CalendarioGlobale({
       const newShifts: Shift[] = [...prevShifts, data]
       setShifts(newShifts)
 
-      // Auto-pairing: assegna automaticamente il giorno abbinato se non già coperto
+      // Pairing: comportamento diverso per sun_next_sat (domenica non-festiva) vs altri modi
       const isHoliday = holidayMap.has(dateStr)
       const pairedDate = getPairedDate(dateStr, schedulingMode, isHoliday)
       if (pairedDate) {
@@ -405,17 +411,8 @@ export default function CalendarioGlobale({
           (s) => s.date === pairedDate && s.user_id === userId
         )
         if (!alreadyAssigned) {
-          const pairedRes = await fetch('/api/shifts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date: pairedDate, user_id: userId }),
-          })
-          if (pairedRes.ok) {
-            const pairedData = await pairedRes.json() as Shift
-            sessionShiftIdsRef.current.add(pairedData.id)
-            setShifts((prev) => [...prev, pairedData])
-          }
-          // Se l'auto-pair fallisce (es. mese bloccato, giorno pieno) lo ignoriamo silenziosamente
+          // Chiede sempre conferma prima di assegnare il giorno abbinato
+          setPendingSaturdayPair({ userId, dateStr: pairedDate, userName })
         }
       }
     } catch (err) {
@@ -426,6 +423,35 @@ export default function CalendarioGlobale({
       setLoadingAction(null)
     }
   }, [pendingAction, shifts, schedulingMode, holidayMap])
+
+  /* ---- Assign Saturday pair (sun_next_sat confirmation) ---- */
+  const handleAssignPair = useCallback(async () => {
+    if (!pendingSaturdayPair) return
+    const { userId, dateStr } = pendingSaturdayPair
+    setPendingSaturdayPair(null)
+    setLoadingAction(`${userId}-${dateStr}`)
+    setErrorMsg(null)
+
+    try {
+      const res = await fetch('/api/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateStr, user_id: userId }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? 'Errore sconosciuto')
+      }
+      const data = await res.json() as Shift
+      sessionShiftIdsRef.current.add(data.id)
+      setShifts((prev) => [...prev, data])
+    } catch (err) {
+      console.error('Errore assegnazione Sab:', err)
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante l\'assegnazione del turno.')
+    } finally {
+      setLoadingAction(null)
+    }
+  }, [pendingSaturdayPair])
 
   /* ---- Remove shift ---- */
   const handleRemove = useCallback(async () => {
@@ -1224,6 +1250,55 @@ export default function CalendarioGlobale({
           </div>
         </div>
       )}
+
+      {/* ================================================================ */}
+      {/* sun_next_sat: proposta assegnazione sabato successivo            */}
+      {/* ================================================================ */}
+      {pendingSaturdayPair && (() => {
+        const [py, pm, pd] = pendingSaturdayPair.dateStr.split('-').map(Number)
+        const pairedDow = new Date(py, pm - 1, pd).getDay() // 0=Dom, 6=Sab
+        const isSat = pairedDow === 6
+        const dayLabel = isSat ? 'sabato' : 'domenica'
+        const dayShort = isSat ? 'Sab' : 'Dom'
+        const skipLabel = isSat ? 'Solo Dom' : 'Solo Sab'
+        const pairedFullDate = formatFullDate(pd, pm - 1, py)
+        return (
+          <div
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Assegna anche il ${dayLabel}`}
+          >
+            <div className="absolute inset-0 bg-black/30" onClick={() => setPendingSaturdayPair(null)} aria-hidden="true" />
+            <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 max-w-sm w-full z-10">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <h4 className="text-sm font-semibold text-gray-900">Assegna anche il {dayLabel}?</h4>
+              </div>
+              <p className="text-sm text-gray-700 mb-1">
+                Assegna <strong>{pendingSaturdayPair.userName}</strong> anche a{' '}
+                <strong>{pairedFullDate}</strong>?
+              </p>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handleAssignPair}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  Assegna {dayShort}
+                </button>
+                <button
+                  onClick={() => setPendingSaturdayPair(null)}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+                >
+                  {skipLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ================================================================ */}
       {/* Unlock confirmation dialog                                       */}
