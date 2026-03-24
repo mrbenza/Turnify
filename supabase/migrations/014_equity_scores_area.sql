@@ -1,4 +1,8 @@
 -- Migration 014: aggiunge p_area_id a get_equity_scores
+-- Elimina il vecchio overload a 2 parametri prima di ricreare la funzione
+DROP FUNCTION IF EXISTS public.get_equity_scores(integer, integer);
+
+--
 -- Il parametro è opzionale (default null) per retrocompatibilità.
 -- Con p_area_id valorizzato filtra utenti e turni per quell'area.
 
