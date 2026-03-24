@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Shift, MonthStatus, MonthStatusValue } from '@/lib/supabase/types'
+import type { User, Shift, MonthStatus, MonthStatusValue, Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import TurniCollapsibili from '@/components/admin/dashboard/TurniCollapsibili'
 
@@ -201,6 +202,31 @@ export default async function AdminDashboardPage() {
   /* MANAGER branch                                                    */
   /* ================================================================ */
 
+  // --- Aree gestite dal manager ---
+  const serviceClient = createServiceClient()
+  const { data: managedAreasData } = await serviceClient
+    .from('areas')
+    .select('*')
+    .eq('manager_id', authUser.id)
+    .order('nome', { ascending: true })
+
+  const managedAreas = (managedAreasData ?? []) as Area[]
+
+  // Includi anche la home area se non è già nel set (edge case: area senza manager_id assegnato)
+  if (profile.area_id && !managedAreas.some((a) => a.id === profile.area_id)) {
+    const { data: homeArea } = await serviceClient
+      .from('areas').select('*').eq('id', profile.area_id).maybeSingle()
+    if (homeArea) managedAreas.unshift(homeArea as Area)
+  }
+
+  // Area attiva: cookie (se presente e accessibile) oppure area del profilo
+  const cookieStore = await cookies()
+  const cookieAreaId = cookieStore.get('active_area_id')?.value
+  const activeAreaId =
+    cookieAreaId && managedAreas.some((a) => a.id === cookieAreaId)
+      ? cookieAreaId
+      : (profile.area_id ?? managedAreas[0]?.id ?? '')
+
   const now = new Date()
   const currMonth = now.getMonth() + 1
   const currYear = now.getFullYear()
@@ -216,20 +242,24 @@ export default async function AdminDashboardPage() {
     supabase
       .from('month_status')
       .select('*')
+      .eq('area_id', activeAreaId)
       .or(`and(month.eq.${currMonth},year.eq.${currYear}),and(month.eq.${nextMonth},year.eq.${nextYear})`),
     supabase
       .from('shifts')
       .select('id', { count: 'exact', head: true })
+      .eq('area_id', activeAreaId)
       .gte('date', `${currYear}-${currMonthStr}-01`)
       .lte('date', `${currYear}-${currMonthStr}-${String(daysInCurr).padStart(2, '0')}`),
     supabase
       .from('shifts')
       .select('id', { count: 'exact', head: true })
+      .eq('area_id', activeAreaId)
       .gte('date', `${nextYear}-${nextMonthStr}-01`)
       .lte('date', `${nextYear}-${nextMonthStr}-${String(daysInNext).padStart(2, '0')}`),
     supabase
       .from('shifts')
       .select('*')
+      .eq('area_id', activeAreaId)
       .gte('date', `${currYear}-${currMonthStr}-01`)
       .lte('date', `${currYear}-${currMonthStr}-${String(daysInCurr).padStart(2, '0')}`)
       .order('date', { ascending: true }),
@@ -237,10 +267,12 @@ export default async function AdminDashboardPage() {
       .from('users')
       .select('*')
       .eq('ruolo', 'dipendente')
+      .eq('area_id', activeAreaId)
       .order('nome', { ascending: true }),
     supabase
       .from('availability')
       .select('user_id')
+      .eq('area_id', activeAreaId)
       .gte('date', `${nextYear}-${nextMonthStr}-01`)
       .lte('date', `${nextYear}-${nextMonthStr}-${String(daysInNext).padStart(2, '0')}`),
   ])
@@ -266,7 +298,12 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} ruolo="manager" />
+      <NavbarAdmin
+        nomeAdmin={profile?.nome}
+        ruolo="manager"
+        managedAreas={managedAreas}
+        activeAreaId={activeAreaId}
+      />
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
 
