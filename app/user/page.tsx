@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import type { User } from '@/lib/supabase/types'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import type { User, SchedulingMode } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
 import CalendarioDisponibilita from '@/components/user/CalendarioDisponibilita'
 import StoricoTurni, { type ShiftRow } from '@/components/user/StoricoTurni'
@@ -21,6 +21,17 @@ export default async function UserPage() {
     .select('*')
     .eq('id', authUser.id)
     .single<User>()
+
+  const areaId = profile?.area_id ?? ''
+
+  // Scheduling mode dall'area del dipendente
+  const serviceClient = createServiceClient()
+  const { data: areaConfig } = await serviceClient
+    .from('areas')
+    .select('scheduling_mode')
+    .eq('id', areaId)
+    .maybeSingle()
+  const schedulingMode: SchedulingMode = (areaConfig?.scheduling_mode as SchedulingMode) ?? 'weekend_full'
 
   const now = new Date()
 
@@ -56,7 +67,8 @@ export default async function UserPage() {
 
     supabase
       .from('month_status')
-      .select('*'),
+      .select('*')
+      .eq('area_id', areaId),
 
     supabase
       .from('shifts')
@@ -125,6 +137,7 @@ export default async function UserPage() {
             holidays={holidays}
             shifts={shifts}
             lockedMonths={lockedMonths}
+            schedulingMode={schedulingMode}
           />
         </section>
 
