@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Availability, Shift, Holiday, MonthStatus, SchedulingMode, Area } from '@/lib/supabase/types'
+import type { User, Availability, Shift, Holiday, MonthStatus, SchedulingMode } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import CalendarioGlobale from '@/components/admin/disponibilita/CalendarioGlobale'
 
@@ -20,30 +19,14 @@ export default async function DisponibilitaPage() {
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
+  const areaId = profile.area_id ?? ''
+
   const serviceClient = createServiceClient()
 
-  /* ---- Aree gestite (per navbar selettore) ---- */
-  const { data: managedAreasData } = await serviceClient
-    .from('areas')
-    .select('*')
-    .eq('manager_id', authUser.id)
-    .order('nome', { ascending: true })
-
-  const managedAreas = (managedAreasData ?? []) as Area[]
-
-  if (profile.area_id && !managedAreas.some((a) => a.id === profile.area_id)) {
-    const { data: homeArea } = await serviceClient
-      .from('areas').select('*').eq('id', profile.area_id).maybeSingle()
-    if (homeArea) managedAreas.unshift(homeArea as Area)
-  }
-
-  /* ---- Area attiva (cookie o profilo) ---- */
-  const cookieStore = await cookies()
-  const cookieAreaId = cookieStore.get('active_area_id')?.value
-  const activeAreaId =
-    cookieAreaId && managedAreas.some((a) => a.id === cookieAreaId)
-      ? cookieAreaId
-      : (profile.area_id ?? managedAreas[0]?.id ?? '')
+  /* ---- Nome area per badge navbar ---- */
+  const { data: areaData } = await serviceClient
+    .from('areas').select('nome').eq('id', areaId).maybeSingle()
+  const areaNome = areaData?.nome ?? undefined
 
   /* ---- Current month ---- */
   const now = new Date()
@@ -53,14 +36,14 @@ export default async function DisponibilitaPage() {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-  /* ---- Parallel fetches filtrate per area attiva ---- */
+  /* ---- Parallel fetches filtrate per area ---- */
   const [usersRes, availRes, shiftsRes, holidaysRes, monthStatusRes, areaConfigRes] = await Promise.all([
-    supabase.from('users').select('*').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', activeAreaId).order('nome'),
-    supabase.from('availability').select('*').eq('area_id', activeAreaId).gte('date', from).lte('date', to),
-    supabase.from('shifts').select('*').eq('area_id', activeAreaId).gte('date', from).lte('date', to),
+    supabase.from('users').select('*').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', areaId).order('nome'),
+    supabase.from('availability').select('*').eq('area_id', areaId).gte('date', from).lte('date', to),
+    supabase.from('shifts').select('*').eq('area_id', areaId).gte('date', from).lte('date', to),
     supabase.from('holidays').select('*').gte('date', from).lte('date', to),
-    supabase.from('month_status').select('*').eq('area_id', activeAreaId).eq('month', month + 1).eq('year', year).maybeSingle<MonthStatus>(),
-    serviceClient.from('areas').select('scheduling_mode, workers_per_day').eq('id', activeAreaId).single(),
+    supabase.from('month_status').select('*').eq('area_id', areaId).eq('month', month + 1).eq('year', year).maybeSingle<MonthStatus>(),
+    serviceClient.from('areas').select('scheduling_mode, workers_per_day').eq('id', areaId).single(),
   ])
 
   const users = usersRes.data ?? []
@@ -78,8 +61,7 @@ export default async function DisponibilitaPage() {
       <NavbarAdmin
         nomeAdmin={profile?.nome}
         ruolo={profile?.ruolo as 'admin' | 'manager'}
-        managedAreas={managedAreas}
-        activeAreaId={activeAreaId}
+        areaNome={areaNome}
       />
 
       <div className="lg:pl-56 pb-16 lg:pb-0">
