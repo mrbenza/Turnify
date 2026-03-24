@@ -52,6 +52,7 @@ export type Shift = {
   user_id: string
   user_nome: string | null
   shift_type: ShiftType
+  reperibile_order: number
   created_by: string
   created_at: string
 }

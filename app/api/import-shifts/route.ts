@@ -160,11 +160,12 @@ export async function POST(request: NextRequest) {
     user_id: string
     user_nome: string
     shift_type: 'reperibilita' | 'weekend' | 'festivo'
+    reperibile_order: 1 | 2
     created_by: string
   }[] = []
   const unmatched: string[] = []
   const ambiguous: string[] = []
-  const pendingShifts: Record<string, { date: string; shift_type: string }[]> = {}
+  const pendingShifts: Record<string, { date: string; shift_type: string; reperibile_order: 1 | 2 }[]> = {}
 
   for (let day = 1; day <= 31; day++) {
     const row = DATA_START + day - 1
@@ -178,15 +179,18 @@ export async function POST(request: NextRequest) {
     const isHoliday = holidayDates.has(dateStr)
     const shiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'
 
-    const cellsToCheck = [`D${row}`, `E${row}`]
-    for (const addr of cellsToCheck) {
+    const cellsToCheck: { addr: string; order: 1 | 2 }[] = [
+      { addr: `D${row}`, order: 1 },
+      { addr: `E${row}`, order: 2 },
+    ]
+    for (const { addr, order } of cellsToCheck) {
       const cognome = getCellText(sheetXml, addr)
       if (!cognome) continue
 
       const matches = cognomeMap.get(cognome)
       if (!matches || matches.length === 0) {
         if (!pendingShifts[cognome]) pendingShifts[cognome] = []
-        pendingShifts[cognome].push({ date: dateStr, shift_type: shiftType })
+        pendingShifts[cognome].push({ date: dateStr, shift_type: shiftType, reperibile_order: order })
         unmatched.push(cognome)
         continue
       }
@@ -202,6 +206,7 @@ export async function POST(request: NextRequest) {
         user_id: foundUser.id,
         user_nome: foundUser.nome,
         shift_type: shiftType,
+        reperibile_order: order,
         created_by: user.id,
       })
     }

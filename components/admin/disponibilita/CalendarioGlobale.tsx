@@ -1133,12 +1133,18 @@ export default function CalendarioGlobale({
                           Assegnati ({assigned.length})
                         </p>
                         <ul className="space-y-1.5">
-                          {assigned.map(u => (
+                          {assigned.map(u => {
+                            const shift = shiftMap.get(`${u.id}-${dateStr}`)
+                            const order = shift?.reperibile_order ?? 1
+                            return (
                             <li key={u.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-red-50 border border-red-100">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
                                 <div className="min-w-0">
-                                  <span className="text-sm font-medium text-gray-800 truncate block">{u.nome}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
+                                    <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1 py-0.5 rounded shrink-0">{order}°</span>
+                                  </div>
                                   {selectedDay.holiday?.mandatory && (() => {
                                     const note = getHolidayNote(u.id, selectedDay.holiday!.name)
                                     return note ? <span className="text-[10px] text-orange-500">{note}</span> : null
@@ -1156,7 +1162,8 @@ export default function CalendarioGlobale({
                                 )}
                               </div>
                             </li>
-                          ))}
+                            )
+                          })}
                         </ul>
                       </section>
                     )}

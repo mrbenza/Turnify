@@ -14,7 +14,7 @@ interface ImportResult {
   skipped: number
   unmatched: string[]
   ambiguous: string[]
-  pendingShifts: Record<string, { date: string; shift_type: string }[]>
+  pendingShifts: Record<string, { date: string; shift_type: string; reperibile_order: 1 | 2 }[]>
 }
 
 interface FileEntry {
@@ -32,7 +32,7 @@ interface FileResult {
 interface CreateModalState {
   fileResultId: number
   cognome: string
-  pendingShifts: { date: string; shift_type: string }[]
+  pendingShifts: { date: string; shift_type: string; reperibile_order: 1 | 2 }[]
 }
 
 function formatBytes(bytes?: number): string {
@@ -398,7 +398,7 @@ export default function ImportaStorico() {
 
 interface CreaUtenteModalProps {
   cognome: string
-  pendingShifts: { date: string; shift_type: string }[]
+  pendingShifts: { date: string; shift_type: string; reperibile_order: 1 | 2 }[]
   onClose: () => void
   onCreated: (cognome: string) => void
 }

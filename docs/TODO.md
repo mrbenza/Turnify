@@ -49,6 +49,7 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 
 ## Completato
 
+- **[2026-03-24] reperibile_order su shifts (migration 012)** — Colonna `reperibile_order` (1 o 2) su `shifts`. Import: D→1, E→2. Export: ordina per `reperibile_order` → D/E sempre corretti. API `/api/shifts`: calcola automaticamente 1° o 2° in base a chi è già assegnato nel giorno; unifica il check `workers_per_day` per entrambi i valori. Drawer: badge "1°"/"2°" in Assegnati.
 - **[2026-03-24] Storico festivi nel drawer** — Per ogni festivo obbligatorio, sotto ogni nome utente appare "lavorato [nome] '[anno]" se ha lavorato quel festivo in anni precedenti. Query client-side su `holidays` (mandatory, year < corrente) + `shifts` su quelle date. Score non modificato.
 - **[2026-03-24] Pairing con conferma (tutti i modi)** — `weekend_full`: click Sab chiede conferma per Dom e viceversa. `sun_next_sat`: click Dom chiede conferma per Sab+7. In entrambi i casi il manager può scegliere "Solo Sab" / "Solo Dom". L'auto-pairing silenzioso è stato rimosso completamente. Dialog dinamico: testo e bottoni si adattano al giorno abbinato.
 - **[2026-03-24] Festività anni futuri** — Import manuale via bottone "Aggiorna festivita {anno}" in pagina Sistema. Usa API Nager.Date (`/api/v3/PublicHolidays/{year}/IT`) per qualsiasi anno tra 2024 e 2030. Upsert sicuro: se l'anno e gia presente, non duplica ma restituisce i record esistenti.

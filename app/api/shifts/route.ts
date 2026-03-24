@@ -70,20 +70,20 @@ export async function POST(request: Request) {
 
   const shiftType: ShiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'
 
-  // Check workers_per_day: max N persone per giorno
-  if (workersPerDay === 1) {
-    const { data: existingForDay } = await supabase
-      .from('shifts')
-      .select('id')
-      .eq('date', date)
-      .limit(1)
-    if (existingForDay && existingForDay.length > 0) {
-      return NextResponse.json(
-        { error: 'Giorno già coperto (max 1 reperibile per giorno).' },
-        { status: 409 }
-      )
-    }
+  // Check workers_per_day: max N persone per giorno; determina reperibile_order
+  const { data: existingForDay } = await supabase
+    .from('shifts')
+    .select('id')
+    .eq('date', date)
+
+  const existingCount = existingForDay?.length ?? 0
+  if (existingCount >= workersPerDay) {
+    return NextResponse.json(
+      { error: `Giorno già coperto (max ${workersPerDay} reperibile/i per giorno).` },
+      { status: 409 }
+    )
   }
+  const reperibile_order = existingCount + 1
 
   // Regola: max 1 turno speciale (weekend o festivo) per dipendente per mese
   if (shiftType === 'weekend' || shiftType === 'festivo') {
@@ -170,6 +170,7 @@ export async function POST(request: Request) {
       user_id,
       user_nome: targetUser?.nome ?? null,
       shift_type: shiftType,
+      reperibile_order,
       created_by: user.id,
     })
     .select()

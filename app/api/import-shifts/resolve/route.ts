@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   if (profile?.ruolo !== 'admin')
     return NextResponse.json({ error: 'Solo l\'amministratore può eseguire questa operazione.' }, { status: 403 })
 
-  let body: { user_id?: string; user_nome?: string; shifts?: { date: string; shift_type: ShiftType }[] }
+  let body: { user_id?: string; user_nome?: string; shifts?: { date: string; shift_type: ShiftType; reperibile_order?: 1 | 2 }[] }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
   }
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     user_id,
     user_nome,
     shift_type: s.shift_type,
+    reperibile_order: s.reperibile_order ?? 1,
     created_by: user.id,
   }))
 

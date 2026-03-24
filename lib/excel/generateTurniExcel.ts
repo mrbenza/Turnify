@@ -86,7 +86,7 @@ export async function generateTurniExcel(
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
   const [{ data: shifts }, { data: users }] = await Promise.all([
-    serviceClient.from('shifts').select('date, user_id').gte('date', from).lte('date', to).order('date'),
+    serviceClient.from('shifts').select('date, user_id, reperibile_order').gte('date', from).lte('date', to).order('date').order('reperibile_order'),
     serviceClient.from('users').select('id, nome'),
   ])
 
