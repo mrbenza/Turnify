@@ -14,6 +14,7 @@ con export Excel del mese confermato.
 | Database | Supabase PostgreSQL | Free tier |
 | Auth | Supabase Auth | Email + password |
 | Export Excel | API route Next.js + JSZip | Template preservato intatto (logo, firma, CF); solo sheet1.xml modificato |
+| Email | Brevo SMTP API | BCC tutti i destinatari, allegato Excel, auto-invio su export |
 
 ## Struttura cartelle
 ```
@@ -27,9 +28,12 @@ turnify/
 │   ├── api/                   ← backend server-side
 │   │   ├── shifts/
 │   │   ├── availability/
-│   │   ├── export/            ← genera XLSX su template (JSZip)
+│   │   ├── export/            ← genera XLSX + auto-email Brevo
+│   │   ├── send-email/        ← invio manuale email con allegato Excel
 │   │   ├── month/
 │   │   ├── email-settings/
+│   │   ├── config/            ← scheduling_mode e workers_per_day (tabella areas)
+│   │   ├── import-shifts/     ← import storico + resolve
 │   │   └── users/
 │   ├── admin/
 │   ├── user/
@@ -37,6 +41,8 @@ turnify/
 ├── components/
 ├── lib/
 │   ├── supabase/
+│   ├── excel/                 ← generateTurniExcel.ts (condiviso da export e send-email)
+│   ├── email/                 ← sendTurniEmail.ts (Brevo SMTP API)
 │   └── utils/
 └── supabase/
     └── migrations/
@@ -84,13 +90,16 @@ Richiesta → ORCHESTRATOR
 ```
 Dipendente segna disponibilità (status: pending)
         ↓
-Admin visualizza calendario globale
+Manager visualizza calendario globale
         ↓
-Admin assegna turni (click su cella)
+Manager assegna turni (click su cella, suggerimento equità)
         ↓
-Admin verifica statistiche equità
+Manager verifica statistiche equità
         ↓
-Admin LOCK mese → tutto diventa immutabile
+Manager "Conferma e blocca" → month_status = 'locked'
         ↓
-Export Excel (da DB, su template utente)
+Manager "Genera Excel" → download XLSX + status = 'confirmed' + auto-email Brevo
+   oppure "Invia email" → genera XLSX + invia email + status = 'confirmed'
+        ↓
+Se errore: admin sblocca da CalendarioGlobale → manager corregge → rinvia
 ```

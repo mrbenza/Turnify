@@ -18,7 +18,7 @@ e calendario festivita.
 | Auth | Supabase Auth | Email + password |
 | Export Excel | API route Next.js + JSZip | Modifica solo `xl/worksheets/sheet1.xml` del template; logo, firma e conditional formatting rimangono intatti |
 | Type Safety | TypeScript 5 + Supabase JS v2 | `lib/supabase/types.ts` generato da Supabase CLI; zero `any` cast nel codebase |
-| Email | Resend | Da implementare |
+| Email | Brevo SMTP API | Free tier, 300 email/giorno, allegato Excel in base64 |
 
 ---
 
@@ -73,13 +73,16 @@ turnify/
 │       ├── shifts/[id]/route.ts     ← DELETE rimuovi turno
 │       ├── availability/route.ts    ← GET/POST disponibilita
 │       ├── month/route.ts           ← GET/POST stato mese (lock/unlock)
-│       ├── export/route.ts          ← GET genera XLSX da template + imposta status 'confirmed'
+│       ├── export/route.ts          ← GET genera XLSX da template + imposta status 'confirmed' + auto-email
+│       ├── send-email/route.ts      ← POST invia email manuale con allegato Excel
 │       ├── import-shifts/route.ts   ← POST importa storico da XLSX (JSZip)
+│       ├── import-shifts/resolve/route.ts ← POST risolve turni con utente non trovato
 │       ├── holidays/route.ts        ← GET/POST/DELETE gestione festivita
 │       ├── email-settings/route.ts  ← GET/POST indirizzi email extra
-│       ├── email-settings/[id]/route.ts ← DELETE
-│       ├── dipendentes/route.ts     ← POST crea nuovo utente
-│       └── dipendentes/[id]/route.ts ← PATCH (attivo/ruolo), DELETE
+│       ├── email-settings/[id]/route.ts ← PATCH (toggle attivo) / DELETE
+│       ├── config/route.ts          ← GET/PATCH scheduling_mode e workers_per_day (tabella areas)
+│       ├── users/route.ts           ← POST crea nuovo utente
+│       └── users/[id]/route.ts      ← PATCH (attivo/ruolo), DELETE
 ├── components/
 │   ├── auth/AuthGuard.tsx           ← timeout sessione automatico
 │   ├── AdminPageSkeleton.tsx        ← skeleton condiviso (sidebar + content) usato da tutti i loading.tsx admin; props: rows, grid
@@ -112,6 +115,10 @@ turnify/
 │   │   ├── client.ts
 │   │   ├── server.ts
 │   │   └── types.ts             ← tipi generati da Supabase CLI; export type (non interface); zero any
+│   ├── excel/
+│   │   └── generateTurniExcel.ts ← genera XLSX dal template (JSZip), condiviso da export e send-email
+│   ├── email/
+│   │   └── sendTurniEmail.ts    ← invia email Brevo con allegato Excel, BCC destinatari
 │   └── utils/
 └── supabase/
     └── migrations/
@@ -124,7 +131,8 @@ turnify/
         ├── 007_equity_scores_lower_weights.sql
         ├── 008_equity_scores_fix_role.sql
         ├── 009_fix_users_role_constraint.sql
-        └── 010_simplify_equity_scores.sql
+        ├── 010_simplify_equity_scores.sql
+        └── 011_areas.sql
 ```
 
 ---
@@ -196,8 +204,8 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 5. Manager → /admin/export ("Invio turni")
    Seleziona il mese, carica l'anteprima grafica (distribuzione turni).
    Genera Excel dal template aziendale (JSZip, preserva logo/firma/formatting).
-   Download → month_status → 'confirmed'.
-   [TODO] Invio email automatico via Resend.
+   Download → month_status → 'confirmed' + email automatica via Brevo (se non gia inviata).
+   In alternativa: "Invia email" per invio manuale senza download.
 
 6. Admin → /admin/sistema (separato dal flusso operativo)
    Carica il template Excel.
@@ -313,7 +321,9 @@ Suggerimento assegnazione in `CalendarioGlobale`:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-RESEND_API_KEY=          # da aggiungere quando si implementa l'email
+BREVO_API_KEY=
+BREVO_SENDER_EMAIL=      # indirizzo verificato su Brevo
+BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 ```
 
 ---
@@ -335,6 +345,7 @@ RESEND_API_KEY=          # da aggiungere quando si implementa l'email
 | `008_equity_scores_fix_role.sql` | Fix ruolo 'user' → 'dipendente' nella funzione SQL |
 | `009_fix_users_role_constraint.sql` | Fix constraint users.ruolo (admin\|manager\|dipendente) |
 | `010_simplify_equity_scores.sql` | Semplifica score: solo festivi_attivi×2, rimuove fest_comandate |
+| `011_areas.sql` | Tabella `areas` con scheduling_mode e workers_per_day; riga "Default" inserita automaticamente |
 
 3. Configurare le variabili d'ambiente (`.env.local` in sviluppo, pannello Vercel in produzione)
 4. Creare il primo admin: Authentication → Users → Add user, poi inserire riga in `users` con `ruolo = 'admin'`
@@ -353,19 +364,51 @@ RESEND_API_KEY=          # da aggiungere quando si implementa l'email
 
 ## TODO
 
-### Alta priorita
-- Email notifica mese confermato via Resend: `email_settings` gia pronta, colonne `email_inviata`/`email_inviata_at` gia su `month_status`, aggiungere `RESEND_API_KEY`
-
 ### Media priorita
-- Multi-area: tabella `areas` (nome, scheduling_mode, template_path, manager_id) + `area_id` su users/shifts/availability/month_status. Scheduling modes: `weekend_full` (attuale), `single_day`, `sun_next_sat`
+- **Multi-area**: tabella `areas` gia creata (migration 011) con `scheduling_mode` e `workers_per_day`; API `/api/config` per leggere/aggiornare la configurazione. Ancora da implementare: `area_id` su users/shifts/availability/month_status, UI multi-area, selettore area in navbar.
 
 ### Bassa priorita
-- Festivita anni futuri (attualmente solo 2026)
 - Rotazione festivi comandati (chi lavora Natale non lo riprende per ~10 anni)
 
 ---
 
 ## Changelog
+
+### [2026-03-24] — DOCS AGENT — Documentazione aggiornata
+
+**File modificati:** `README.md`, `CLAUDE.md`, `docs/TODO.md`, `docs/ARCHITECTURE.md`
+
+**Sommario:** Allineamento di tutta la documentazione alle feature completate dopo v1.2.0 (email Brevo, mesi confirmed, sblocco admin, festività anni futuri, migration 011 areas, API config).
+
+---
+
+### [2026-03-23] — CODE AGENT + UI AGENT — Email turni Brevo + Mesi confirmed
+
+**Versione:** 1.2.0 → 1.3.0
+
+**File modificati:**
+- `lib/email/sendTurniEmail.ts` (nuovo)
+- `lib/excel/generateTurniExcel.ts` (estratto da export/route.ts)
+- `app/api/export/route.ts`
+- `app/api/send-email/route.ts` (nuovo)
+- `components/admin/export/ExportForm.tsx`
+- `components/admin/disponibilita/CalendarioGlobale.tsx`
+- `app/api/month/route.ts`
+
+**Sommario:** Implementazione email turni via Brevo con allegato Excel; mesi `confirmed` resi immutabili per manager (solo admin puo sbloccare); admin aggiunto alla navbar Disponibilita.
+
+**Dettagli:**
+1. `sendTurniEmail.ts` — Invia email Brevo con tabella turni HTML + allegato Excel base64. `to` = mittente, `bcc` = dipendenti attivi + email_settings. Env vars: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`.
+2. `generateTurniExcel.ts` — Logica generazione XLSX estratta da `export/route.ts` e condivisa con `send-email/route.ts`.
+3. `export/route.ts` — Auto-invio email se `!email_inviata` dopo il download; setta `confirmed` + `email_inviata=true`.
+4. `send-email/route.ts` — Invio manuale da ExportForm; genera Excel + invia email + setta `confirmed` + `email_inviata=true`.
+5. `ExportForm.tsx` — Bottone "Invia email" + stato "Email inviata ✓".
+6. `CalendarioGlobale.tsx` — Prop `isConfirmed` separata da `locked`; mese `confirmed` = nessun unlock per manager; admin vede bottone "Sblocca" con dialog di conferma.
+7. `month/route.ts` — Unlock resetta `email_inviata=false`, `email_inviata_at=null`.
+
+**Status:** Completato
+
+---
 
 ### [2026-03-22] — UI AGENT — Fix: Logout admin su mobile + Performance: loading skeleton + SSR StoricoTurni
 

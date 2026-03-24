@@ -6,14 +6,7 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Alta priorita
 
-### Email notifica mese confermato (Resend)
-- Integrare **Resend** (resend.com) per invio email automatico alla conferma mese
-- La tabella `email_settings` e gia pronta su Supabase
-- Le colonne `email_inviata` e `email_inviata_at` sono gia su `month_status`
-- Logica: invio a tutti i dipendenti attivi + indirizzi extra in `email_settings`
-- Variabile d'ambiente da aggiungere: `RESEND_API_KEY=re_...`
-- Da installare: `npm install resend`
-- Dopo invio: impostare `email_inviata = true` e `email_inviata_at = now()`
+*(Nessun item — tutto completato)*
 
 ---
 
@@ -21,16 +14,23 @@ Funzionalita da implementare in ordine di priorita.
 
 ### Multi-area con scheduling modes diversi
 - **Obiettivo**: supportare piu aree aziendali, ognuna con la propria logica di turnazione e i propri dipendenti
+- **Stato attuale**: tabella `areas` creata (migration 011), API `/api/config` per leggere/aggiornare `scheduling_mode` e `workers_per_day`; riga "Default" inserita automaticamente
 - **Scheduling modes previsti**:
   | Mode | Comportamento |
   |------|--------------|
   | `weekend_full` | Sab+Dom sempre insieme (comportamento attuale) |
   | `single_day` | Sab e Dom indipendenti, assegnabili a persone diverse |
   | `sun_next_sat` | Chi lavora Dom lavora anche il Sab della settimana successiva |
-- **Schema DB**: nuova tabella `areas` (id, name, scheduling_mode, template_path, manager_id); aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
-- **Frontend**: selettore area in navbar, `CalendarioGlobale` con logica dinamica per mode
+- **Ancora da fare**:
+  1. Aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
+  2. Seed: assegnare tutti gli utenti esistenti all'area "Default"
+  3. API: filtro `area_id` su shifts, availability, export, month_status
+  4. UI admin: pagina Sistema con gestione aree (crea area, assegna manager, assegna dipendenti, carica template)
+  5. NavbarAdmin manager: selettore area se manager ha piu aree
+  6. CalendarioGlobale: logica dinamica per `scheduling_mode`
+  7. Export: usa `areas.template_path` invece di template globale
+  8. Statistiche: per area
 - **Da chiarire prima dell'implementazione**: per `sun_next_sat`, cosa succede se il Sab successivo e gia occupato?
-- **Calendario per manager**: ogni manager deve vedere e poter modificare solo il calendario della propria area (`area_id` su `users`); admin vede tutti i calendari; `month_status` deve avere `area_id` per blocchi separati per area
 
 ### Import storico — 2° reperibile (backup) e selezione per area
 - Il foglio Excel ha gia la colonna E **"Nominativo 2° reperibile"** (backup), attualmente non usata dalla logica turni ordinaria
@@ -44,11 +44,6 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Bassa priorita
 
-### Festivita anni futuri
-- Attualmente le festivita sono presenti solo fino al 2026
-- Import automatico via Nager.Date per anni successivi (Vercel Cron Job il 1 gennaio)
-- Bottone manuale "Aggiorna festivita {anno}" nella pagina Sistema
-
 ### Rotazione festivi comandati (es. Natale ogni 10 anni)
 - **Obiettivo**: chi lavora un festivo comandato non dovrebbe riprenderlo per ~10 anni (con 10 persone in rotazione)
 - **Situazione attuale**: lo score (festivo×3 pt totali) distribuisce i festivi attivi su base annuale, ma non garantisce una rotazione decennale
@@ -59,6 +54,10 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Completato
 
+- **[2026-03-24] Festività anni futuri** — Import manuale via bottone "Aggiorna festivita {anno}" in pagina Sistema. Usa API Nager.Date (`/api/v3/PublicHolidays/{year}/IT`) per qualsiasi anno tra 2024 e 2030. Upsert sicuro: se l'anno e gia presente, non duplica ma restituisce i record esistenti.
+- **[2026-03-23] Email notifica mese confermato** — Implementato con **Brevo** (brevo.com, free tier 300/giorno). `lib/email/sendTurniEmail.ts`: HTML + text + allegato Excel base64, BCC per tutti i destinatari. Auto-invio su export GET se `!email_inviata`; invio manuale via POST `/api/send-email`. Env vars: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`.
+- **[2026-03-23] Mesi confirmed immutabili** — Manager non puo sbloccare mesi `confirmed`; solo admin puo con dialog di conferma. CalendarioGlobale: `isConfirmed` prop separata da `locked`.
+- **[2026-03-23] Admin aggiunto alla navbar Disponibilita** — Admin accede al CalendarioGlobale e puo sbloccare mesi confirmed.
 - **[v1.2.0] Fix logout admin mobile** — Il pulsante "Altro" nella bottom bar mobile di `NavbarAdmin` e ora sempre visibile, garantendo accesso al logout anche per il ruolo admin che non ha voci nel menu overflow.
 - **[v1.2.0] Loading skeleton su tutte le pagine SSR** — Aggiunto `loading.tsx` per tutte le route admin e user. Componente condiviso `AdminPageSkeleton` con `rows` e `grid` props. Elimina la pagina bianca durante il caricamento SSR.
 - **[v1.2.0] StoricoTurni — conversione a server component** — `StoricoTurni.tsx` ora riceve `turni: ShiftRow[]` come prop da `app/user/page.tsx`; la query storico (ultimi 12 mesi) e aggiunta nel `Promise.all` della pagina; join con `month_status` in memoria tramite `statusMap`. Eliminato doppio round-trip client→server.

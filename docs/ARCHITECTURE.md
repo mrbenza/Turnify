@@ -150,6 +150,8 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 | `/api/templates` | POST | admin | Upload .xlsx a Storage bucket `templates` |
 | `/api/import-shifts` | POST | admin | Importa storico da Excel. Mappa cognomi → user_id. Setta confirmed/locked |
 | `/api/import-shifts/resolve` | POST | admin | Risolve turni pending (utente non trovato al momento dell'import) |
+| `/api/config` | GET | admin/manager | Legge `scheduling_mode` e `workers_per_day` dalla tabella `areas` (riga Default) |
+| `/api/config` | PATCH | admin/manager | Aggiorna `scheduling_mode` e/o `workers_per_day` |
 
 ---
 
@@ -420,4 +422,6 @@ turnify/
     ├── seed_demo.sql
     ├── reset.sql
     └── migrations/
+        ├── 001–010_*.sql   (schema iniziale, RLS, ruoli, score equita)
+        └── 011_areas.sql   (tabella areas: scheduling_mode, workers_per_day, template_path, manager_id; riga Default)
 ```
