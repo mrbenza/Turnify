@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
 
   const { data: profile } = await supabase
-    .from('users').select('ruolo').eq('id', user.id).single()
+    .from('users').select('ruolo, area_id').eq('id', user.id).single()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     .select('status')
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', profile.area_id)
     .single()
 
   if (!monthStatus || (monthStatus.status !== 'locked' && monthStatus.status !== 'confirmed')) {
@@ -47,9 +48,9 @@ export async function POST(request: Request) {
     { data: extraEmails },
     excelResult,
   ] = await Promise.all([
-    serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
+    serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', profile.area_id),
     serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
-    generateTurniExcel(month, year, serviceClient),
+    generateTurniExcel(month, year, serviceClient, undefined, profile.area_id),
   ])
 
   const recipients = [
@@ -80,6 +81,7 @@ export async function POST(request: Request) {
     })
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', profile.area_id)
 
   return NextResponse.json({ success: true, recipients: recipients.length })
 }

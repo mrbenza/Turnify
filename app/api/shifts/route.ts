@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   // Admin check
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const { data: areaConfig } = await supabase
     .from('areas')
     .select('scheduling_mode, workers_per_day')
-    .limit(1)
+    .eq('id', profile.area_id)
     .single()
   const schedulingMode = areaConfig?.scheduling_mode ?? 'weekend_full'
   const workersPerDay = areaConfig?.workers_per_day ?? 2
@@ -75,6 +75,7 @@ export async function POST(request: Request) {
     .from('shifts')
     .select('id')
     .eq('date', date)
+    .eq('area_id', profile.area_id)
 
   const existingCount = existingForDay?.length ?? 0
   if (existingCount >= workersPerDay) {
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
       .from('shifts')
       .select('date')
       .eq('user_id', user_id)
+      .eq('area_id', profile.area_id)
       .in('shift_type', ['weekend', 'festivo'])
       .gte('date', monthStart)
       .lte('date', monthEnd)
@@ -146,6 +148,7 @@ export async function POST(request: Request) {
     .select('status')
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', profile.area_id)
     .maybeSingle()
 
   if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
@@ -172,6 +175,7 @@ export async function POST(request: Request) {
       shift_type: shiftType,
       reperibile_order,
       created_by: user.id,
+      area_id: profile.area_id,
     })
     .select()
     .single()

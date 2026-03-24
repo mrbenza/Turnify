@@ -9,7 +9,7 @@ async function getAuthProfile() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { user: null, profile: null, supabase }
   const { data: profile } = await supabase
-    .from('users').select('ruolo').eq('id', user.id).single()
+    .from('users').select('ruolo, area_id').eq('id', user.id).single()
   return { user, profile, supabase }
 }
 
@@ -24,7 +24,7 @@ export async function GET() {
   const { data, error } = await serviceClient
     .from('areas')
     .select('scheduling_mode, workers_per_day')
-    .limit(1)
+    .eq('id', profile?.area_id)
     .single()
 
   if (error || !data) {
@@ -60,9 +60,9 @@ export async function PATCH(request: Request) {
 
   const serviceClient = createServiceClient()
 
-  // Leggi ID della riga default
+  // Leggi ID della riga area dell'utente
   const { data: existing } = await serviceClient
-    .from('areas').select('id').limit(1).single()
+    .from('areas').select('id').eq('id', profile?.area_id).single()
 
   if (!existing) {
     return NextResponse.json({ error: 'Configurazione non trovata' }, { status: 404 })

@@ -59,6 +59,12 @@ export async function POST(request: Request) {
   // --- 4. Crea auth user con service role (la service key non lascia mai il server) ---
   const serviceClient = createServiceClient()
 
+  const { data: defaultArea } = await serviceClient
+    .from('areas')
+    .select('id')
+    .eq('nome', 'Default')
+    .single()
+
   const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
     email,
     password: '1234',
@@ -79,7 +85,7 @@ export async function POST(request: Request) {
   // --- 5. Inserisce il profilo in public.users ---
   const { data: newUser, error: dbError } = await serviceClient
     .from('users')
-    .insert({ id: authUserId, nome, email, ruolo, attivo: true })
+    .insert({ id: authUserId, nome, email, ruolo, attivo: true, area_id: defaultArea?.id })
     .select()
     .single()
 

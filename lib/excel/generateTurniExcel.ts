@@ -80,14 +80,22 @@ export async function generateTurniExcel(
   year: number,
   serviceClient: SupabaseClient,
   templateName?: string | null,
+  areaId?: string,
 ): Promise<GenerateResult> {
   const daysInMonth = new Date(year, month, 0).getDate()
   const from = `${year}-${String(month).padStart(2, '0')}-01`
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
+  let shiftsQuery = serviceClient.from('shifts').select('date, user_id, reperibile_order').gte('date', from).lte('date', to)
+  if (areaId) shiftsQuery = shiftsQuery.eq('area_id', areaId)
+  shiftsQuery = shiftsQuery.order('date').order('reperibile_order')
+
+  let usersQuery = serviceClient.from('users').select('id, nome')
+  if (areaId) usersQuery = usersQuery.eq('area_id', areaId)
+
   const [{ data: shifts }, { data: users }] = await Promise.all([
-    serviceClient.from('shifts').select('date, user_id, reperibile_order').gte('date', from).lte('date', to).order('date').order('reperibile_order'),
-    serviceClient.from('users').select('id, nome'),
+    shiftsQuery,
+    usersQuery,
   ])
 
   const userMap = new Map<string, string>(

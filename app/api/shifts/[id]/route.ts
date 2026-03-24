@@ -16,7 +16,7 @@ export async function DELETE(
   // Admin check
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
@@ -47,6 +47,7 @@ export async function DELETE(
       .select('status')
       .eq('month', shiftMonth)
       .eq('year', shiftYear)
+      .eq('area_id', profile.area_id)
       .maybeSingle()
 
     if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
