@@ -88,15 +88,33 @@ create trigger availability_updated_at
 -- TABELLA: shifts
 -- ============================================================
 create table if not exists public.shifts (
-  id         uuid        primary key default uuid_generate_v4(),
-  date       date        not null,
-  user_id    uuid        not null references public.users(id) on delete cascade,
-  user_nome  text,
-  shift_type text        not null
-                         check (shift_type in ('weekend', 'festivo', 'reperibilita')),
-  created_by uuid        not null references public.users(id),
-  created_at timestamptz not null default now(),
+  id               uuid        primary key default uuid_generate_v4(),
+  date             date        not null,
+  user_id          uuid        not null references public.users(id) on delete cascade,
+  user_nome        text,
+  shift_type       text        not null
+                               check (shift_type in ('weekend', 'festivo', 'reperibilita')),
+  reperibile_order smallint    not null default 1
+                               check (reperibile_order in (1, 2)),
+  created_by       uuid        not null references public.users(id),
+  created_at       timestamptz not null default now(),
   unique (date, user_id)
+);
+
+-- ============================================================
+-- TABELLA: areas (migration 011)
+-- ============================================================
+create table if not exists public.areas (
+  id               uuid        primary key default uuid_generate_v4(),
+  nome             text        not null unique,
+  scheduling_mode  text        not null default 'weekend_full'
+                               check (scheduling_mode in ('weekend_full', 'single_day', 'sun_next_sat')),
+  workers_per_day  smallint    not null default 1
+                               check (workers_per_day in (1, 2)),
+  template_path    text,
+  manager_id       uuid        references public.users(id),
+  description      text,
+  created_at       timestamptz not null default now()
 );
 
 -- ============================================================

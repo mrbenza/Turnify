@@ -58,6 +58,7 @@ Turni assegnati dal manager. Separata da `availability` per design.
 | date | date | giorno del turno |
 | user_id | uuid | FK → users.id |
 | shift_type | text | `weekend` \| `festivo` \| `reperibilita` |
+| reperibile_order | smallint | `1` = 1° reperibile (colonna D Excel) \| `2` = 2° reperibile (colonna E Excel); default 1 |
 | created_by | uuid | FK → users.id (manager che ha assegnato) |
 | created_at | timestamptz | default now() |
 
@@ -114,6 +115,29 @@ Controlla lo stato e il lock di ogni mese.
 
 **Constraint:** unique su `(month, year)`
 **RLS:** admin e manager possono scrivere; tutti possono leggere.
+
+---
+
+## Tabella: `areas`
+Aree aziendali con logica di turnazione propria (migration 011). Multi-area non ancora implementato nel frontend.
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| nome | text | unique, es. "Default" |
+| scheduling_mode | text | `weekend_full` \| `single_day` \| `sun_next_sat` |
+| workers_per_day | smallint | `1` o `2` — numero di reperibili per giorno |
+| template_path | text | nullable — nome file template Excel nello storage |
+| manager_id | uuid | FK → users.id — manager responsabile dell'area |
+| description | text | nullable |
+| created_at | timestamptz | default now() |
+
+**scheduling_mode:**
+- `weekend_full` — Sab e Dom assegnati con conferma (propone il giorno abbinato)
+- `single_day` — Sab e Dom indipendenti, nessun pairing
+- `sun_next_sat` — Dom assegnata propone il Sab+7 della settimana successiva
+
+**Nota:** riga "Default" inserita automaticamente alla prima configurazione tramite API `/api/config`.
 
 ---
 
@@ -199,3 +223,5 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-03-20 | Fix ruolo 'user' → 'dipendente' nella funzione SQL | 008_equity_scores_fix_role.sql |
 | 2026-03-20 | Fix constraint users.ruolo (admin\|manager\|dipendente) | 009_fix_users_role_constraint.sql |
 | 2026-03-22 | Semplifica score: rimuove fest_comandate, solo festivi_attivi×2 | 010_simplify_equity_scores.sql |
+| 2026-03-24 | Tabella `areas`: scheduling_mode, workers_per_day, template_path, manager_id | 011_areas.sql |
+| 2026-03-24 | `shifts.reperibile_order`: 1=colonna D (1° rep.), 2=colonna E (2° rep.) | 012_reperibile_order.sql |
