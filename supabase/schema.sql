@@ -286,7 +286,11 @@ create policy "email_settings: admin o manager elimina" on public.email_settings
 -- normale=1pt, festivo attivo (mandatory=true)=3pt
 -- p_month=0 → tutti i tempi
 -- ============================================================
-create or replace function public.get_equity_scores(p_month integer, p_year integer)
+create or replace function public.get_equity_scores(
+  p_month   integer,
+  p_year    integer,
+  p_area_id uuid default null
+)
 returns table (
   user_id      uuid,
   nome         text,
@@ -313,8 +317,11 @@ as $$
         and extract(year  from s.date)::integer = p_year
       )
     )
+    and (p_area_id is null or s.area_id = p_area_id)
   left join public.holidays h on s.date = h.date
-  where u.ruolo = 'dipendente' and u.attivo = true
+  where u.ruolo = 'dipendente'
+    and u.attivo = true
+    and (p_area_id is null or u.area_id = p_area_id)
   group by u.id, u.nome
   order by score asc;
 $$;

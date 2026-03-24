@@ -197,7 +197,7 @@ export type Database = {
     }
     Functions: {
       get_equity_scores: {
-        Args: { p_month: number; p_year: number }
+        Args: { p_month: number; p_year: number; p_area_id?: string }
         Returns: EquityScore[]
       }
       is_admin: {

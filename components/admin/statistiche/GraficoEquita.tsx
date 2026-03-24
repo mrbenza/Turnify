@@ -21,9 +21,10 @@ interface GraficoEquitaProps {
   initialScores: EquityScore[]
   initialMonth: number
   initialYear: number
+  areaId?: string
 }
 
-export default function GraficoEquita({ initialScores, initialMonth, initialYear }: GraficoEquitaProps) {
+export default function GraficoEquita({ initialScores, initialMonth, initialYear, areaId }: GraficoEquitaProps) {
   const now = new Date()
   const [scores, setScores] = useState<EquityScore[]>(initialScores)
   const [viewMode, setViewMode] = useState<'month' | 'all'>('month')
@@ -40,6 +41,7 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
       const { data, error } = await supabase.rpc('get_equity_scores', {
         p_month: mode === 'month' ? month + 1 : 0,
         p_year: year,
+        ...(areaId ? { p_area_id: areaId } : {}),
       })
       if (error) throw error
       setScores(data ?? [])
