@@ -175,8 +175,9 @@ export default function CalendarioDisponibilita({
             if (!ex) {
               updated = [...updated, {
                 id: `temp-${dt}`, user_id: userId, date: dt,
-                available: newAvailable, status: 'pending',
+                available: newAvailable, status: 'pending' as const,
                 created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                area_id: '',
               }]
             } else {
               updated = updated.map((a) => a.date === dt ? { ...a, available: newAvailable } : a)

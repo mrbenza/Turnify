@@ -55,12 +55,16 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
   if (profile?.ruolo !== 'admin') {
     return NextResponse.json({ error: 'Non autorizzato — solo admin' }, { status: 403 })
+  }
+
+  if (!profile?.area_id) {
+    return NextResponse.json({ error: 'Profilo admin non trovato.' }, { status: 403 })
   }
 
   // Leggi FormData
@@ -162,6 +166,7 @@ export async function POST(request: NextRequest) {
     shift_type: 'reperibilita' | 'weekend' | 'festivo'
     reperibile_order: 1 | 2
     created_by: string
+    area_id: string
   }[] = []
   const unmatched: string[] = []
   const ambiguous: string[] = []
@@ -208,6 +213,7 @@ export async function POST(request: NextRequest) {
         shift_type: shiftType,
         reperibile_order: order,
         created_by: user.id,
+        area_id: profile.area_id,
       })
     }
   }
@@ -247,6 +253,7 @@ export async function POST(request: NextRequest) {
     .select('id')
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', profile.area_id)
     .single()
 
   if (existingStatus) {
@@ -255,11 +262,12 @@ export async function POST(request: NextRequest) {
       .update(lockPayload)
       .eq('month', month)
       .eq('year', year)
+      .eq('area_id', profile.area_id)
     if (updateError) console.error('Errore update month_status:', updateError)
   } else {
     const { error: insertError } = await serviceClient
       .from('month_status')
-      .insert({ month, year, ...lockPayload })
+      .insert({ month, year, area_id: profile.area_id, ...lockPayload })
     if (insertError) console.error('Errore insert month_status:', insertError)
   }
 

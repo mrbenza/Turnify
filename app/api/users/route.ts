@@ -65,6 +65,10 @@ export async function POST(request: Request) {
     .eq('nome', 'Default')
     .single()
 
+  if (!defaultArea?.id) {
+    return NextResponse.json({ error: 'Area Default non trovata.' }, { status: 500 })
+  }
+
   const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
     email,
     password: '1234',
@@ -85,7 +89,7 @@ export async function POST(request: Request) {
   // --- 5. Inserisce il profilo in public.users ---
   const { data: newUser, error: dbError } = await serviceClient
     .from('users')
-    .insert({ id: authUserId, nome, email, ruolo, attivo: true, area_id: defaultArea?.id })
+    .insert({ id: authUserId, nome, email, ruolo, attivo: true, area_id: defaultArea.id })
     .select()
     .single()
 
