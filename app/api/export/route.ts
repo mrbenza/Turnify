@@ -15,8 +15,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
-  const month = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1))
-  const year  = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()))
+  const month   = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1))
+  const year    = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()))
+  const noEmail = searchParams.get('noEmail') === 'true'
 
   if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100)
     return NextResponse.json({ error: 'Parametri non validi' }, { status: 400 })
@@ -73,8 +74,8 @@ export async function GET(request: NextRequest) {
     console.error('Errore aggiornamento stato post-export (non bloccante):', err)
   }
 
-  // Invia email con allegato se non ancora inviata
-  if (!monthStatus?.email_inviata) {
+  // Invia email con allegato se non ancora inviata e non esplicitamente escluso
+  if (!monthStatus?.email_inviata && !noEmail) {
     try {
       const [{ data: employees }, { data: extraEmails }] = await Promise.all([
         serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),

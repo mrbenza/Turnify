@@ -130,7 +130,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     setErrorMsg(null)
     try {
       const templateParam = selectedTemplate ? `&template=${encodeURIComponent(selectedTemplate)}` : ''
-      const res = await fetch(`/api/export?month=${filterMonth + 1}&year=${filterYear}${templateParam}`)
+      const res = await fetch(`/api/export?month=${filterMonth + 1}&year=${filterYear}${templateParam}&noEmail=true`)
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? `Errore HTTP ${res.status}`)
@@ -191,23 +191,33 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
           <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">{stepNum.period}</span>
           Seleziona il periodo
         </h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={filterMonth}
-            onChange={(e) => handleFilterChange(Number(e.target.value), filterYear)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            aria-label="Mese"
-          >
-            {MONTH_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
-          </select>
-          <select
-            value={filterYear}
-            onChange={(e) => handleFilterChange(filterMonth, Number(e.target.value))}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            aria-label="Anno"
-          >
-            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <select
+              value={filterMonth}
+              onChange={(e) => handleFilterChange(Number(e.target.value), filterYear)}
+              className="appearance-none text-sm border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+              aria-label="Mese"
+            >
+              {MONTH_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </span>
+          </div>
+          <div className="relative">
+            <select
+              value={filterYear}
+              onChange={(e) => handleFilterChange(filterMonth, Number(e.target.value))}
+              className="appearance-none text-sm border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+              aria-label="Anno"
+            >
+              {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </span>
+          </div>
         </div>
       </section>
 
@@ -378,7 +388,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
               <p className="text-xs text-gray-500 mt-0.5">
                 Genera il file Excel dal template aziendale — formattazione, logo e struttura originali preservati.
               </p>
-              <div className="mt-3 flex flex-wrap gap-3">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={handleExport}
                   disabled={exporting}
@@ -392,6 +402,8 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
                   )}
                   {exporting ? 'Generazione in corso...' : 'Genera Excel'}
                 </button>
+
+                <span className="hidden sm:block w-px h-8 bg-gray-200" aria-hidden="true" />
 
                 {emailInviata ? (
                   <span className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-green-700">
