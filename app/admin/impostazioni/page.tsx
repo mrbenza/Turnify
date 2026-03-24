@@ -22,18 +22,20 @@ export default async function ImpostazioniPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo, nome')
+    .select('ruolo, nome, area_id')
     .eq('id', authUser.id)
-    .single<{ ruolo: string; nome: string }>()
+    .single<{ ruolo: string; nome: string; area_id: string }>()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
   const serviceClient = createServiceClient()
 
+  const areaId = profile?.area_id ?? ''
+
   /* ---- Parallel fetches ---- */
   const [emailSettingsRes, areaConfigRes] = await Promise.all([
     supabase.from('email_settings').select('*').order('created_at', { ascending: true }),
-    serviceClient.from('areas').select('scheduling_mode, workers_per_day').limit(1).single(),
+    serviceClient.from('areas').select('scheduling_mode, workers_per_day, nome').eq('id', areaId).single(),
   ])
 
   const emailSettings = (emailSettingsRes.data ?? []) as EmailSetting[]
@@ -44,7 +46,7 @@ export default async function ImpostazioniPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
+      <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} areaNome={areaConfigRes.data?.nome ?? undefined} />
 
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
