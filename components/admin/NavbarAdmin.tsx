@@ -53,6 +53,16 @@ const ADMIN_NAV_ITEMS = [
     ),
   },
   {
+    href: '/admin/equita',
+    label: 'Equità',
+    shortLabel: 'Equità',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h18M3 18h18" />
+      </svg>
+    ),
+  },
+  {
     href: '/admin/sistema',
     label: 'Sistema',
     shortLabel: 'Sistema',

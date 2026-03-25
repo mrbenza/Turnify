@@ -179,16 +179,22 @@ function NuovaAreaModal({ onClose, onCreated }: NuovaAreaModalProps) {
 
 interface ModificaAreaModalProps {
   area: Area
+  areas: Area[]
   managers: User[]
   onClose: () => void
   onUpdated: (area: Area) => void
 }
 
-function ModificaAreaModal({ area, managers, onClose, onUpdated }: ModificaAreaModalProps) {
+function ModificaAreaModal({ area, areas, managers, onClose, onUpdated }: ModificaAreaModalProps) {
   const [nome, setNome] = useState(area.nome)
   const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>(area.scheduling_mode)
   const [workersPerDay, setWorkersPerDay] = useState<1 | 2>(area.workers_per_day)
   const [managerId, setManagerId] = useState<string>(area.manager_id ?? '')
+
+  // Area attuale del manager selezionato (se diversa dall'area corrente)
+  const selectedManagerCurrentArea = managerId
+    ? areas.find((a) => a.manager_id === managerId && a.id !== area.id)
+    : null
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -300,10 +306,28 @@ function ModificaAreaModal({ area, managers, onClose, onUpdated }: ModificaAreaM
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="">Nessun manager</option>
-              {managers.map((m) => (
-                <option key={m.id} value={m.id}>{m.nome}</option>
-              ))}
+              {managers.map((m) => {
+                const currentArea = areas.find((a) => a.manager_id === m.id && a.id !== area.id)
+                return (
+                  <option key={m.id} value={m.id}>
+                    {currentArea ? `${m.nome} — ${currentArea.nome}` : m.nome}
+                  </option>
+                )
+              })}
             </select>
+
+            {selectedManagerCurrentArea && (
+              <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <p className="text-xs text-amber-700">
+                  <strong>{managers.find((m) => m.id === managerId)?.nome}</strong> è attualmente manager di{' '}
+                  <strong>{selectedManagerCurrentArea.nome}</strong>. Salvando, verrà spostato in questa area e{' '}
+                  <strong>{selectedManagerCurrentArea.nome}</strong> rimarrà senza manager.
+                </p>
+              </div>
+            )}
           </div>
 
           {error && (
@@ -816,6 +840,7 @@ export default function GestioneAree({ areas: initialAreas, users: initialUsers 
       {editingArea && (
         <ModificaAreaModal
           area={editingArea}
+          areas={areas}
           managers={managers}
           onClose={() => setEditingArea(null)}
           onUpdated={handleUpdated}

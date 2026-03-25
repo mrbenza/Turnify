@@ -59,8 +59,12 @@ export async function PATCH(
     patch.workers_per_day = body.workers_per_day
   }
 
-  if (body.manager_id !== undefined) {
-    patch.manager_id = body.manager_id === null ? null : String(body.manager_id)
+  const newManagerId = body.manager_id !== undefined
+    ? (body.manager_id === null ? null : String(body.manager_id))
+    : undefined
+
+  if (newManagerId !== undefined) {
+    patch.manager_id = newManagerId
   }
 
   if (Object.keys(patch).length === 0) {
@@ -68,6 +72,34 @@ export async function PATCH(
   }
 
   const serviceClient = createServiceClient()
+
+  // Se stiamo cambiando manager, gestiamo il trasferimento in cascata
+  if (newManagerId !== undefined) {
+    // Leggi il manager attuale di quest'area
+    const { data: currentArea } = await serviceClient
+      .from('areas')
+      .select('manager_id')
+      .eq('id', id)
+      .single()
+
+    const oldManagerId = currentArea?.manager_id ?? null
+
+    if (newManagerId !== null && newManagerId !== oldManagerId) {
+      // Togli il nuovo manager dall'area in cui è eventualmente manager ora
+      await serviceClient
+        .from('areas')
+        .update({ manager_id: null })
+        .eq('manager_id', newManagerId)
+        .neq('id', id)
+
+      // Sposta il nuovo manager in quest'area
+      await serviceClient
+        .from('users')
+        .update({ area_id: id })
+        .eq('id', newManagerId)
+    }
+  }
+
   const { data, error } = await serviceClient
     .from('areas')
     .update(patch)
