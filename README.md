@@ -95,7 +95,8 @@ turnify/
 │       ├── dashboard/
 │       │   └── TurniCollapsibili.tsx ← sezione turni collassabile nella dashboard manager
 │       ├── disponibilita/
-│       │   └── CalendarioGlobale.tsx
+│       │   ├── CalendarioGlobale.tsx
+│       │   └── AreaSelector.tsx             ← select client-side per navigazione tra aree
 │       ├── turni/
 │       │   └── ListaTurni.tsx       ← weekend Sab+Dom raggruppati in una riga
 │       ├── statistiche/
@@ -280,6 +281,7 @@ Status:
 | email | text | unique |
 | descrizione | text | nullable |
 | attivo | boolean | default true |
+| area_id | uuid | FK → areas.id — ownership per area; ogni manager gestisce solo le proprie |
 
 ---
 
@@ -346,6 +348,8 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 | `009_fix_users_role_constraint.sql` | Fix constraint users.ruolo (admin\|manager\|dipendente) |
 | `010_simplify_equity_scores.sql` | Semplifica score: solo festivi_attivi×2, rimuove fest_comandate |
 | `011_areas.sql` | Tabella `areas` con scheduling_mode e workers_per_day; riga "Default" inserita automaticamente |
+| `012_reperibile_order.sql` | Colonna `reperibile_order` su shifts (1 = col D, 2 = col E) |
+| `013_multi_area.sql` | `area_id` su users/shifts/availability/month_status; unique (month, year, area_id) |
 
 3. Configurare le variabili d'ambiente (`.env.local` in sviluppo, pannello Vercel in produzione)
 4. Creare il primo admin: Authentication → Users → Add user, poi inserire riga in `users` con `ruolo = 'admin'`
@@ -365,14 +369,63 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 ## TODO
 
 ### Media priorita
-- **Multi-area**: tabella `areas` gia creata (migration 011) con `scheduling_mode` e `workers_per_day`; API `/api/config` per leggere/aggiornare la configurazione. Ancora da implementare: `area_id` su users/shifts/availability/month_status, UI multi-area, selettore area in navbar.
-
-### Bassa priorita
-- Rotazione festivi comandati (chi lavora Natale non lo riprende per ~10 anni)
+- **Multi-area** (in corso): `area_id` su tutte le tabelle principali (migration 013). Email settings isolate per area. Selettore area su `/admin/disponibilita`. 14 aree demo con dati realistici. Gestione aree UI con trasferimento manager in cascata. Pagina `/admin/equita` (panoramica cross-area). Export area-aware (nome area in A1, manager in B51). Ancora da fare: selettore area in navbar manager, scheduling_mode dinamico per area, import storico area-aware.
 
 ---
 
 ## Changelog
+
+### [2026-03-25] — CODE AGENT + UI AGENT + DOCS AGENT — Multi-area: gestione aree UI, equità cross-area, export area-aware, fix seed
+
+**File modificati:**
+- `components/admin/aree/GestioneAree.tsx`
+- `app/api/areas/[id]/route.ts` (nuovo)
+- `app/api/equity-overview/route.ts` (nuovo)
+- `app/admin/equita/page.tsx` (nuovo)
+- `components/admin/NavbarAdmin.tsx`
+- `lib/excel/generateTurniExcel.ts`
+- `supabase/seed_demo.sql`
+
+**Sommario:** Gestione aree con UX trasferimento manager; nuova pagina equità cross-area solo admin; export Excel area-aware (A1/B51 da DB); fix seed Area2-Liguria e nomi duplicati.
+
+**Dettagli:**
+1. `GestioneAree.tsx` — Dropdown manager mostra `Nome — NomeArea` se già assegnato altrove, solo `Nome` se libero. Banner ambra inline avvisa l'impatto del cambio prima del salvataggio. Nessun modal annidato.
+2. `areas/[id]/route.ts` — PATCH con trasferimento manager in cascata: azzera `manager_id` dell'area precedente del nuovo manager e aggiorna `users.area_id` del nuovo manager alla nuova area.
+3. `equity-overview/route.ts` — Nuova API GET che chiama `get_equity_scores` in parallelo per tutte le aree e ritorna array `AreaEquitySummary`.
+4. `admin/equita/page.tsx` — Pagina solo admin con panoramica equità cross-area: score medio/min/max/delta per area, badge salute (verde ≤ 2, giallo 3–5, rosso > 5), ranking espandibile, filtro mese/anno.
+5. `NavbarAdmin.tsx` — Voce "Equità" aggiunta per admin tra Aree e Sistema.
+6. `generateTurniExcel.ts` — Scrive nome area in A1 e cognome manager in B51 letti dal DB tramite `areaId` (rimossi i valori hardcoded "AREA 4" e "Marco Lucchesi").
+7. `seed_demo.sql` — Area2-Liguria: aggiunto `manager_id` mancante (Marco Ferrari). Nomi utenti resi unici con suffisso numerico per eliminare duplicati.
+
+**Status:** Completato
+
+---
+
+### [2026-03-25] — CODE AGENT + UI AGENT — Multi-area: bug fix email settings, selettore area disponibilita, UI miglioramenti
+
+**File modificati:**
+- `app/api/email-settings/route.ts`
+- `app/api/email-settings/[id]/route.ts`
+- `app/admin/impostazioni/page.tsx`
+- `app/admin/disponibilita/page.tsx`
+- `components/admin/disponibilita/AreaSelector.tsx` (nuovo)
+- `components/admin/utenti/ListaUtenti.tsx`
+- `app/admin/page.tsx`
+
+**Sommario:** Bug fix ownership email settings per area; selettore area su calendario disponibilita admin; miglioramenti UI filtri e dashboard.
+
+**Dettagli:**
+1. `email-settings/route.ts` POST — include `area_id` dal profilo utente nell'insert, garantendo che ogni manager crei email settings solo per la propria area.
+2. `email-settings/[id]/route.ts` PATCH e DELETE — aggiunto filtro `.eq('area_id', authResult.areaId)` come ownership check: un manager non puo modificare o eliminare email settings di altre aree.
+3. `admin/impostazioni/page.tsx` — query email_settings filtrata per `areaId` per visualizzare solo le proprie.
+4. `admin/disponibilita/page.tsx` — accetta `searchParams`, fetcha tutte le aree se admin, usa `?area=<id>` come parametro per l'area attiva.
+5. `AreaSelector.tsx` — nuovo componente `<select>` client-side che naviga tra aree tramite `router.push` con query string `?area=<id>`.
+6. `ListaUtenti.tsx` — filtro area convertito da pill a `<select>` dropdown per migliore usabilita.
+7. `admin/page.tsx` — aggiunto badge "Aree" (verde) accanto ad Area Manager e ATC nella sezione Utenti della dashboard admin.
+
+**Status:** Completato
+
+---
 
 ### [2026-03-24] — DOCS AGENT — Documentazione aggiornata
 

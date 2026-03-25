@@ -52,7 +52,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | locked_at | timestamptz\|null | |
 | email_inviata | boolean | default false |
 | email_inviata_at | timestamptz\|null | |
-| — | UNIQUE(month, year) | |
+| area_id | uuid FK areas | area di riferimento (migration 013) |
+| — | UNIQUE(month, year, area_id) | ogni area ha il proprio stato mensile |
 
 **Semantica status:**
 - `open` → modificabile, nessun lock
@@ -144,14 +145,16 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 | `/api/holidays/[id]` | DELETE | admin | Elimina (blocca se shifts esistono in quella data) |
 | `/api/export` | GET | admin/manager | Genera XLSX dal template, setta `confirmed`, invia email se !email_inviata |
 | `/api/send-email` | POST | admin/manager | Genera XLSX, invia email con allegato, setta `confirmed` + email_inviata=true |
-| `/api/email-settings` | POST | admin/manager | Crea indirizzo extra notifiche |
-| `/api/email-settings/[id]` | PATCH | admin/manager | Toggle attivo |
-| `/api/email-settings/[id]` | DELETE | admin/manager | Elimina |
+| `/api/email-settings` | POST | admin/manager | Crea indirizzo extra notifiche; include `area_id` nel profilo e nell'insert — isolamento per area |
+| `/api/email-settings/[id]` | PATCH | admin/manager | Toggle attivo; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
+| `/api/email-settings/[id]` | DELETE | admin/manager | Elimina; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/templates` | POST | admin | Upload .xlsx a Storage bucket `templates` |
 | `/api/import-shifts` | POST | admin | Importa storico da Excel. Mappa cognomi → user_id. Setta confirmed/locked |
 | `/api/import-shifts/resolve` | POST | admin | Risolve turni pending (utente non trovato al momento dell'import) |
 | `/api/config` | GET | admin/manager | Legge `scheduling_mode` e `workers_per_day` dalla tabella `areas` (riga Default) |
 | `/api/config` | PATCH | admin/manager | Aggiorna `scheduling_mode` e/o `workers_per_day` |
+| `/api/areas/[id]` | PATCH | admin | Modifica area (nome, scheduling_mode, manager). Trasferimento manager in cascata: azzera `manager_id` dell'area precedente del nuovo manager; aggiorna `users.area_id` del nuovo manager |
+| `/api/equity-overview` | GET | admin | Carica `get_equity_scores` in parallelo per tutte le aree; ritorna array `AreaEquitySummary` (n. dipendenti, score medio/min/max, delta) |
 
 ---
 
@@ -170,13 +173,15 @@ createClient() // browser only, client components
 
 ### `lib/excel/generateTurniExcel.ts`
 ```typescript
-generateTurniExcel(month, year, serviceClient, templateName?)
+generateTurniExcel(month, year, serviceClient, templateName?, areaId?)
   → { buffer: Buffer, fileName: string }
 ```
-- Query shifts + users dal DB
+- Query shifts + users dal DB (filtrati per `areaId` se fornito)
+- Recupera nome area e cognome manager da DB tramite `areaId`
 - Scarica template da Storage bucket `templates`
 - Trova foglio "Dati" via workbook.xml + rels
-- Popola celle: A3 (serial primo giorno), C5 (serial oggi), A10-A40 (date), D10-E40 (cognomi, rossi se weekend)
+- Popola celle: **A1** (nome area), A3 (serial primo giorno), C5 (serial oggi), A10-A40 (date), D10-E40 (cognomi, rossi se weekend), **B51** (cognome manager)
+- A1 e B51 erano hardcoded ("AREA 4", "Marco Lucchesi") — ora letti dal DB tramite `areaId`
 - Rimuove calcChain.xml
 - Restituisce buffer + nome file
 
@@ -211,15 +216,21 @@ Database  // tipo completo Supabase con Tables + Functions
 | Pagina | Ruolo | Query principali | Componenti montati |
 |--------|-------|-----------------|-------------------|
 | `/admin` | admin/manager | users, auth.listUsers, storage templates (admin) oppure month_status, shifts, availability (manager) | Dashboard diversa per ruolo |
-| `/admin/disponibilita` | admin/manager | users attivi, availability, shifts, holidays, month_status mese corrente | `CalendarioGlobale` |
+| `/admin/disponibilita` | admin/manager | users attivi, availability, shifts, holidays, month_status mese corrente; accetta `searchParams.area` per filtrare per area | `CalendarioGlobale`, `AreaSelector` |
 | `/admin/turni` | admin/manager | users, shifts, month_status mese corrente | `ListaTurni` |
 | `/admin/export` | admin/manager | users, storage templates | `ExportForm` |
 | `/admin/utenti` | admin/manager | users (tutti), auth.listUsers (last login) | `ListaUtenti` |
 | `/admin/statistiche` | admin/manager | RPC get_equity_scores mese corrente | `GraficoEquita` |
 | `/admin/impostazioni` | admin/manager | email_settings | `GestioneEmail` |
 | `/admin/sistema` | admin | storage templates, holidays | `GestioneTemplate`, `AggiornamentoCalendario`, `ImportaStorico` |
+| `/admin/equita` | admin | `/api/equity-overview` → `get_equity_scores` per tutte le aree | `PanoramicaEquita` (inline) |
+
+**Nota `/admin/equita`:** accessibile solo ad admin. Mostra per ogni area: n. dipendenti, score medio/min/max, delta. Badge salute: verde (delta ≤ 2), giallo (3–5), rosso (> 5). Ogni riga è espandibile per vedere il ranking completo dei dipendenti. Filtro mese/anno con toggle "Questo mese / Tutti i tempi".
 
 ### Admin — Componenti chiave (client components)
+
+#### `GestioneAree` (`components/admin/aree/GestioneAree.tsx`)
+Modal "Modifica area": dropdown manager mostra `Nome — NomeArea` se il manager è già assegnato ad un'altra area, solo `Nome` se libero. Banner inline ambra se si seleziona un manager già assegnato altrove (avvisa che l'area precedente perderà il manager al salvataggio). Nessun modal annidato — "Salva modifiche" fa da conferma implicita. Al salvataggio chiama PATCH `/api/areas/[id]`.
 
 #### `CalendarioGlobale`
 Props: `initialUsers, initialAvailability, initialShifts, initialHolidays, initialMonth (0-based), initialYear, initialLocked, initialConfirmed, isAdmin`
@@ -331,6 +342,16 @@ Upload .xlsx (ImportaStorico)
 - `createServiceClient()` → operazioni privilegiate in API routes (bypassa RLS)
 - `createClient()` da `lib/supabase/client.ts` → solo client components
 
+### Creazione utenti — regola critica
+
+In produzione usare **sempre** `serviceClient.auth.admin.createUser()` (equivalente a `POST /auth/v1/admin/users` con service role key). L'admin API crea automaticamente il record in `auth.identities`, che GoTrue richiede obbligatoriamente per autenticare via email+password. Un INSERT SQL diretto in `auth.users` senza il corrispondente INSERT in `auth.identities` causa errore 500 "Database error querying schema" o "Database error loading user" al login.
+
+**Solo in seed SQL / test:** è ammesso l'insert diretto, ma richiede due operazioni:
+1. INSERT in `auth.users` con `instance_id='00000000-0000-0000-0000-000000000000'`, `raw_user_meta_data='{"email_verified":true}'`, e tutti i token come `''` (stringa vuota, non NULL).
+2. INSERT in `auth.identities` con `provider='email'` e `identity_data` contenente `sub`, `email`, `email_verified`, `phone_verified`.
+
+Riferimento: `supabase/seed_demo.sql` (esempio corretto già presente).
+
 ### Gestione errori
 - Supabase non lancia eccezioni → controllare sempre `{ data, error }`
 - try/catch sui fetch client-side
@@ -372,7 +393,9 @@ turnify/
 │   │   ├── email-settings/route.ts + [id]/route.ts
 │   │   ├── templates/route.ts
 │   │   ├── import-shifts/route.ts
-│   │   └── import-shifts/resolve/route.ts
+│   │   ├── import-shifts/resolve/route.ts
+│   │   ├── areas/[id]/route.ts           ← PATCH modifica area + trasferimento manager cascata
+│   │   └── equity-overview/route.ts      ← GET panoramica equità cross-area
 │   ├── admin/
 │   │   ├── page.tsx (dashboard)
 │   │   ├── disponibilita/page.tsx
@@ -381,21 +404,24 @@ turnify/
 │   │   ├── utenti/page.tsx
 │   │   ├── statistiche/page.tsx
 │   │   ├── impostazioni/page.tsx
-│   │   └── sistema/page.tsx
+│   │   ├── sistema/page.tsx
+│   │   └── equita/page.tsx               ← panoramica equità cross-area (solo admin)
 │   ├── user/
 │   │   ├── page.tsx
 │   │   └── impostazioni/page.tsx
 │   └── login/ + forgot-password/ + reset-password/
 ├── components/
 │   ├── admin/
-│   │   ├── NavbarAdmin.tsx
+│   │   ├── NavbarAdmin.tsx               ← voce "Equità" aggiunta per admin (tra Aree e Sistema)
 │   │   ├── disponibilita/CalendarioGlobale.tsx
+│   │   ├── disponibilita/AreaSelector.tsx
 │   │   ├── turni/ListaTurni.tsx
 │   │   ├── export/ExportForm.tsx
 │   │   ├── utenti/ListaUtenti.tsx + AddUserModal.tsx
 │   │   ├── statistiche/GraficoEquita.tsx
 │   │   ├── impostazioni/GestioneEmail.tsx
 │   │   ├── sistema/GestioneTemplate.tsx + AggiornamentoCalendario.tsx + ImportaStorico.tsx
+│   │   ├── aree/GestioneAree.tsx         ← modal modifica area con dropdown manager e banner ambra
 │   │   └── dashboard/TurniCollapsibili.tsx
 │   └── user/
 │       ├── NavbarUtente.tsx
@@ -423,5 +449,7 @@ turnify/
     ├── reset.sql
     └── migrations/
         ├── 001–010_*.sql   (schema iniziale, RLS, ruoli, score equita)
-        └── 011_areas.sql   (tabella areas: scheduling_mode, workers_per_day, template_path, manager_id; riga Default)
+        ├── 011_areas.sql   (tabella areas: scheduling_mode, workers_per_day, template_path, manager_id; riga Default)
+        ├── 012_reperibile_order.sql  (colonna reperibile_order su shifts: 1=col D, 2=col E)
+        └── 013_multi_area.sql  (area_id su users/shifts/availability/month_status; unique month+year+area_id)
 ```
