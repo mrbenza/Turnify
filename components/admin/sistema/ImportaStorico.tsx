@@ -10,6 +10,9 @@ const MONTH_NAMES_IT = [
 interface ImportResult {
   month: number
   year: number
+  areaId: string
+  areaNome: string
+  areaWarning: string | null
   imported: number
   skipped: number
   unmatched: string[]
@@ -251,6 +254,23 @@ export default function ImportaStorico() {
                 </div>
               ) : fr.result && (
                 <div className="space-y-1.5">
+                  {/* Area rilevata */}
+                  <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-4 py-2.5">
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Area: <strong>{fr.result.areaNome || '—'}</strong></span>
+                  </div>
+                  {/* Warning area/manager mismatch */}
+                  {fr.result.areaWarning && (
+                    <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
+                      <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>{fr.result.areaWarning}</span>
+                    </div>
+                  )}
                   <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-4 py-2.5">
                     <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
