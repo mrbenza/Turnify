@@ -111,6 +111,31 @@ export async function generateTurniExcel(
     shiftsByDate.get(s.date)!.push(userMap.get(s.user_id) ?? s.user_id)
   }
 
+  // Recupera nome area e manager se areaId fornito
+  let areaNome: string | null = null
+  let managerNome: string | null = null
+  if (areaId) {
+    const { data: area } = await serviceClient
+      .from('areas')
+      .select('nome, manager_id')
+      .eq('id', areaId)
+      .single()
+    if (area) {
+      areaNome = area.nome
+      if (area.manager_id) {
+        const { data: manager } = await serviceClient
+          .from('users')
+          .select('nome')
+          .eq('id', area.manager_id)
+          .single()
+        if (manager) {
+          const idx = manager.nome.indexOf(' ')
+          managerNome = idx === -1 ? manager.nome : manager.nome.slice(idx + 1)
+        }
+      }
+    }
+  }
+
   // Scarica template dallo storage
   let resolvedTemplate = templateName
   if (!resolvedTemplate) {
@@ -130,6 +155,8 @@ export async function generateTurniExcel(
 
   let sheetXml = await zip.files[sheetPath].async('string')
 
+  if (areaNome) sheetXml = setInlineStr(sheetXml, 'A1', areaNome)
+  if (managerNome) sheetXml = setInlineStr(sheetXml, 'B51', managerNome)
   sheetXml = setNumCell(sheetXml, 'A3', excelSerial(year, month, 1))
   const now = new Date()
   sheetXml = setNumCell(sheetXml, 'C5', excelSerial(now.getFullYear(), now.getMonth() + 1, now.getDate()))
