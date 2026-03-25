@@ -40,7 +40,6 @@ Funzionalita da implementare in ordine di priorita.
 - **Ancora da fare**:
   1. NavbarAdmin manager: selettore area se manager ha piu aree
   2. CalendarioGlobale: logica dinamica per `scheduling_mode` per area
-  3. Import storico: passare `area_id` al momento dell'import
 - **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente.
 
 ### ✅ Bug pairing Dom↔Sab — NESSUNA MODIFICA NECESSARIA (pairing con conferma già implementato 2026-03-24)
@@ -64,6 +63,7 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 
 ## Completato
 
+- **[2026-03-25] Import storico area-aware** — `app/api/import-shifts/route.ts`: lettura nome area da cella A1 e cognome manager da B51. Match area per nome (ilike) con cross-check manager; fallback automatico per cognome manager se il nome area non viene riconosciuto. Filtro dipendenti per `area_id` durante la costruzione del `cognomeMap`. `area_id` incluso in ogni record inserito in `shifts`. `month_status` aggiornato per `(month, year, area_id)`. Fix bug cascata in `PATCH /api/areas/[id]`: aggiornamento area ora precede gli effetti collaterali sul manager, eliminando lo stato inconsistente in caso di errore sul nome duplicato.
 - **[2026-03-25] Multi-area — gestione aree UI, equità cross-area, export area-aware, fix seed** — `GestioneAree.tsx`: dropdown manager con etichetta area e banner ambra. API PATCH `/api/areas/[id]` con trasferimento manager in cascata. Nuova pagina `/admin/equita` (solo admin) con panoramica cross-area e badge salute. API `/api/equity-overview`. NavbarAdmin: voce "Equità" per admin. `generateTurniExcel`: A1 (nome area) e B51 (cognome manager) da DB via `areaId`. Seed: Area2-Liguria con manager; nomi utenti unici.
 - **[2026-03-25] Multi-area — bug fix email settings e UI selettore area** — Email settings isolate per area: POST include `area_id` nel profilo e nell'insert; PATCH/DELETE filtrano con `.eq('area_id', authResult.areaId)`. Pagina `/admin/disponibilita` accetta `searchParams` e usa `AreaSelector` per navigare tra aree. Filtro area in `ListaUtenti` convertito da pill a `<select>` dropdown. Badge "Aree" in dashboard admin.
 - **[2026-03-25] Seed DB 14 aree** — Create Area1-Area14 con regioni italiane (Piemonte, Liguria, Lombardia, Veneto, Emilia-Romagna, Toscana, Lazio, Campania, Puglia, Sicilia, Sardegna, Abruzzo, Calabria, Marche). Ogni area ha 1 manager e 8-18 dipendenti. 15.780 disponibilita fittizie per tutti i dipendenti per i weekend del 2026.

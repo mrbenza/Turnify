@@ -73,33 +73,21 @@ export async function PATCH(
 
   const serviceClient = createServiceClient()
 
-  // Se stiamo cambiando manager, gestiamo il trasferimento in cascata
+  // Leggi il manager attuale prima di modificare: serve per il confronto in cascata.
+  // Fatto qui (prima dell'update) così se l'update fallisce non abbiamo già
+  // alterato gli altri record.
+  let oldManagerId: string | null = null
   if (newManagerId !== undefined) {
-    // Leggi il manager attuale di quest'area
     const { data: currentArea } = await serviceClient
       .from('areas')
       .select('manager_id')
       .eq('id', id)
       .single()
-
-    const oldManagerId = currentArea?.manager_id ?? null
-
-    if (newManagerId !== null && newManagerId !== oldManagerId) {
-      // Togli il nuovo manager dall'area in cui è eventualmente manager ora
-      await serviceClient
-        .from('areas')
-        .update({ manager_id: null })
-        .eq('manager_id', newManagerId)
-        .neq('id', id)
-
-      // Sposta il nuovo manager in quest'area
-      await serviceClient
-        .from('users')
-        .update({ area_id: id })
-        .eq('id', newManagerId)
-    }
+    oldManagerId = currentArea?.manager_id ?? null
   }
 
+  // Esegui l'aggiornamento dell'area per primo: se fallisce (es. nome duplicato)
+  // non vengono eseguiti gli effetti collaterali sul manager in cascata.
   const { data, error } = await serviceClient
     .from('areas')
     .update(patch)
@@ -117,6 +105,23 @@ export async function PATCH(
 
   if (!data) {
     return NextResponse.json({ error: 'Area non trovata' }, { status: 404 })
+  }
+
+  // Se stiamo cambiando manager, gestiamo il trasferimento in cascata
+  // (solo dopo che l'area è stata aggiornata con successo)
+  if (newManagerId !== undefined && newManagerId !== null && newManagerId !== oldManagerId) {
+    // Togli il nuovo manager dall'area in cui è eventualmente manager ora
+    await serviceClient
+      .from('areas')
+      .update({ manager_id: null })
+      .eq('manager_id', newManagerId)
+      .neq('id', id)
+
+    // Sposta il nuovo manager in quest'area
+    await serviceClient
+      .from('users')
+      .update({ area_id: id })
+      .eq('id', newManagerId)
   }
 
   return NextResponse.json(data)

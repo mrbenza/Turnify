@@ -149,11 +149,11 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 | `/api/email-settings/[id]` | PATCH | admin/manager | Toggle attivo; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/email-settings/[id]` | DELETE | admin/manager | Elimina; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/templates` | POST | admin | Upload .xlsx a Storage bucket `templates` |
-| `/api/import-shifts` | POST | admin | Importa storico da Excel. Mappa cognomi → user_id. Setta confirmed/locked |
+| `/api/import-shifts` | POST | admin | Importa storico da Excel area-aware. Legge nome area da A1 e cognome manager da B51. Match area per nome (ilike) + cross-check manager; fallback per cognome manager se il nome area non viene riconosciuto. Filtra dipendenti per `area_id`. Inserisce turni con `area_id`. Aggiorna `month_status` per `(month, year, area_id)` |
 | `/api/import-shifts/resolve` | POST | admin | Risolve turni pending (utente non trovato al momento dell'import) |
 | `/api/config` | GET | admin/manager | Legge `scheduling_mode` e `workers_per_day` dalla tabella `areas` (riga Default) |
 | `/api/config` | PATCH | admin/manager | Aggiorna `scheduling_mode` e/o `workers_per_day` |
-| `/api/areas/[id]` | PATCH | admin | Modifica area (nome, scheduling_mode, manager). Trasferimento manager in cascata: azzera `manager_id` dell'area precedente del nuovo manager; aggiorna `users.area_id` del nuovo manager |
+| `/api/areas/[id]` | PATCH | admin | Modifica area (nome, scheduling_mode, manager). Aggiornamento area eseguito prima degli effetti collaterali: se il nome è duplicato (409) la cascata non viene eseguita. Trasferimento manager in cascata: azzera `manager_id` dell'area precedente del nuovo manager; aggiorna `users.area_id` del nuovo manager |
 | `/api/equity-overview` | GET | admin | Carica `get_equity_scores` in parallelo per tutte le aree; ritorna array `AreaEquitySummary` (n. dipendenti, score medio/min/max, delta) |
 
 ---
@@ -314,17 +314,26 @@ CalendarioGlobale click cella
   → setLocked(false), setIsConfirmed(false)
 ```
 
-### 6. Import storico
+### 6. Import storico (area-aware)
 ```
 Upload .xlsx (ImportaStorico)
   → POST /api/import-shifts (FormData)
   → parsea ZIP, legge foglio "Dati"
+  → legge A1 (nome area) e B51 (cognome manager)
+  → risolvi area target:
+      1. cerca per nome in areas (ilike A1)
+         → se trovata: cross-check cognome manager (B51) vs DB
+           → mismatch: areaWarning incluso nella risposta
+      2. fallback: se A1 non matcha, cerca manager per cognome (B51)
+         → area trovata tramite manager: areaWarning incluso
+      3. nessuna area trovata → 400 con messaggio diagnostico
   → estrae mese da cella A3 (Excel serial date)
-  → per ogni riga 10-40: legge D/E (cognomi)
+  → costruisce cognomeMap filtrato per area_id (solo dipendenti dell'area)
+  → per ogni riga 10-40: legge D (1° reperibile) + E (2° reperibile)
   → match cognome → user_id (cognomeMap)
   → unmatched → pendingShifts (modal per creazione utente al volo)
-  → INSERT shifts (upsert ignoreDuplicates)
-  → UPDATE month_status: past→confirmed, current→locked
+  → INSERT shifts con area_id (upsert ignoreDuplicates su date,user_id)
+  → UPDATE month_status per (month, year, area_id): past→confirmed, current→locked
 ```
 
 ---
