@@ -37,6 +37,7 @@ export default async function UtentiPage() {
   const users = usersData ?? []
 
   /* ---- Aree (per filtro admin) ---- */
+  // service_role: auth.admin.listUsers() richiede service key; usato nella stessa istanza per coerenza
   const serviceClient = createServiceClient()
   const areas: Area[] = isAdmin
     ? sortByNome(((await serviceClient.from('areas').select('*')).data ?? []) as Area[])

@@ -49,9 +49,7 @@ Funzionalita da implementare in ordine di priorita.
   23. `app/user/page.tsx`: nome area mostrato nel saluto dashboard dipendente
   24. `NavbarAdmin.tsx`: fix warning import pkg.version
   25. Template Excel: rinominato `AREA4.xlsx` → `template_turni.xlsx`; celle A1/C51 svuotate per universalita
-- **Ancora da fare**:
-  1. NavbarAdmin manager: selettore area se manager ha piu aree
-  2. CalendarioGlobale: logica dinamica per `scheduling_mode` per area
+- **Ancora da fare**: *(nessun item aperto)*
 - **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente.
 
 ### ✅ Bug pairing Dom↔Sab — NESSUNA MODIFICA NECESSARIA (pairing con conferma già implementato 2026-03-24)
@@ -67,6 +65,20 @@ Funzionalita da implementare in ordine di priorita.
 ---
 
 ## Bug noti / Debito tecnico
+
+### Refactoring / Infrastruttura (da fare, non urgente)
+
+1. **Centralizzare auth/ruolo/area_id in helper server-side** — Creare helper riutilizzabili (`requireUser`, `requireAdminOrManager`, `requireArea`) per evitare duplicazione del blocco auth+profile in ogni route.
+
+2. **Ridurre uso del service-role dove non necessario** — Documentare e giustificare ogni `createServiceClient()` nel codebase. Sostituire con il client normale + RLS dove è sufficiente.
+
+3. **Introdurre test per casi business critici** — Coprire almeno: creazione utente, lock mese completo/incompleto, blocco locked/confirmed su shifts/availability/import, isolamento per area.
+
+4. **Strato unico di validazione input** — Unificare la validazione dei parametri delle route critiche (date, mese/anno, tipi enumerati) in utility condivise per ridurre duplicazioni e rischio di discrepanze.
+
+5. **Aggiornare README e docs post-security-hardening** — Allineare la documentazione al comportamento reale dopo le correzioni di immutabilità (locked/confirmed), validazione copertura al lock, e hardening RLS area-aware.
+
+---
 
 ### `GraficoEquita.tsx` — `fetchScores` non in dep array di useEffect
 - **File**: `components/admin/statistiche/GraficoEquita.tsx`

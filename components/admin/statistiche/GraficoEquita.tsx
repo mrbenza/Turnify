@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { EquityScore } from '@/lib/supabase/types'
 import DrawerStoricoDipendente from './DrawerStoricoDipendente'
+import Select from '@/components/ui/Select'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -100,26 +101,20 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
         {/* Month/year filters (only when month mode) */}
         {viewMode === 'month' && (
           <>
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(Number(e.target.value))}
+            <Select
+              value={String(filterMonth)}
+              onChange={(v) => setFilterMonth(Number(v))}
+              options={MONTH_NAMES.map((name, i) => ({ value: String(i), label: name }))}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Mese"
-            >
-              {MONTH_NAMES.map((name, i) => (
-                <option key={i} value={i}>{name}</option>
-              ))}
-            </select>
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(Number(e.target.value))}
+            />
+            <Select
+              value={String(filterYear)}
+              onChange={(v) => setFilterYear(Number(v))}
+              options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Anno"
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+            />
           </>
         )}
 

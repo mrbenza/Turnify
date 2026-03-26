@@ -33,6 +33,7 @@ export async function GET(request: Request) {
   const month = Number(searchParams.get('month') ?? 0)
   const year = Number(searchParams.get('year') ?? new Date().getFullYear())
 
+  // service_role: RPC get_equity_scores cross-area + SELECT areas per tutte le aree (admin panoramica)
   const serviceClient = createServiceClient()
 
   // Carica tutte le aree (esclusa Default)

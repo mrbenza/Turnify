@@ -32,6 +32,7 @@ export async function GET(
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
+  // service_role: SELECT users cross-area (admin vede tutte le aree)
   const serviceClient = createServiceClient()
 
   const { data, error } = await serviceClient
@@ -78,6 +79,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Il campo "user_id" è obbligatorio' }, { status: 400 })
   }
 
+  // service_role: UPDATE users.area_id — RLS su users non prevede write per admin tramite client normale
   const serviceClient = createServiceClient()
 
   // Verifica che l'area di destinazione esista

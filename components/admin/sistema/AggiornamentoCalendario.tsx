@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Holiday } from '@/lib/supabase/types'
+import Select from '@/components/ui/Select'
 
 interface AggiornamentoCalendarioProps {
   initialHolidays: Holiday[]
@@ -203,16 +204,13 @@ export default function AggiornamentoCalendario({ initialHolidays }: Aggiornamen
         <label htmlFor="import-year" className="text-sm text-gray-700 font-medium shrink-0">
           Anno
         </label>
-        <select
+        <Select
           id="import-year"
-          value={importYear}
-          onChange={(e) => setImportYear(Number(e.target.value))}
+          value={String(importYear)}
+          onChange={(v) => setImportYear(Number(v))}
+          options={YEARS.map((y) => ({ value: String(y), label: String(y) }))}
           className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          {YEARS.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+        />
         <button
           onClick={handleImport}
           disabled={importing}

@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: month, year' }, { status: 400 })
   }
 
+  // service_role: generateTurniExcel legge shifts cross-area + UPDATE month_status
   const serviceClient = createServiceClient()
 
   const { data: monthStatus } = await serviceClient

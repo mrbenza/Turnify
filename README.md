@@ -1,5 +1,5 @@
 # Turnify — Gestione Turni di Reperibilita
-**v1.2.0**
+**v2.0.0**
 
 Web app per la gestione dei turni di reperibilita dei dipendenti.
 Permette ai dipendenti di segnare la propria disponibilita su un calendario,
@@ -81,8 +81,13 @@ turnify/
 │       ├── email-settings/route.ts  ← GET/POST indirizzi email extra
 │       ├── email-settings/[id]/route.ts ← PATCH (toggle attivo) / DELETE
 │       ├── config/route.ts          ← GET/PATCH scheduling_mode e workers_per_day (tabella areas)
+│       ├── areas/route.ts           ← GET lista aree, POST crea area (admin)
+│       ├── areas/[id]/route.ts      ← PATCH aggiorna area (cascade manager), DELETE
+│       ├── areas/[id]/users/route.ts ← GET utenti area, PATCH sposta utente
+│       ├── equity-overview/route.ts ← GET panoramica equita cross-area (admin)
 │       ├── users/route.ts           ← POST crea nuovo utente
-│       └── users/[id]/route.ts      ← PATCH (attivo/ruolo), DELETE
+│       ├── users/[id]/route.ts      ← PATCH (attivo/ruolo), DELETE
+│       └── users/[id]/shifts/route.ts ← GET storico turni dipendente
 ├── components/
 │   ├── auth/AuthGuard.tsx           ← timeout sessione automatico
 │   ├── AdminPageSkeleton.tsx        ← skeleton condiviso (sidebar + content) usato da tutti i loading.tsx admin; props: rows, grid
@@ -97,6 +102,10 @@ turnify/
 │       ├── disponibilita/
 │       │   ├── CalendarioGlobale.tsx
 │       │   └── AreaSelector.tsx             ← select client-side per navigazione tra aree
+│       ├── aree/
+│       │   └── GestioneAree.tsx     ← crea/modifica/elimina aree, sposta utenti, assegna manager
+│       ├── equita/
+│       │   └── RiepilogoEquitaAree.tsx ← panoramica cross-area (solo admin), badge salute
 │       ├── turni/
 │       │   └── ListaTurni.tsx       ← weekend Sab+Dom raggruppati in una riga
 │       ├── statistiche/
@@ -104,7 +113,7 @@ turnify/
 │       ├── export/
 │       │   └── ExportForm.tsx       ← anteprima grafica + genera Excel
 │       ├── utenti/
-│       │   └── ListaUtenti.tsx      ← prop isManager: se true, ruolo non modificabile
+│       │   └── ListaUtenti.tsx      ← prop isManager: se true, ruolo non modificabile; ricerca per nome; filtro area
 │       ├── impostazioni/
 │       │   └── GestioneEmail.tsx
 │       └── sistema/
@@ -123,6 +132,8 @@ turnify/
 │   └── utils/
 │       ├── dates.ts
 │       └── sort.ts              ← sortByNome con Intl.Collator numeric (ordinamento naturale aree)
+├── components/ui/
+│   └── Select.tsx               ← custom select Portal-based (dropdown a document.body, immune a position:fixed e zoom Chrome)
 └── supabase/
     └── migrations/
         ├── 001_initial_schema.sql
@@ -228,7 +239,19 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 | email | text | unique |
 | ruolo | text | `admin` \| `manager` \| `dipendente` |
 | attivo | boolean | default true |
+| area_id | uuid | FK → areas.id |
+| disattivato_at | timestamptz | nullable; impostato quando `attivo` viene messo a false |
 | data_creazione | timestamptz | default now() |
+
+### `areas`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| nome | text | unique |
+| scheduling_mode | text | `weekend_full` \| `single_day` \| `sun_next_sat` |
+| workers_per_day | integer | 1 o 2 — numero di reperibili per giornata |
+| manager_id | uuid | FK → users.id, nullable |
+| template_path | text | nullable |
 
 ### `availability`
 | Colonna | Tipo | Note |
@@ -238,6 +261,7 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 | date | date | giorno di disponibilita |
 | available | boolean | |
 | status | text | `pending` \| `approved` \| `locked` |
+| area_id | uuid | FK → areas.id |
 
 ### `shifts`
 | Colonna | Tipo | Note |
@@ -246,6 +270,8 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 | date | date | giorno del turno |
 | user_id | uuid | FK → users.id |
 | shift_type | text | `weekend` \| `festivo` \| `reperibilita` |
+| reperibile_order | integer | 1 = primo reperibile (col D Excel), 2 = secondo (col E) |
+| area_id | uuid | FK → areas.id |
 | created_by | uuid | FK → users.id |
 
 `shift_type = 'festivo'` viene usato solo se il giorno e una festivita con `mandatory = true`.
@@ -266,6 +292,7 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 | month | integer | 1–12 |
 | year | integer | |
 | status | text | `open` \| `locked` \| `confirmed` |
+| area_id | uuid | FK → areas.id — unique(month, year, area_id) |
 | locked_by | uuid | FK → users.id |
 | locked_at | timestamptz | |
 | email_inviata | boolean | default false |
@@ -273,8 +300,8 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 
 Status:
 - `open` — in lavorazione
-- `locked` — confermato dal manager, pronto per export
-- `confirmed` — Excel generato/scaricato (impostato automaticamente da `/api/export`)
+- `locked` — confermato dal manager, pronto per export; **immutabile** (nessuna write su availability/shifts/import consentita)
+- `confirmed` — Excel generato/scaricato (impostato automaticamente da `/api/export`); **immutabile** come `locked`
 
 ### `email_settings`
 | Colonna | Tipo | Note |
@@ -320,6 +347,9 @@ Suggerimento assegnazione in `CalendarioGlobale`:
 - `AuthGuard.tsx` gestisce il timeout automatico della sessione lato frontend
 - `userId` e ruolo non transitano mai dal browser — vengono letti dalla sessione server-side
 - Nomi utente nel template HTML email sanitizzati via `escHtml()` — previene XSS injection tramite nomi malevoli
+- **Immutabilità mesi**: `locked` e `confirmed` bloccano ogni write su `availability`, `shifts`, `import-shifts`, `import-shifts/resolve` (HTTP 422 con messaggio esplicito)
+- **Validazione copertura al lock**: `POST /api/month` con `action=lock` verifica server-side che ogni sabato, domenica e festivo obbligatorio del mese abbia esattamente `workers_per_day` turni assegnati — impedisce il lock di mesi incompleti
+- `service_role` key usata solo dove strettamente necessario (auth.admin.*, storage, write su tabelle senza policy write nel DB); ogni occorrenza è documentata con commento inline
 
 ---
 
@@ -377,12 +407,25 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 
 ## TODO
 
-### Media priorita
-- **Multi-area** (quasi completato): implementazione avanzata. Ancora da fare: selettore area in navbar manager (se manager gestisce piu aree), scheduling_mode dinamico per area in `CalendarioGlobale`.
+Vedi `docs/TODO.md` per il backlog completo.
+
+### Debito tecnico (non urgente)
+- Centralizzare helper auth server-side (`requireUser`, `requireAdminOrManager`, `requireArea`)
+- Introdurre test automatici per i casi business critici (lock, immutabilita, isolamento area)
+- Strato unico di validazione input nelle route critiche
 
 ---
 
 ## Changelog
+
+### [2026-03-26] — v2.0.0: Multi-area, security hardening, custom Select
+
+**Funzionalita principali:**
+- **Multi-area completo**: 14 aree indipendenti, ogni area con manager, dipendenti, scheduling_mode e workers_per_day propri. Import storico area-aware (matching a 3 livelli), export Excel area-aware (nome file, nome area in A1, team leader in C51). Panoramica equita cross-area per admin (`/admin/equita`). Navigazione mesi filtrata per area in CalendarioGlobale.
+- **Immutabilita mesi**: `locked` e `confirmed` bloccano ogni write su availability, shifts, import-shifts e import-shifts/resolve. Ritorna HTTP 422 con messaggio leggibile.
+- **Validazione copertura al lock**: server-side verifica che tutti i sabati, domeniche e festivi obbligatori del mese abbiano `workers_per_day` turni prima di permettere il lock. Ritorna HTTP 422 con lista giorni scoperti.
+- **Custom Select Portal-based** (`components/ui/Select.tsx`): dropdown renderizzato a `document.body` tramite `createPortal`, immune a `position:fixed` e zoom Chrome. Adottato in ListaUtenti, GestioneAree, AggiornamentoCalendario, GraficoEquita.
+- **Service-role ridotto**: rimosso da email-settings (POST/PATCH/DELETE) e da 5 pagine SSR con solo SELECT su areas. Ogni occorrenza rimanente documentata con commento `// service_role: <motivo>`.
 
 ### [2026-03-26] — Security audit #2: XSS fix email HTML + audit completo
 

@@ -19,6 +19,7 @@ export default async function ExportPage() {
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
   /* ---- Users list + template list ---- */
+  // service_role: storage.list() per i template richiede service key
   const serviceClient = createServiceClient()
   const [usersRes, templatesRes] = await Promise.all([
     supabase.from('users').select('*'),

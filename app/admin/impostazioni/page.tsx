@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import type { SchedulingMode } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import GestioneEmail from '@/components/admin/impostazioni/GestioneEmail'
@@ -28,14 +28,12 @@ export default async function ImpostazioniPage() {
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
-  const serviceClient = createServiceClient()
-
   const areaId = profile?.area_id ?? ''
 
   /* ---- Parallel fetches ---- */
   const [emailSettingsRes, areaConfigRes] = await Promise.all([
     supabase.from('email_settings').select('*').eq('area_id', areaId).order('created_at', { ascending: true }),
-    serviceClient.from('areas').select('scheduling_mode, workers_per_day, nome').eq('id', areaId).single(),
+    supabase.from('areas').select('scheduling_mode, workers_per_day, nome').eq('id', areaId).single(),
   ])
 
   const emailSettings = (emailSettingsRes.data ?? []) as EmailSetting[]

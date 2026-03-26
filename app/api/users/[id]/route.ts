@@ -33,6 +33,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'ID utente mancante' }, { status: 400 })
   }
 
+  // service_role: UPDATE users + UPDATE areas (RLS su users è solo SELECT per manager; areas non ha policy write)
   const serviceClient = createServiceClient()
 
   let body: { attivo?: boolean; ruolo?: string }
@@ -222,7 +223,7 @@ export async function DELETE(
     )
   }
 
-  // Elimina auth user tramite service client
+  // service_role: auth.admin.deleteUser() — richiede service key
   const serviceClient = createServiceClient()
   const { error: authDeleteError } = await serviceClient.auth.admin.deleteUser(id)
   if (authDeleteError) {

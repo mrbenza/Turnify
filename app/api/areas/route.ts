@@ -24,6 +24,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
+  // service_role: areas non ha policy write; manteniamo coerenza tra GET e POST dello stesso file
   const serviceClient = createServiceClient()
   const { data, error } = await serviceClient
     .from('areas')
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'workers_per_day deve essere 1 o 2' }, { status: 400 })
   }
 
+  // service_role: INSERT areas — la tabella non ha policy write nel DB
   const serviceClient = createServiceClient()
   const { data, error } = await serviceClient
     .from('areas')

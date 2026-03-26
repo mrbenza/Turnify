@@ -21,6 +21,16 @@ Aggiornare dopo ogni modifica strutturale significativa.
 
 ## Schema Database
 
+### `areas`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid PK | |
+| nome | text UNIQUE | es. "Area4 - Toscana" |
+| scheduling_mode | enum | `weekend_full` \| `single_day` \| `sun_next_sat` |
+| workers_per_day | int | 1 o 2 |
+| manager_id | uuid\|null FK users | |
+| template_path | text\|null | |
+
 ### `users`
 | Colonna | Tipo | Note |
 |---------|------|------|
@@ -29,6 +39,7 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | email | text UNIQUE | |
 | ruolo | enum | `admin` \| `manager` \| `dipendente` |
 | attivo | boolean | default true |
+| area_id | uuid FK areas | area di appartenenza |
 | data_creazione | timestamptz | default now() |
 | disattivato_at | timestamptz\|null | |
 
@@ -57,8 +68,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 
 **Semantica status:**
 - `open` → modificabile, nessun lock
-- `locked` → bloccato dal manager, sbloccabile (da manager o admin)
-- `confirmed` → definitivo dopo export Excel o invio email; sbloccabile solo da admin
+- `locked` → bloccato dal manager; **immutabile** — availability/shifts/import bloccati con 422. Sbloccabile da manager o admin.
+- `confirmed` → definitivo dopo export Excel o invio email; **immutabile** come `locked`. Sbloccabile solo da admin.
 
 ### `availability`
 | Colonna | Tipo | Note |
@@ -68,6 +79,7 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | date | date | |
 | available | boolean | |
 | status | enum | `pending` \| `approved` \| `locked` |
+| area_id | uuid FK areas | |
 | created_at | timestamptz | |
 | updated_at | timestamptz | trigger auto-update |
 | — | UNIQUE(user_id, date) | |
@@ -80,6 +92,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | user_id | uuid FK users | |
 | user_nome | text\|null | denormalizzato, preserva nome se user cancellato |
 | shift_type | enum | `weekend` \| `festivo` \| `reperibilita` |
+| reperibile_order | int | 1 = primo (col D Excel), 2 = secondo (col E) |
+| area_id | uuid FK areas | |
 | created_by | uuid FK users | |
 | created_at | timestamptz | |
 | — | UNIQUE(date, user_id) | |
@@ -90,9 +104,10 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | Colonna | Tipo | Note |
 |---------|------|------|
 | id | uuid PK | |
-| email | text UNIQUE | |
+| email | text | UNIQUE(email, area_id) |
 | descrizione | text\|null | |
 | attivo | boolean | default true |
+| area_id | uuid FK areas | ownership per area |
 | created_at | timestamptz | |
 
 ---
@@ -136,14 +151,14 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 
 | Route | Metodo | Auth | Cosa fa |
 |-------|--------|------|---------|
-| `/api/availability` | POST | dipendente | Crea/aggiorna disponibilità. Blocca se mese locked/approved |
+| `/api/availability` | POST | dipendente | Crea/aggiorna disponibilità. Blocca con 422 se mese `locked` **o** `confirmed` |
 | `/api/shifts` | POST | admin/manager | Assegna turno. Calcola shift_type. Blocca se mese locked. In `sun_next_sat`: Dom usa `day + 6`, Sab usa `day - 6` per validazione conflitti (fix: rimossa condizione `isHolidayOnWeekend` che forzava `weekend_full`). Manager: verifica che `user_id` dal body appartenga alla propria area — 403 se cross-area |
 | `/api/shifts/[id]` | DELETE | admin/manager | Elimina turno. Blocca se mese locked. Manager: query filtrata con `.eq('area_id', profile.area_id)` — non può eliminare turni di altre aree. Admin: accesso totale |
 | `/api/users` | POST | admin/manager | Crea utente (auth + db). Rollback se DB fallisce. Accetta `area_id` opzionale nel body; se caller e admin, usa `area_id` dal body (non quello del profilo admin) |
 | `/api/users/[id]` | PATCH | admin/manager | Modifica ruolo (admin only) o attivo/disattivato_at. Tutte le write su `public.users` usano `serviceClient` (RLS manager = SELECT only). Manager: verifica cross-area prima del toggle `attivo`. Se ruolo cambia a `manager`: aggiorna automaticamente `areas.manager_id`. Se ruolo scende da `manager`: rimuove `areas.manager_id` |
 | `/api/users/[id]/shifts` | GET | admin/manager | Storico turni di un utente. Manager: restituisce solo turni se l'utente appartiene alla propria area — 403 se cross-area. Admin: accesso totale |
 | `/api/users/[id]` | DELETE | admin | Elimina utente. Richiede attivo=false |
-| `/api/month` | POST | admin/manager | Lock (`locked`) o unlock (`open`) mese. Unlock resetta email_inviata=false |
+| `/api/month` | POST | admin/manager | Lock (`locked`) o unlock (`open`) mese. Unlock resetta email_inviata=false. **Al lock**: validazione server-side che ogni sabato, domenica e festivo obbligatorio del mese abbia `workers_per_day` turni assegnati — 422 con lista giorni scoperti se la copertura è incompleta |
 | `/api/holidays` | GET | admin/manager | Lista festività |
 | `/api/holidays` | POST | admin | Crea manuale o import da Nager.Date API |
 | `/api/holidays/[id]` | PATCH | admin | Modifica mandatory |
@@ -170,6 +185,14 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 createClient()        // server component + API routes (usa cookies)
 createServiceClient() // service role, mai esposto al browser
 ```
+
+**Uso service_role:** strettamente limitato a operazioni non coperte dalla RLS:
+- `auth.admin.createUser()`, `auth.admin.deleteUser()`, `auth.admin.listUsers()` — API admin Supabase
+- `storage.from('templates').*` — bucket storage senza policy write per utenti normali
+- Write su tabella `areas` — nessuna policy INSERT/UPDATE/DELETE nel DB
+- Write su tabella `users` (PATCH/DELETE) — RLS manager è solo SELECT; admin ha write via RLS ma usiamo serviceClient per coerenza con i casi manager
+
+Ogni `createServiceClient()` nel codebase è documentato con commento `// service_role: <motivo>`.
 
 ### `lib/supabase/client.ts`
 ```typescript
@@ -294,9 +317,13 @@ CalendarioGlobale click cella
 ```
 "Conferma e blocca" button
   → POST /api/month { month, year, action: 'lock' }
+  → validazione server-side: ogni sab/dom/festivo obbligatorio deve avere workers_per_day turni
+  → 422 con lista giorni scoperti se incompleto
   → UPDATE month_status SET status='locked'
   → setLocked(true), setIsConfirmed(false)
 ```
+
+**Immutabilità post-lock:** qualsiasi tentativo di write su availability, shifts, import-shifts, import-shifts/resolve per un mese `locked` o `confirmed` ritorna 422.
 
 ### 3. Export Excel + auto-email
 ```

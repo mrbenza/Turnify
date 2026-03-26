@@ -49,6 +49,7 @@ export async function GET(
   }
 
   const { id } = await params
+  // service_role: lettura cross-area su users e shifts per storico completo (anche per admin)
   const serviceClient = createServiceClient()
 
   // Verifica che il target appartenga all'area del caller (se manager)

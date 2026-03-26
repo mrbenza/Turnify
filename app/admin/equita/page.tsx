@@ -22,6 +22,7 @@ export default async function EquitaPage() {
   const currentMonth = now.getMonth() // 0-indexed
   const currentYear = now.getFullYear()
 
+  // service_role: RPC get_equity_scores cross-area + SELECT areas per panoramica admin
   const serviceClient = createServiceClient()
 
   // Carica tutte le aree (esclusa Default)

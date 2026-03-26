@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
   if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100)
     return NextResponse.json({ error: 'Parametri non validi' }, { status: 400 })
 
+  // service_role: generateTurniExcel legge shifts/users cross-area + upload storage
   const serviceClient = createServiceClient()
 
   const { data: monthStatus } = await supabase

@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Formato email non valido' }, { status: 400 })
   }
 
-  // --- 4. Crea auth user con service role (la service key non lascia mai il server) ---
+  // service_role: auth.admin.createUser() + INSERT users — non esposto dal client anon
   const serviceClient = createServiceClient()
 
   // Admin può specificare un'area diversa nel body (es. import storico); manager usa sempre la sua area

@@ -59,6 +59,7 @@ export default async function AdminDashboardPage() {
   /* ADMIN branch                                                      */
   /* ================================================================ */
   if (isAdmin) {
+    // service_role: auth.admin.listUsers() + storage.list() templates
     const serviceClient = createServiceClient()
 
     const [usersRes, authListRes, templateRes, areasRes] = await Promise.all([
@@ -208,6 +209,7 @@ export default async function AdminDashboardPage() {
   const areaId = profile.area_id ?? ''
 
   // Nome area per il badge in navbar
+  // service_role: coerenza con il branch admin nello stesso file; SELECT areas sarebbe ok con client normale
   const serviceClient = createServiceClient()
   const { data: areaData } = await serviceClient
     .from('areas').select('nome').eq('id', areaId).maybeSingle()
