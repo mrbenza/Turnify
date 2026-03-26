@@ -54,14 +54,22 @@ export async function POST(request: Request) {
       ? { status: 'locked' as const, locked_by: user.id, locked_at: new Date().toISOString() }
       : { status: 'open' as const, locked_by: null, locked_at: null, email_inviata: false, email_inviata_at: null }
 
-  // Verifica se il record esiste già
+  // Verifica se il record esiste già (e legge lo status corrente)
   const { data: existing } = await serviceClient
     .from('month_status')
-    .select('id')
+    .select('id, status')
     .eq('month', month)
     .eq('year', year)
     .eq('area_id', profile.area_id)
     .single()
+
+  // Mese confirmed: solo admin può sbloccare
+  if (action === 'unlock' && existing?.status === 'confirmed' && profile.ruolo !== 'admin') {
+    return NextResponse.json(
+      { error: 'Solo l\'amministratore può sbloccare un mese confermato.' },
+      { status: 403 }
+    )
+  }
 
   if (existing) {
     const { error } = await serviceClient

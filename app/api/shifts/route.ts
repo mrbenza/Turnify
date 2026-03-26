@@ -27,6 +27,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
+  // Manager deve avere un'area assegnata
+  if (profile.ruolo === 'manager' && !profile.area_id) {
+    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
+  }
+
   // Parse body
   let body: { date?: string; user_id?: string }
   try {
@@ -158,12 +163,16 @@ export async function POST(request: Request) {
     )
   }
 
-  // Fetch nome dipendente per denormalizzarlo nel turno
+  // Verifica che il dipendente appartenga alla stessa area del caller (se manager)
   const { data: targetUser } = await supabase
     .from('users')
-    .select('nome')
+    .select('nome, area_id')
     .eq('id', user_id)
     .single()
+
+  if (profile.ruolo !== 'admin' && targetUser?.area_id !== profile.area_id) {
+    return NextResponse.json({ error: 'Utente non appartenente alla tua area.' }, { status: 403 })
+  }
 
   // Insert shift — adminId comes from session, not from client
   const { data, error } = await supabase

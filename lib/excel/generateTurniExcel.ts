@@ -137,7 +137,8 @@ export async function generateTurniExcel(
   }
 
   // Scarica template dallo storage
-  let resolvedTemplate = templateName
+  // Sanitize: accetta solo nomi file senza path separator (previene traversal nel bucket)
+  let resolvedTemplate = templateName && /^[^/\\]+$/.test(templateName) ? templateName : null
   if (!resolvedTemplate) {
     const { data: fileList } = await serviceClient.storage.from('templates').list()
     const xlsxFiles = (fileList ?? []).filter((f: { name: string }) => f.name.endsWith('.xlsx'))

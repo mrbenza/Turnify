@@ -14,6 +14,9 @@ export async function GET(request: NextRequest) {
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager')
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
 
+  if (profile.ruolo === 'manager' && !profile.area_id)
+    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
+
   const { searchParams } = new URL(request.url)
   const month   = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1))
   const year    = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()))
@@ -82,7 +85,7 @@ export async function GET(request: NextRequest) {
     try {
       const [{ data: employees }, { data: extraEmails }] = await Promise.all([
         serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', profile.area_id),
-        serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
+        serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true).eq('area_id', profile.area_id),
       ])
 
       const recipients = [

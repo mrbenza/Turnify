@@ -24,18 +24,23 @@ export async function DELETE(
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
+  if (profile.ruolo === 'manager' && !profile.area_id) {
+    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
+  }
+
   const { id } = await params
 
   if (!id) {
     return NextResponse.json({ error: 'ID turno mancante' }, { status: 400 })
   }
 
-  // Recupera il turno per verificare la data
-  const { data: existingShift } = await supabase
-    .from('shifts')
-    .select('date')
-    .eq('id', id)
-    .maybeSingle()
+  // Recupera il turno per verificare la data (filtra area per evitare info disclosure cross-area)
+  const shiftQuery = supabase.from('shifts').select('date').eq('id', id)
+  const { data: existingShift } = await (
+    profile.ruolo !== 'admin'
+      ? shiftQuery.eq('area_id', profile.area_id)
+      : shiftQuery
+  ).maybeSingle()
 
   if (existingShift) {
     const shiftDate = new Date(existingShift.date)
@@ -58,10 +63,12 @@ export async function DELETE(
     }
   }
 
-  const { error } = await supabase
-    .from('shifts')
-    .delete()
-    .eq('id', id)
+  // Filtra anche per area_id: un manager non può eliminare turni di altre aree
+  const deleteQuery = supabase.from('shifts').delete().eq('id', id)
+  const finalDelete = profile.ruolo !== 'admin'
+    ? deleteQuery.eq('area_id', profile.area_id)
+    : deleteQuery
+  const { error } = await finalDelete
 
   if (error) {
     console.error('Errore rimozione turno:', error)

@@ -6,7 +6,7 @@ async function getAuthProfile() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { user: null, profile: null }
   const { data: profile } = await supabase
-    .from('users').select('ruolo').eq('id', user.id).single()
+    .from('users').select('ruolo, area_id').eq('id', user.id).single()
   return { user, profile }
 }
 
@@ -26,6 +26,12 @@ export async function GET(
   }
 
   const { id } = await params
+
+  // Manager: può leggere solo la propria area
+  if (profile?.ruolo === 'manager' && profile.area_id !== id) {
+    return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  }
+
   const serviceClient = createServiceClient()
 
   const { data, error } = await serviceClient

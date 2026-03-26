@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     excelResult,
   ] = await Promise.all([
     serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', profile.area_id),
-    serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
+    serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true).eq('area_id', profile.area_id),
     generateTurniExcel(month, year, serviceClient, undefined, profile.area_id),
   ])
 

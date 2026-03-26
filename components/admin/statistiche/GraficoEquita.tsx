@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { EquityScore } from '@/lib/supabase/types'
+import DrawerStoricoDipendente from './DrawerStoricoDipendente'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -32,6 +33,7 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
   const [filterYear, setFilterYear] = useState(initialYear)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
   async function fetchScores(month: number, year: number, mode: 'month' | 'all') {
     setLoading(true)
@@ -152,7 +154,8 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
             return (
               <div
                 key={s.user_id}
-                className={`rounded-xl border p-4 ${isPriority ? 'bg-green-50/60 border-green-200' : 'bg-white border-gray-100'}`}
+                onClick={() => setSelectedUserId(s.user_id)}
+                className={`rounded-xl border p-4 cursor-pointer transition-shadow hover:shadow-md ${isPriority ? 'bg-green-50/60 border-green-200' : 'bg-white border-gray-100'}`}
               >
                 {/* Header row */}
                 <div className="flex items-center justify-between mb-3">
@@ -222,7 +225,8 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
                 return (
                   <tr
                     key={s.user_id}
-                    className={`transition-colors ${isPriority ? 'bg-green-50/60 hover:bg-green-50' : 'hover:bg-gray-50'}`}
+                    onClick={() => setSelectedUserId(s.user_id)}
+                    className={`transition-colors cursor-pointer ${isPriority ? 'bg-green-50/60 hover:bg-green-50' : 'hover:bg-gray-50'}`}
                   >
                     <td className="py-3 px-0 text-gray-400 font-medium text-xs">{idx + 1}</td>
                     <td className="py-3 px-2 font-medium text-gray-800">
@@ -262,6 +266,11 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
           </table>
         </div>
       )}
+
+      <DrawerStoricoDipendente
+        userId={selectedUserId}
+        onClose={() => setSelectedUserId(null)}
+      />
     </div>
   )
 }

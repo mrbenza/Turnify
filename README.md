@@ -311,11 +311,15 @@ Suggerimento assegnazione in `CalendarioGlobale`:
 
 ## Sicurezza
 
-- Row Level Security (RLS) abilitata su tutte le tabelle Supabase
-- `is_admin_or_manager()` — funzione SQL usata nelle policy per operazioni che richiedono ruolo elevato
+- Row Level Security (RLS) abilitata su tutte le tabelle Supabase (migration 016: area-aware)
+- `current_user_area_id()` e `is_manager()` — funzioni SQL per RLS che isolano i manager alla propria area
+- Manager: solo `SELECT` su `public.users` via RLS — impedisce privilege escalation (auto-promozione ad admin via REST Supabase diretto)
+- Tutte le write su `public.users` (PATCH ruolo/attivo, DELETE, POST) usano `serviceClient` (service_role) nelle API route
+- Cross-area enforcement: manager non può leggere o scrivere dati di altre aree neanche bypassando le API con JWT valido
 - Il frontend usa il client Supabase con chiave `anon`; le operazioni privilegiate usano la `service_role` key solo nelle API route server-side Next.js
 - `AuthGuard.tsx` gestisce il timeout automatico della sessione lato frontend
 - `userId` e ruolo non transitano mai dal browser — vengono letti dalla sessione server-side
+- Nomi utente nel template HTML email sanitizzati via `escHtml()` — previene XSS injection tramite nomi malevoli
 
 ---
 
@@ -352,6 +356,9 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 | `011_areas.sql` | Tabella `areas` con scheduling_mode e workers_per_day; riga "Default" inserita automaticamente |
 | `012_reperibile_order.sql` | Colonna `reperibile_order` su shifts (1 = col D, 2 = col E) |
 | `013_multi_area.sql` | `area_id` su users/shifts/availability/month_status; unique (month, year, area_id) |
+| `014_email_settings_area_id.sql` | `area_id NOT NULL` su email_settings; unique(email, area_id) |
+| `015_areas_template_manager.sql` | `template_path` e `manager_id` su areas |
+| `016_rls_area_aware.sql` | RLS area-aware su tutte le tabelle; manager solo SELECT su users (privilege escalation prevention) |
 
 3. Configurare le variabili d'ambiente (`.env.local` in sviluppo, pannello Vercel in produzione)
 4. Creare il primo admin: Authentication → Users → Add user, poi inserire riga in `users` con `ruolo = 'admin'`
@@ -376,6 +383,50 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 ---
 
 ## Changelog
+
+### [2026-03-26] — Security audit #2: XSS fix email HTML + audit completo
+
+**File modificati:**
+- `lib/email/sendTurniEmail.ts`
+
+**Sommario:** Secondo round di audit sicurezza (bypass login, escalation, esposizione API). Trovato e risolto XSS injection via nomi utente nel template HTML delle email.
+
+**Dettagli:**
+1. `sendTurniEmail.ts` — Aggiunta funzione `escHtml()` che sanitizza `&`, `<`, `>`, `"`, `'`. I nomi utente nei campi `names[0]` e `names[1]` sono ora escaped prima dell'inserimento nell'HTML dell'email, prevenendo injection di tag HTML/JS da parte di un admin che avesse creato un utente con nome malevolo.
+
+**Status:** Completato
+
+---
+
+### [2026-03-26] — Security hardening: privilege escalation fix + storico dipendente
+
+**File modificati:**
+- `app/api/users/[id]/route.ts`
+- `app/api/users/[id]/shifts/route.ts` (nuovo)
+- `app/api/shifts/[id]/route.ts`
+- `app/api/shifts/route.ts`
+- `supabase/migrations/016_rls_area_aware.sql` (nuovo)
+- `supabase/schema.sql` (aggiornato a 001–016)
+- `supabase/clean_db.sql` (nuovo)
+- `components/admin/statistiche/DrawerStoricoDipendente.tsx` (nuovo)
+- `components/admin/statistiche/GraficoEquita.tsx`
+- `app/layout.tsx` (rimosso Geist_Mono)
+
+**Sommario:** Eliminati 4 vettori di privilege escalation/cross-area; RLS area-aware su Supabase; drawer storico dipendente nella pagina statistiche.
+
+**Dettagli:**
+1. `shifts/[id]/route.ts` DELETE — manager ora filtra per `area_id`; non può eliminare turni di altre aree.
+2. `shifts/route.ts` POST — verifica che `user_id` dal body appartenga all'area del manager (403 se cross-area).
+3. `users/[id]/shifts/route.ts` GET — nuovo endpoint storico turni per dipendente. Manager: 403 se il target è in un'altra area.
+4. `016_rls_area_aware.sql` — `current_user_area_id()` + `is_manager()`; policy RLS separate per admin/manager/dipendente su shifts, availability, month_status, users, email_settings. Manager: solo `FOR SELECT` su `users` (previene auto-promozione ad admin via REST diretto).
+5. `users/[id]/route.ts` PATCH/DELETE — tutte le write su `public.users` spostate su `serviceClient`; aggiunto check cross-area per il toggle `attivo` (manager non può agire su utenti di altre aree).
+6. `DrawerStoricoDipendente.tsx` — drawer laterale destro: contatori, grafico barre per mese, festività, lista turni. Si apre cliccando su un dipendente in GraficoEquita.
+7. `clean_db.sql` — nuovo script per svuotare tutti i dati senza toccare la struttura.
+8. `layout.tsx` — rimosso Geist_Mono (fix warning font preload inutilizzato).
+
+**Status:** Completato
+
+---
 
 ### [2026-03-26] — CODE AGENT + UI AGENT + DOCS AGENT — Multi-area: bug fix area matching import, area_id su crea-utente e resolve, manager sync cambio ruolo, export Excel (nome file, A1, C51), ordinamento naturale aree, ricerca utenti, dashboard nome area
 
