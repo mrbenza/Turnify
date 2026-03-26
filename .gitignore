@@ -48,3 +48,12 @@ next-env.d.ts
 
 # file eliminati / backup locali
 /_trash/
+
+# Supabase CLI (generato automaticamente)
+/supabase/.temp/
+
+# Claude Code (skill e config locali)
+/.agents/
+/.claude/
+/skills-lock.json
+/.mcp.json
