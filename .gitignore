@@ -45,3 +45,6 @@ next-env.d.ts
 /public/templates/
 /docs/*.xlsx
 /docs/*.xlsx:Zone.Identifier
+
+# file eliminati / backup locali
+/_trash/

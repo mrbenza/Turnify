@@ -1,9 +1,9 @@
 -- ============================================================
--- schema.sql — Schema completo Turnify (migrations 001-013)
+-- schema.sql — Schema completo Turnify (migrations 001-015)
 -- Idempotente: DROP POLICY IF EXISTS prima di ogni CREATE.
 --
 -- Per un DB completamente vuoto: eseguire questo file.
--- Per un DB con schema esistente: eseguire reset.sql poi seed_demo.sql.
+-- Per pulire i dati senza toccare la struttura: eseguire clean_db.sql.
 -- Eseguire nel SQL Editor di Supabase (service_role).
 -- ============================================================
 
@@ -124,14 +124,16 @@ create table if not exists public.areas (
 insert into public.areas (nome) values ('Default') on conflict (nome) do nothing;
 
 -- ============================================================
--- TABELLA: email_settings
+-- TABELLA: email_settings (migration 015: area_id aggiunto)
 -- ============================================================
 create table if not exists public.email_settings (
   id          uuid        primary key default uuid_generate_v4(),
-  email       text        not null unique,
+  email       text        not null,
   descrizione text,
   attivo      boolean     not null default true,
-  created_at  timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  area_id     uuid        not null references public.areas(id) on delete cascade,
+  unique (email, area_id)
 );
 
 -- ============================================================
@@ -146,10 +148,11 @@ alter table public.availability add constraint availability_area_id_fkey
 alter table public.month_status add constraint month_status_area_id_fkey
   foreign key (area_id) references public.areas(id) on delete restrict;
 
-create index if not exists idx_users_area_id        on public.users(area_id);
-create index if not exists idx_shifts_area_id       on public.shifts(area_id);
-create index if not exists idx_availability_area_id on public.availability(area_id);
-create index if not exists idx_month_status_area_id on public.month_status(area_id);
+create index if not exists idx_users_area_id          on public.users(area_id);
+create index if not exists idx_shifts_area_id         on public.shifts(area_id);
+create index if not exists idx_availability_area_id   on public.availability(area_id);
+create index if not exists idx_month_status_area_id   on public.month_status(area_id);
+create index if not exists idx_email_settings_area_id on public.email_settings(area_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
