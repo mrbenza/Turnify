@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { sortByNome } from '@/lib/utils/sort'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import RiepilogoEquitaAree from '@/components/admin/equita/RiepilogoEquitaAree'
 import type { AreaEquitySummary } from '@/app/api/equity-overview/route'
@@ -30,9 +31,8 @@ export default async function EquitaPage() {
     .from('areas')
     .select('id, nome')
     .neq('nome', 'Default')
-    .order('nome', { ascending: true })
 
-  const areaList = areas ?? []
+  const areaList = sortByNome(areas ?? [])
 
   // Carica equity scores per tutte le aree in parallelo (mese corrente)
   const summaries: AreaEquitySummary[] = await Promise.all(
