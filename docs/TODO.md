@@ -49,9 +49,7 @@ Funzionalita da implementare in ordine di priorita.
   23. `app/user/page.tsx`: nome area mostrato nel saluto dashboard dipendente
   24. `NavbarAdmin.tsx`: fix warning import pkg.version
   25. Template Excel: rinominato `AREA4.xlsx` → `template_turni.xlsx`; celle A1/C51 svuotate per universalita
-- **Ancora da fare**:
-  1. NavbarAdmin manager: selettore area se manager ha piu aree
-  2. CalendarioGlobale: logica dinamica per `scheduling_mode` per area
+- **Ancora da fare**: *(nessun item aperto)*
 - **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente.
 
 ### ✅ Bug pairing Dom↔Sab — NESSUNA MODIFICA NECESSARIA (pairing con conferma già implementato 2026-03-24)
@@ -63,6 +61,30 @@ Funzionalita da implementare in ordine di priorita.
 - Se E è presente, entrambi hanno effettivamente lavorato → entrambi contribuiscono allo score equità
 - Il codice attuale importa già correttamente sia D che E come turni regolari (loop su `D${row}` + `E${row}`)
 - Il file Excel è sempre lo specchio fedele della logica dei turni: non può esistere un E senza che quella persona abbia lavorato
+
+---
+
+## Bug noti / Debito tecnico
+
+### Refactoring / Infrastruttura (da fare, non urgente)
+
+1. **Centralizzare auth/ruolo/area_id in helper server-side** — Creare helper riutilizzabili (`requireUser`, `requireAdminOrManager`, `requireArea`) per evitare duplicazione del blocco auth+profile in ogni route.
+
+2. **Ridurre uso del service-role dove non necessario** — Documentare e giustificare ogni `createServiceClient()` nel codebase. Sostituire con il client normale + RLS dove è sufficiente.
+
+3. **Introdurre test per casi business critici** — Coprire almeno: creazione utente, lock mese completo/incompleto, blocco locked/confirmed su shifts/availability/import, isolamento per area.
+
+4. **Strato unico di validazione input** — Unificare la validazione dei parametri delle route critiche (date, mese/anno, tipi enumerati) in utility condivise per ridurre duplicazioni e rischio di discrepanze.
+
+5. **Aggiornare README e docs post-security-hardening** — Allineare la documentazione al comportamento reale dopo le correzioni di immutabilità (locked/confirmed), validazione copertura al lock, e hardening RLS area-aware.
+
+---
+
+### `GraficoEquita.tsx` — `fetchScores` non in dep array di useEffect
+- **File**: `components/admin/statistiche/GraficoEquita.tsx`
+- **Problema**: `fetchScores` è definita dentro il componente e usata nell'`useEffect`, ma non inserita nel dep array per evitare loop infiniti. La regola `react-hooks/exhaustive-deps` è soppressa con `eslint-disable`.
+- **Fix corretto**: wrappare `fetchScores` in `useCallback` con i suoi parametri come dipendenze, poi inserirla nel dep array dell'effect.
+- **Impatto attuale**: nessuno funzionale — il comportamento è corretto. Solo debito tecnico.
 
 ---
 
@@ -83,6 +105,7 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 
 ## Completato
 
+- **[2026-03-26] Security hardening — API cross-area + RLS area-aware (migration 016)** — `DELETE /api/shifts/[id]`: query filtrata per `area_id` per i manager (admin: accesso totale). `POST /api/shifts`: verifica che `user_id` appartenga all'area del manager — 403 se cross-area. `GET /api/users/[id]/shifts`: storico visibile al manager solo per utenti della propria area — 403 se cross-area. `supabase/migrations/016_rls_area_aware.sql`: nuove funzioni `current_user_area_id()` e `is_manager()`; policy RLS riscritte per shifts, availability, month_status, users, email_settings con separazione admin/manager per area. `supabase/schema_completo.sql`: aggiornato a migrations 001–016.
 - **[2026-03-26] Fix sun_next_sat: distanza Dom→Sab corretta (±6)** — `CalendarioGlobale.tsx` `getPairedDate`: blocco `sun_next_sat` precede `holiday`, distanza corretta `d+6`. `app/api/shifts/route.ts`: rimossa `isHolidayOnWeekend` che forzava `weekend_full` in `sun_next_sat`. Rimozione turno: `handleRemove` agisce solo sul giorno cliccato (no pairing inverso). DB: disponibilità Area4 aprile 2026 allineate alle coppie corrette.
 - **[2026-03-26] Multi-area completamento** — `import-shifts/route.ts`: area matching a 3 livelli (esatto → ilike → normalizzato). `import-shifts/resolve/route.ts`: `area_id` dal body (fix area Default). `users/route.ts`: `area_id` opzionale nel body. `users/[id]/route.ts`: cambio ruolo sincronizza `areas.manager_id`. `generateTurniExcel.ts`: nome file `Area4_Marzo_2026.xlsx`, A1 uppercase parte corta, team leader C51. `CalendarioGlobale.tsx`: navigazione mesi filtrata per area. `lib/utils/sort.ts`: `sortByNome` con Intl.Collator numeric. `ListaUtenti.tsx`: ricerca per nome. `app/user/page.tsx`: nome area nel saluto. `NavbarAdmin.tsx`: fix import pkg.version. Template rinominato `template_turni.xlsx` con A1/C51 universali.
 - **[2026-03-25] Import storico area-aware** — `app/api/import-shifts/route.ts`: lettura nome area da cella A1 e cognome manager da B51. Match area per nome (ilike) con cross-check manager; fallback automatico per cognome manager se il nome area non viene riconosciuto. Filtro dipendenti per `area_id` durante la costruzione del `cognomeMap`. `area_id` incluso in ogni record inserito in `shifts`. `month_status` aggiornato per `(month, year, area_id)`. Fix bug cascata in `PATCH /api/areas/[id]`: aggiornamento area ora precede gli effetti collaterali sul manager, eliminando lo stato inconsistente in caso di errore sul nome duplicato.

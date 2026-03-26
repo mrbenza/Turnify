@@ -1,6 +1,5 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { User } from '@/lib/supabase/types'
 
 /**
  * POST /api/users
@@ -45,22 +44,34 @@ export async function POST(request: Request) {
 
   const nome = typeof body.nome === 'string' ? body.nome.trim() : ''
   const email = typeof body.email === 'string' ? body.email.trim() : ''
-  const ruolo = body.ruolo
+  const ruoloRaw = typeof body.ruolo === 'string' ? body.ruolo : ''
 
   if (!nome || !email) {
     return NextResponse.json({ error: 'Campi obbligatori: nome, email' }, { status: 400 })
   }
 
-  if (ruolo !== 'dipendente' && ruolo !== 'manager' && ruolo !== 'admin') {
-    return NextResponse.json({ error: 'Ruolo non valido. Valori ammessi: dipendente, manager, admin' }, { status: 400 })
+  // Manager può creare solo dipendenti; solo admin può creare manager o admin
+  const rolesAllowed: string[] = callerProfile.ruolo === 'admin'
+    ? ['dipendente', 'manager', 'admin']
+    : ['dipendente']
+
+  if (!rolesAllowed.includes(ruoloRaw)) {
+    return NextResponse.json(
+      { error: callerProfile.ruolo === 'manager'
+          ? 'Il manager può creare solo utenti con ruolo dipendente.'
+          : 'Ruolo non valido. Valori ammessi: dipendente, manager, admin' },
+      { status: 403 }
+    )
   }
+
+  const ruolo = ruoloRaw as import('@/lib/supabase/types').UserRole
 
   // Validazione email minimale
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'Formato email non valido' }, { status: 400 })
   }
 
-  // --- 4. Crea auth user con service role (la service key non lascia mai il server) ---
+  // service_role: auth.admin.createUser() + INSERT users — non esposto dal client anon
   const serviceClient = createServiceClient()
 
   // Admin può specificare un'area diversa nel body (es. import storico); manager usa sempre la sua area

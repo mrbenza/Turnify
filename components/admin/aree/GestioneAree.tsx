@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import type { Area, User, SchedulingMode } from '@/lib/supabase/types'
+import Select from '@/components/ui/Select'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -117,31 +118,29 @@ function NuovaAreaModal({ onClose, onCreated }: NuovaAreaModalProps) {
             <label htmlFor="nuova-mode" className="block text-sm font-medium text-gray-700 mb-1">
               Modalità scheduling
             </label>
-            <select
+            <Select
               id="nuova-mode"
               value={schedulingMode}
-              onChange={(e) => setSchedulingMode(e.target.value as SchedulingMode)}
+              onChange={(v) => setSchedulingMode(v as SchedulingMode)}
+              options={VALID_MODES.map((m) => ({ value: m, label: SCHEDULING_MODE_LABELS[m] }))}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              {VALID_MODES.map((m) => (
-                <option key={m} value={m}>{SCHEDULING_MODE_LABELS[m]}</option>
-              ))}
-            </select>
+            />
           </div>
 
           <div>
             <label htmlFor="nuova-workers" className="block text-sm font-medium text-gray-700 mb-1">
               Lavoratori per giorno
             </label>
-            <select
+            <Select
               id="nuova-workers"
-              value={workersPerDay}
-              onChange={(e) => setWorkersPerDay(Number(e.target.value) as 1 | 2)}
+              value={String(workersPerDay)}
+              onChange={(v) => setWorkersPerDay(Number(v) as 1 | 2)}
+              options={[
+                { value: '1', label: '1 lavoratore' },
+                { value: '2', label: '2 lavoratori' },
+              ]}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value={1}>1 lavoratore</option>
-              <option value={2}>2 lavoratori</option>
-            </select>
+            />
           </div>
 
           {error && (
@@ -268,53 +267,48 @@ function ModificaAreaModal({ area, areas, managers, onClose, onUpdated }: Modifi
             <label htmlFor="modifica-mode" className="block text-sm font-medium text-gray-700 mb-1">
               Modalità scheduling
             </label>
-            <select
+            <Select
               id="modifica-mode"
               value={schedulingMode}
-              onChange={(e) => setSchedulingMode(e.target.value as SchedulingMode)}
+              onChange={(v) => setSchedulingMode(v as SchedulingMode)}
+              options={VALID_MODES.map((m) => ({ value: m, label: SCHEDULING_MODE_LABELS[m] }))}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              {VALID_MODES.map((m) => (
-                <option key={m} value={m}>{SCHEDULING_MODE_LABELS[m]}</option>
-              ))}
-            </select>
+            />
           </div>
 
           <div>
             <label htmlFor="modifica-workers" className="block text-sm font-medium text-gray-700 mb-1">
               Lavoratori per giorno
             </label>
-            <select
+            <Select
               id="modifica-workers"
-              value={workersPerDay}
-              onChange={(e) => setWorkersPerDay(Number(e.target.value) as 1 | 2)}
+              value={String(workersPerDay)}
+              onChange={(v) => setWorkersPerDay(Number(v) as 1 | 2)}
+              options={[
+                { value: '1', label: '1 lavoratore' },
+                { value: '2', label: '2 lavoratori' },
+              ]}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value={1}>1 lavoratore</option>
-              <option value={2}>2 lavoratori</option>
-            </select>
+            />
           </div>
 
           <div>
             <label htmlFor="modifica-manager" className="block text-sm font-medium text-gray-700 mb-1">
               Manager
             </label>
-            <select
+            <Select
               id="modifica-manager"
               value={managerId}
-              onChange={(e) => setManagerId(e.target.value)}
+              onChange={setManagerId}
+              options={[
+                { value: '', label: 'Nessun manager' },
+                ...managers.map((m) => {
+                  const currentArea = areas.find((a) => a.manager_id === m.id && a.id !== area.id)
+                  return { value: m.id, label: currentArea ? `${m.nome} — ${currentArea.nome}` : m.nome }
+                }),
+              ]}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="">Nessun manager</option>
-              {managers.map((m) => {
-                const currentArea = areas.find((a) => a.manager_id === m.id && a.id !== area.id)
-                return (
-                  <option key={m.id} value={m.id}>
-                    {currentArea ? `${m.nome} — ${currentArea.nome}` : m.nome}
-                  </option>
-                )
-              })}
-            </select>
+            />
 
             {selectedManagerCurrentArea && (
               <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
@@ -509,17 +503,16 @@ function DipendentiDrawer({ area, allAreas, allUsers, onClose, onUserMoved }: Di
 
                       {isMoving && (
                         <div className="flex items-center gap-2">
-                          <select
+                          <Select
                             value={targetAreaId}
-                            onChange={(e) => setMoveTargetAreaId((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                            onChange={(v) => setMoveTargetAreaId((prev) => ({ ...prev, [u.id]: v }))}
+                            options={[
+                              { value: '', label: 'Seleziona area...' },
+                              ...otherAreas.map((a) => ({ value: a.id, label: a.nome })),
+                            ]}
                             className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                             aria-label={`Seleziona area di destinazione per ${u.nome}`}
-                          >
-                            <option value="">Seleziona area...</option>
-                            {otherAreas.map((a) => (
-                              <option key={a.id} value={a.id}>{a.nome}</option>
-                            ))}
-                          </select>
+                          />
                           <button
                             onClick={() => handleMoveUser(u.id, targetAreaId)}
                             disabled={!targetAreaId || isLoading}
@@ -544,19 +537,19 @@ function DipendentiDrawer({ area, allAreas, allUsers, onClose, onUserMoved }: Di
                 Aggiungi dipendente
               </h3>
               <div className="flex items-center gap-2">
-                <select
+                <Select
                   value={addUserId}
-                  onChange={(e) => setAddUserId(e.target.value)}
+                  onChange={setAddUserId}
+                  options={[
+                    { value: '', label: 'Seleziona dipendente...' },
+                    ...otherUsers.map((u) => ({
+                      value: u.id,
+                      label: `${u.nome} — ${u.area_id ? allAreas.find((a) => a.id === u.area_id)?.nome ?? 'Area sconosciuta' : 'Senza area'}`,
+                    })),
+                  ]}
                   className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                   aria-label="Seleziona dipendente da aggiungere"
-                >
-                  <option value="">Seleziona dipendente...</option>
-                  {otherUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nome} — {u.area_id ? allAreas.find((a) => a.id === u.area_id)?.nome ?? 'Area sconosciuta' : 'Senza area'}
-                    </option>
-                  ))}
-                </select>
+                />
                 <button
                   onClick={handleAddUser}
                   disabled={!addUserId || loadingMove === addUserId}

@@ -37,7 +37,33 @@ export async function POST(request: Request) {
   // Usa l'area_id passata dal frontend (dall'import), fallback sull'area dell'admin
   const areaId = (typeof body.area_id === 'string' && body.area_id) ? body.area_id : profile.area_id
 
+  // service_role: UPDATE shifts cross-area per risoluzione conflitti (admin)
   const serviceClient = createServiceClient()
+
+  // Blocco immutabilità: rifiuta se qualsiasi mese coinvolto è locked o confirmed
+  const { data: lockedStatuses } = await serviceClient
+    .from('month_status')
+    .select('month, year, status')
+    .eq('area_id', areaId)
+    .in('status', ['locked', 'confirmed'])
+
+  if (lockedStatuses && lockedStatuses.length > 0) {
+    const lockedSet = new Set<string>(
+      lockedStatuses.map((ms) => `${ms.year}-${String(ms.month).padStart(2, '0')}`)
+    )
+    const blocked = [...new Set(
+      shifts
+        .map((s) => s.date.slice(0, 7))
+        .filter((ym) => lockedSet.has(ym))
+    )]
+    if (blocked.length > 0) {
+      const fmt = (ym: string) => { const [y, m] = ym.split('-'); return `${m}/${y}` }
+      return NextResponse.json(
+        { error: `Impossibile risolvere: i mesi ${blocked.map(fmt).join(', ')} sono già bloccati/confermati. Sblocca prima di procedere.` },
+        { status: 422 }
+      )
+    }
+  }
 
   const toInsert = shifts.map((s) => ({
     date: s.date,

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { User, UserRole, Area } from '@/lib/supabase/types'
+import Select from '@/components/ui/Select'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -169,17 +170,16 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
       {/* Filtri */}
       <div className="flex flex-wrap gap-2 mb-5">
         {isAdmin && areas.length > 1 && (
-          <select
+          <Select
             value={filterAreaId ?? ''}
-            onChange={(e) => setFilterAreaId(e.target.value || null)}
+            onChange={(v) => setFilterAreaId(v || null)}
+            options={[
+              { value: '', label: 'Tutte le aree' },
+              ...areas.map((area) => ({ value: area.id, label: area.nome })),
+            ]}
             className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
             aria-label="Filtra per area"
-          >
-            <option value="">Tutte le aree</option>
-            {areas.map((area) => (
-              <option key={area.id} value={area.id}>{area.nome}</option>
-            ))}
-          </select>
+          />
         )}
         <div className="relative">
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
@@ -238,9 +238,14 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
                     ) : changingRole === dipendente.id ? (
                       <span className="text-gray-400"><Spinner /></span>
                     ) : (
-                      <select
+                      <Select
                         value={dipendente.ruolo}
-                        onChange={(e) => handleRoleChange(dipendente, e.target.value as UserRole)}
+                        onChange={(v) => handleRoleChange(dipendente, v as UserRole)}
+                        options={[
+                          { value: 'dipendente', label: 'ATC' },
+                          { value: 'manager', label: 'Area Manager' },
+                          { value: 'admin', label: 'Administrator' },
+                        ]}
                         disabled={dipendente.id === currentUserId}
                         aria-label={`Ruolo di ${dipendente.nome}`}
                         title={dipendente.id === currentUserId ? 'Non puoi modificare il tuo ruolo' : undefined}
@@ -250,11 +255,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
                           ${ROLE_STYLES[dipendente.ruolo]}
                           ${dipendente.id === currentUserId ? 'cursor-not-allowed opacity-60' : ''}
                         `}
-                      >
-                        <option value="dipendente">ATC</option>
-                        <option value="manager">Area Manager</option>
-                        <option value="admin">Administrator</option>
-                      </select>
+                      />
                     )}
                   </td>
                   {isAdmin && (
@@ -440,16 +441,17 @@ function AddUserModal({ onClose, onAdded, isManager = false }: AddUserModalProps
           {!isManager && (
             <div>
               <label htmlFor="add-ruolo" className="block text-xs font-medium text-gray-700 mb-1">Ruolo</label>
-              <select
+              <Select
                 id="add-ruolo"
                 value={ruolo}
-                onChange={(e) => setRuolo(e.target.value as UserRole)}
+                onChange={(v) => setRuolo(v as UserRole)}
+                options={[
+                  { value: 'dipendente', label: 'ATC' },
+                  { value: 'manager', label: 'Area Manager' },
+                  { value: 'admin', label: 'Administrator' },
+                ]}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-              >
-                <option value="dipendente">ATC</option>
-                <option value="manager">Area Manager</option>
-                <option value="admin">Administrator</option>
-              </select>
+              />
             </div>
           )}
 

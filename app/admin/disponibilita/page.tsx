@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Availability, Shift, Holiday, MonthStatus, SchedulingMode, Area } from '@/lib/supabase/types'
+import { createClient } from '@/lib/supabase/server'
+import type { MonthStatus, SchedulingMode, Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import CalendarioGlobale from '@/components/admin/disponibilita/CalendarioGlobale'
 import { sortByNome } from '@/lib/utils/sort'
@@ -27,14 +27,12 @@ export default async function DisponibilitaPage({
 
   const isAdmin = profile?.ruolo === 'admin'
 
-  const serviceClient = createServiceClient()
-
   /* ---- Area selezione ---- */
   // Admin: può scegliere qualsiasi area via ?area=<id>, default alla prima
   // Manager: sempre la propria area
   let areas: Area[] = []
   if (isAdmin) {
-    const { data } = await serviceClient.from('areas').select('*')
+    const { data } = await supabase.from('areas').select('*')
     areas = sortByNome(data ?? [])
   }
 
@@ -49,7 +47,7 @@ export default async function DisponibilitaPage({
   }
 
   /* ---- Nome area per badge navbar ---- */
-  const { data: areaData } = await serviceClient
+  const { data: areaData } = await supabase
     .from('areas').select('nome').eq('id', areaId).maybeSingle()
   const areaNome = areaData?.nome ?? undefined
 
@@ -68,7 +66,7 @@ export default async function DisponibilitaPage({
     supabase.from('shifts').select('*').eq('area_id', areaId).gte('date', from).lte('date', to),
     supabase.from('holidays').select('*').gte('date', from).lte('date', to),
     supabase.from('month_status').select('*').eq('area_id', areaId).eq('month', month + 1).eq('year', year).maybeSingle<MonthStatus>(),
-    serviceClient.from('areas').select('scheduling_mode, workers_per_day').eq('id', areaId).single(),
+    supabase.from('areas').select('scheduling_mode, workers_per_day').eq('id', areaId).single(),
   ])
 
   const users = usersRes.data ?? []

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import type { User, SchedulingMode } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
 import CalendarioDisponibilita from '@/components/user/CalendarioDisponibilita'
@@ -25,8 +25,7 @@ export default async function UserPage() {
   const areaId = profile?.area_id ?? ''
 
   // Scheduling mode dall'area del dipendente
-  const serviceClient = createServiceClient()
-  const { data: areaConfig } = await serviceClient
+  const { data: areaConfig } = await supabase
     .from('areas')
     .select('scheduling_mode, nome')
     .eq('id', areaId)

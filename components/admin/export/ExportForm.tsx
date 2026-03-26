@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Shift, User } from '@/lib/supabase/types'
+import type { User } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Types & constants                                                   */
@@ -56,11 +56,33 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
+  const [monthStatus, setMonthStatus] = useState<string | null>(null)
   const [emailInviata, setEmailInviata] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const userMap = new Map<string, string>(users.map((u) => [u.id, u.nome]))
   const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
+
+  /* ---- Fetch month status ---- */
+  async function fetchMonthStatus(month: number, year: number) {
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('month_status')
+        .select('status, email_inviata')
+        .eq('month', month + 1)
+        .eq('year', year)
+        .maybeSingle()
+      const status = data?.status ?? null
+      setMonthStatus(status)
+      // "Email inviata" si mostra solo se il mese è confirmed E l'email è stata inviata
+      // Se admin ha sbloccato (status torna open/locked), reset visivo dell'email
+      setEmailInviata(status === 'confirmed' && (data?.email_inviata ?? false))
+    } catch { /* non bloccante */ }
+  }
+
+  // Carica stato al mount con il mese iniziale
+  useEffect(() => { fetchMonthStatus(filterMonth, filterYear) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- Load preview ---- */
   async function loadPreview(month: number, year: number) {
@@ -110,18 +132,9 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     setFilterMonth(month)
     setFilterYear(year)
     setPreview(null)
+    setMonthStatus(null)
     setEmailInviata(false)
-    // Controlla stato email per il mese selezionato
-    try {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('month_status')
-        .select('email_inviata')
-        .eq('month', month + 1)
-        .eq('year', year)
-        .maybeSingle()
-      setEmailInviata(data?.email_inviata ?? false)
-    } catch { /* non bloccante */ }
+    await fetchMonthStatus(month, year)
   }
 
   /* ---- Export XLSX ---- */
@@ -180,6 +193,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     </svg>
   )
 
+  const canExport = monthStatus === 'locked' || monthStatus === 'confirmed'
   const stepNum = templates.length > 1 ? { period: 1, template: 2, preview: 3, send: 4 } : { period: 1, template: 0, preview: 2, send: 3 }
 
   return (
@@ -237,6 +251,16 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
             {templates.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
           </select>
         </section>
+      )}
+
+      {/* Stato mese — banner informativo */}
+      {monthStatus !== null && monthStatus !== 'locked' && monthStatus !== 'confirmed' && (
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          Il mese non è ancora confermato. Prima di esportare, conferma il mese dal Calendario.
+        </div>
       )}
 
       {/* Step 2: Anteprima */}
@@ -391,8 +415,8 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={handleExport}
-                  disabled={exporting}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  disabled={exporting || !canExport}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                   aria-label={`Genera Excel turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
                 >
                   {exporting ? <Spinner /> : (
@@ -415,8 +439,8 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
                 ) : (
                   <button
                     onClick={handleSendEmail}
-                    disabled={sendingEmail}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-blue-300 text-blue-700 bg-white text-sm font-medium hover:bg-blue-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    disabled={sendingEmail || !canExport}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-blue-300 text-blue-700 bg-white text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                     aria-label={`Invia email turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
                   >
                     {sendingEmail ? <Spinner /> : (

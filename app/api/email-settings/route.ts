@@ -1,6 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { EmailSetting } from '@/lib/supabase/types'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -46,8 +45,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Formato email non valido.' }, { status: 400 })
   }
 
-  const serviceClient = createServiceClient()
-  const { data, error } = await serviceClient
+  const { data, error } = await supabase
     .from('email_settings')
     .insert({
       email: trimmedEmail,

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { EquityScore } from '@/lib/supabase/types'
+import DrawerStoricoDipendente from './DrawerStoricoDipendente'
+import Select from '@/components/ui/Select'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -32,6 +34,7 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
   const [filterYear, setFilterYear] = useState(initialYear)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
   async function fetchScores(month: number, year: number, mode: 'month' | 'all') {
     setLoading(true)
@@ -55,7 +58,8 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
 
   useEffect(() => {
     fetchScores(filterMonth, filterYear, viewMode)
-  }, [filterMonth, filterYear, viewMode]) // fetchScores is defined inside component intentionally
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMonth, filterYear, viewMode])
 
   /* Sort by score ascending (lower score = priority) */
   const sorted = [...scores].sort((a, b) => a.score - b.score)
@@ -97,26 +101,20 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
         {/* Month/year filters (only when month mode) */}
         {viewMode === 'month' && (
           <>
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(Number(e.target.value))}
+            <Select
+              value={String(filterMonth)}
+              onChange={(v) => setFilterMonth(Number(v))}
+              options={MONTH_NAMES.map((name, i) => ({ value: String(i), label: name }))}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Mese"
-            >
-              {MONTH_NAMES.map((name, i) => (
-                <option key={i} value={i}>{name}</option>
-              ))}
-            </select>
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(Number(e.target.value))}
+            />
+            <Select
+              value={String(filterYear)}
+              onChange={(v) => setFilterYear(Number(v))}
+              options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label="Anno"
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+            />
           </>
         )}
 
@@ -152,7 +150,8 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
             return (
               <div
                 key={s.user_id}
-                className={`rounded-xl border p-4 ${isPriority ? 'bg-green-50/60 border-green-200' : 'bg-white border-gray-100'}`}
+                onClick={() => setSelectedUserId(s.user_id)}
+                className={`rounded-xl border p-4 cursor-pointer transition-shadow hover:shadow-md ${isPriority ? 'bg-green-50/60 border-green-200' : 'bg-white border-gray-100'}`}
               >
                 {/* Header row */}
                 <div className="flex items-center justify-between mb-3">
@@ -222,7 +221,8 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
                 return (
                   <tr
                     key={s.user_id}
-                    className={`transition-colors ${isPriority ? 'bg-green-50/60 hover:bg-green-50' : 'hover:bg-gray-50'}`}
+                    onClick={() => setSelectedUserId(s.user_id)}
+                    className={`transition-colors cursor-pointer ${isPriority ? 'bg-green-50/60 hover:bg-green-50' : 'hover:bg-gray-50'}`}
                   >
                     <td className="py-3 px-0 text-gray-400 font-medium text-xs">{idx + 1}</td>
                     <td className="py-3 px-2 font-medium text-gray-800">
@@ -262,6 +262,11 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
           </table>
         </div>
       )}
+
+      <DrawerStoricoDipendente
+        userId={selectedUserId}
+        onClose={() => setSelectedUserId(null)}
+      />
     </div>
   )
 }

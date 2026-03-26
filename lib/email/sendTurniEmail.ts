@@ -18,6 +18,15 @@ type SendTurniEmailParams = {
   excelFileName?: string
 }
 
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function buildHtml(month: number, year: number, shiftsByDate: Map<string, string[]>): string {
   const monthName = MONTH_NAMES_IT[month - 1]
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -36,8 +45,8 @@ function buildHtml(month: number, year: number, shiftsByDate: Map<string, string
     rows.push(`
       <tr style="background:${bg}">
         <td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;color:#374151;white-space:nowrap">${dayLabel}</td>
-        <td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;color:#111827">${names[0] ?? ''}</td>
-        <td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;color:#111827">${names[1] ?? ''}</td>
+        <td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;color:#111827">${escHtml(names[0] ?? '')}</td>
+        <td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;color:#111827">${escHtml(names[1] ?? '')}</td>
       </tr>`)
   }
 

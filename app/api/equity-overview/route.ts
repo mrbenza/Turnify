@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { sortByNome } from '@/lib/utils/sort'
 import type { EquityScore } from '@/lib/supabase/types'
 
 export interface AreaEquitySummary {
@@ -33,18 +34,20 @@ export async function GET(request: Request) {
   const month = Number(searchParams.get('month') ?? 0)
   const year = Number(searchParams.get('year') ?? new Date().getFullYear())
 
+  // service_role: RPC get_equity_scores cross-area + SELECT areas per tutte le aree (admin panoramica)
   const serviceClient = createServiceClient()
 
   // Carica tutte le aree (esclusa Default)
-  const { data: areas, error: areasError } = await serviceClient
+  const { data: areasRaw, error: areasError } = await serviceClient
     .from('areas')
     .select('id, nome')
     .neq('nome', 'Default')
-    .order('nome', { ascending: true })
 
-  if (areasError || !areas) {
+  if (areasError || !areasRaw) {
     return NextResponse.json({ error: 'Errore caricamento aree' }, { status: 500 })
   }
+
+  const areas = sortByNome(areasRaw)
 
   // Carica equity scores per tutte le aree in parallelo
   const results = await Promise.all(

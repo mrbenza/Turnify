@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Area } from '@/lib/supabase/types'
+import type { Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import ListaUtenti from '@/components/admin/utenti/ListaUtenti'
 import { sortByNome } from '@/lib/utils/sort'
@@ -37,6 +37,7 @@ export default async function UtentiPage() {
   const users = usersData ?? []
 
   /* ---- Aree (per filtro admin) ---- */
+  // service_role: auth.admin.listUsers() richiede service key; usato nella stessa istanza per coerenza
   const serviceClient = createServiceClient()
   const areas: Area[] = isAdmin
     ? sortByNome(((await serviceClient.from('areas').select('*')).data ?? []) as Area[])

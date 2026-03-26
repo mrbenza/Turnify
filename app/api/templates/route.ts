@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
   }
 
   /* ---- Upload to Supabase Storage ---- */
+  // service_role: storage write — il bucket 'templates' richiede service key per upload
   const serviceClient = createServiceClient()
   const { error: storageError } = await serviceClient.storage
     .from('templates')

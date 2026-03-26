@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
   // ----------------------------------------------------------------
   // Risolvi area nel DB
   // ----------------------------------------------------------------
+  // service_role: UPSERT shifts + INSERT/UPDATE month_status cross-area (import storico admin)
   const serviceClient = createServiceClient()
   let targetAreaId: string | null = null
   let areaWarning: string | null = null
@@ -264,6 +265,24 @@ export async function POST(request: NextRequest) {
 
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || year < 2020 || year > 2100) {
     return NextResponse.json({ error: 'Impossibile determinare il mese dal file — data non valida in A3' }, { status: 400 })
+  }
+
+  // ----------------------------------------------------------------
+  // Blocco immutabilità: rifiuta import su mese locked o confirmed
+  // ----------------------------------------------------------------
+  const { data: existingMonthStatus } = await serviceClient
+    .from('month_status')
+    .select('id, status')
+    .eq('month', month)
+    .eq('year', year)
+    .eq('area_id', targetAreaId)
+    .maybeSingle()
+
+  if (existingMonthStatus?.status === 'locked' || existingMonthStatus?.status === 'confirmed') {
+    return NextResponse.json(
+      { error: `Impossibile importare: il mese ${month}/${year} è già ${existingMonthStatus.status === 'confirmed' ? 'confermato' : 'bloccato'}. Sblocca il mese prima di importare.` },
+      { status: 422 }
+    )
   }
 
   // ----------------------------------------------------------------
@@ -397,15 +416,7 @@ export async function POST(request: NextRequest) {
     locked_at: new Date().toISOString(),
   }
 
-  const { data: existingStatus } = await serviceClient
-    .from('month_status')
-    .select('id')
-    .eq('month', month)
-    .eq('year', year)
-    .eq('area_id', targetAreaId)
-    .single()
-
-  if (existingStatus) {
+  if (existingMonthStatus) {
     await serviceClient
       .from('month_status')
       .update(lockPayload)

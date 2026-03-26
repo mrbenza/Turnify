@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-const INACTIVITY_MINUTES = 60      // logout dopo 60 min di inattività
+const INACTIVITY_MINUTES = 10      // logout dopo 10 min di inattività
 const WARNING_BEFORE_SECONDS = 60  // avviso 60 sec prima del logout
 
 const EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']

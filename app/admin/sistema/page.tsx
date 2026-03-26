@@ -30,6 +30,7 @@ export default async function SistemaPage() {
   if (profile?.ruolo === 'manager') redirect('/admin/disponibilita')
 
   /* ---- Lista template dallo storage ---- */
+  // service_role: storage.list() richiede service key
   const serviceClient = createServiceClient()
   const { data: fileList } = await serviceClient.storage.from('templates').list()
   const templates: TemplateFile[] = (fileList ?? [])

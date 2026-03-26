@@ -21,6 +21,16 @@ Aggiornare dopo ogni modifica strutturale significativa.
 
 ## Schema Database
 
+### `areas`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid PK | |
+| nome | text UNIQUE | es. "Area4 - Toscana" |
+| scheduling_mode | enum | `weekend_full` \| `single_day` \| `sun_next_sat` |
+| workers_per_day | int | 1 o 2 |
+| manager_id | uuid\|null FK users | |
+| template_path | text\|null | |
+
 ### `users`
 | Colonna | Tipo | Note |
 |---------|------|------|
@@ -29,6 +39,7 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | email | text UNIQUE | |
 | ruolo | enum | `admin` \| `manager` \| `dipendente` |
 | attivo | boolean | default true |
+| area_id | uuid FK areas | area di appartenenza |
 | data_creazione | timestamptz | default now() |
 | disattivato_at | timestamptz\|null | |
 
@@ -57,8 +68,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 
 **Semantica status:**
 - `open` → modificabile, nessun lock
-- `locked` → bloccato dal manager, sbloccabile (da manager o admin)
-- `confirmed` → definitivo dopo export Excel o invio email; sbloccabile solo da admin
+- `locked` → bloccato dal manager; **immutabile** — availability/shifts/import bloccati con 422. Sbloccabile da manager o admin.
+- `confirmed` → definitivo dopo export Excel o invio email; **immutabile** come `locked`. Sbloccabile solo da admin.
 
 ### `availability`
 | Colonna | Tipo | Note |
@@ -68,6 +79,7 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | date | date | |
 | available | boolean | |
 | status | enum | `pending` \| `approved` \| `locked` |
+| area_id | uuid FK areas | |
 | created_at | timestamptz | |
 | updated_at | timestamptz | trigger auto-update |
 | — | UNIQUE(user_id, date) | |
@@ -80,6 +92,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | user_id | uuid FK users | |
 | user_nome | text\|null | denormalizzato, preserva nome se user cancellato |
 | shift_type | enum | `weekend` \| `festivo` \| `reperibilita` |
+| reperibile_order | int | 1 = primo (col D Excel), 2 = secondo (col E) |
+| area_id | uuid FK areas | |
 | created_by | uuid FK users | |
 | created_at | timestamptz | |
 | — | UNIQUE(date, user_id) | |
@@ -90,9 +104,10 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | Colonna | Tipo | Note |
 |---------|------|------|
 | id | uuid PK | |
-| email | text UNIQUE | |
+| email | text | UNIQUE(email, area_id) |
 | descrizione | text\|null | |
 | attivo | boolean | default true |
+| area_id | uuid FK areas | ownership per area |
 | created_at | timestamptz | |
 
 ---
@@ -103,23 +118,27 @@ Aggiornare dopo ogni modifica strutturale significativa.
 ```sql
 is_admin() → boolean                          -- RLS helper
 is_admin_or_manager() → boolean               -- RLS helper
+current_user_area_id() → uuid                 -- RLS helper (migration 016): area_id dell'utente autenticato corrente
+is_manager() → boolean                        -- RLS helper (migration 016): true se utente attivo con ruolo manager
 get_equity_scores(p_month int, p_year int)    -- RPC usata da statistiche
   → { user_id, nome, turni_totali, festivi, score }
   -- score = turni_totali + festivi*2
   -- p_month=0 → all-time (ignora filtro mese/anno)
 ```
 
-### RLS (sintesi)
+### RLS (sintesi) — area-aware (migration 016)
 | Tabella | Dipendente | Manager | Admin |
 |---------|-----------|---------|-------|
-| users | legge self | legge tutti, modifica dipendenti | tutto |
+| users | legge self | **solo SELECT** sulla propria area — nessuna write via RLS | tutto |
 | holidays | legge | legge | tutto |
-| month_status | legge | legge + write | tutto |
-| availability | proprie (pending) | tutto | tutto |
-| shifts | proprie | tutto | tutto |
-| email_settings | — | legge + write (service) | tutto |
+| month_status | legge | legge + write solo area propria | tutto |
+| availability | proprie (pending) | solo area propria | tutto |
+| shifts | proprie | solo area propria | tutto |
+| email_settings | — | legge + write solo area propria | tutto |
 
-> **Nota:** le operazioni sensibili (email_settings, users creation) usano `serviceClient` (service role) per bypassare RLS.
+> **Scritture su `users`:** tutte le API route che modificano `public.users` (PATCH ruolo, PATCH attivo, DELETE, POST crea utente) usano `serviceClient` (service_role). La RLS manager-SELECT-only impedisce privilege escalation anche in caso di bypass diretto delle API.
+
+> **Garanzia cross-area (migration 016):** le policy RLS usano `current_user_area_id()` per i manager. Anche bypassando le API e chiamando Supabase direttamente con un token manager valido, il DB rifiuta letture e scritture su righe di aree diverse dalla propria.
 
 ---
 
@@ -132,13 +151,14 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 
 | Route | Metodo | Auth | Cosa fa |
 |-------|--------|------|---------|
-| `/api/availability` | POST | dipendente | Crea/aggiorna disponibilità. Blocca se mese locked/approved |
-| `/api/shifts` | POST | admin/manager | Assegna turno. Calcola shift_type. Blocca se mese locked. In `sun_next_sat`: Dom usa `day + 6`, Sab usa `day - 6` per validazione conflitti (fix: rimossa condizione `isHolidayOnWeekend` che forzava `weekend_full`) |
-| `/api/shifts/[id]` | DELETE | admin/manager | Elimina turno. Blocca se mese locked |
+| `/api/availability` | POST | dipendente | Crea/aggiorna disponibilità. Blocca con 422 se mese `locked` **o** `confirmed` |
+| `/api/shifts` | POST | admin/manager | Assegna turno. Calcola shift_type. Blocca se mese locked. In `sun_next_sat`: Dom usa `day + 6`, Sab usa `day - 6` per validazione conflitti (fix: rimossa condizione `isHolidayOnWeekend` che forzava `weekend_full`). Manager: verifica che `user_id` dal body appartenga alla propria area — 403 se cross-area |
+| `/api/shifts/[id]` | DELETE | admin/manager | Elimina turno. Blocca se mese locked. Manager: query filtrata con `.eq('area_id', profile.area_id)` — non può eliminare turni di altre aree. Admin: accesso totale |
 | `/api/users` | POST | admin/manager | Crea utente (auth + db). Rollback se DB fallisce. Accetta `area_id` opzionale nel body; se caller e admin, usa `area_id` dal body (non quello del profilo admin) |
-| `/api/users/[id]` | PATCH | admin/manager | Modifica ruolo (admin only) o attivo/disattivato_at. Se ruolo cambia a `manager`: aggiorna automaticamente `areas.manager_id` per l'area dell'utente. Se ruolo scende da `manager`: rimuove `areas.manager_id` se era assegnato |
+| `/api/users/[id]` | PATCH | admin/manager | Modifica ruolo (admin only) o attivo/disattivato_at. Tutte le write su `public.users` usano `serviceClient` (RLS manager = SELECT only). Manager: verifica cross-area prima del toggle `attivo`. Se ruolo cambia a `manager`: aggiorna automaticamente `areas.manager_id`. Se ruolo scende da `manager`: rimuove `areas.manager_id` |
+| `/api/users/[id]/shifts` | GET | admin/manager | Storico turni di un utente. Manager: restituisce solo turni se l'utente appartiene alla propria area — 403 se cross-area. Admin: accesso totale |
 | `/api/users/[id]` | DELETE | admin | Elimina utente. Richiede attivo=false |
-| `/api/month` | POST | admin/manager | Lock (`locked`) o unlock (`open`) mese. Unlock resetta email_inviata=false |
+| `/api/month` | POST | admin/manager | Lock (`locked`) o unlock (`open`) mese. Unlock resetta email_inviata=false. **Al lock**: validazione server-side che ogni sabato, domenica e festivo obbligatorio del mese abbia `workers_per_day` turni assegnati — 422 con lista giorni scoperti se la copertura è incompleta |
 | `/api/holidays` | GET | admin/manager | Lista festività |
 | `/api/holidays` | POST | admin | Crea manuale o import da Nager.Date API |
 | `/api/holidays/[id]` | PATCH | admin | Modifica mandatory |
@@ -166,6 +186,14 @@ createClient()        // server component + API routes (usa cookies)
 createServiceClient() // service role, mai esposto al browser
 ```
 
+**Uso service_role:** strettamente limitato a operazioni non coperte dalla RLS:
+- `auth.admin.createUser()`, `auth.admin.deleteUser()`, `auth.admin.listUsers()` — API admin Supabase
+- `storage.from('templates').*` — bucket storage senza policy write per utenti normali
+- Write su tabella `areas` — nessuna policy INSERT/UPDATE/DELETE nel DB
+- Write su tabella `users` (PATCH/DELETE) — RLS manager è solo SELECT; admin ha write via RLS ma usiamo serviceClient per coerenza con i casi manager
+
+Ogni `createServiceClient()` nel codebase è documentato con commento `// service_role: <motivo>`.
+
 ### `lib/supabase/client.ts`
 ```typescript
 createClient() // browser only, client components
@@ -192,6 +220,7 @@ sendTurniEmail({ month, year, shiftsByDate, recipients, excelBuffer?, excelFileN
   → Promise<void>
 ```
 - Costruisce HTML tabella turni + versione testo
+- Nomi utente sanitizzati via `escHtml()` prima dell'inserimento nel template HTML (previene XSS injection via nomi utente malevoli)
 - Chiama Brevo API (`POST https://api.brevo.com/v3/smtp/email`)
 - `to` = solo mittente (BREVO_SENDER_EMAIL), `bcc` = tutti i destinatari (nessuno si vede tra loro)
 - Allega Excel in base64 se excelBuffer fornito
@@ -250,6 +279,9 @@ In modalità `sun_next_sat`, il blocco `sun_next_sat` viene valutato prima del b
 **`handleRemove` — rimozione singola:**
 La funzione rimuove esclusivamente il turno del giorno cliccato. Non esiste logica di pairing inverso: rimuovere Sab 11 non tocca Dom 5 e viceversa. Questo è il comportamento voluto e definitivo.
 
+#### `DrawerStoricoDipendente` (`components/admin/statistiche/DrawerStoricoDipendente.tsx`)
+Drawer laterale destro con overlay. Si apre cliccando su un dipendente in `GraficoEquita`. Mostra: contatori (totale/weekend/festivi), grafico barre per mese (blu=weekend, arancione=festivi), lista festività con contatore, lista turni raggruppata per mese. Chiude con Escape o click overlay. Chiama `GET /api/users/[id]/shifts`.
+
 #### `ExportForm`
 Props: `users, templates`
 
@@ -285,9 +317,13 @@ CalendarioGlobale click cella
 ```
 "Conferma e blocca" button
   → POST /api/month { month, year, action: 'lock' }
+  → validazione server-side: ogni sab/dom/festivo obbligatorio deve avere workers_per_day turni
+  → 422 con lista giorni scoperti se incompleto
   → UPDATE month_status SET status='locked'
   → setLocked(true), setIsConfirmed(false)
 ```
+
+**Immutabilità post-lock:** qualsiasi tentativo di write su availability, shifts, import-shifts, import-shifts/resolve per un mese `locked` o `confirmed` ritorna 422.
 
 ### 3. Export Excel + auto-email
 ```
@@ -437,6 +473,7 @@ turnify/
 │   │   ├── export/ExportForm.tsx
 │   │   ├── utenti/ListaUtenti.tsx + AddUserModal.tsx  ← ricerca per nome aggiunta
 │   │   ├── statistiche/GraficoEquita.tsx
+│   │   ├── statistiche/DrawerStoricoDipendente.tsx  ← drawer storico turni per dipendente (click su riga GraficoEquita)
 │   │   ├── impostazioni/GestioneEmail.tsx
 │   │   ├── sistema/GestioneTemplate.tsx + AggiornamentoCalendario.tsx + ImportaStorico.tsx
 │   │   ├── aree/GestioneAree.tsx         ← modal modifica area con dropdown manager e banner ambra
@@ -470,5 +507,8 @@ turnify/
         ├── 001–010_*.sql   (schema iniziale, RLS, ruoli, score equita)
         ├── 011_areas.sql   (tabella areas: scheduling_mode, workers_per_day, template_path, manager_id; riga Default)
         ├── 012_reperibile_order.sql  (colonna reperibile_order su shifts: 1=col D, 2=col E)
-        └── 013_multi_area.sql  (area_id su users/shifts/availability/month_status; unique month+year+area_id)
+        ├── 013_multi_area.sql  (area_id su users/shifts/availability/month_status; unique month+year+area_id)
+        ├── 014_email_settings_area_id.sql  (area_id NOT NULL su email_settings; unique(email, area_id))
+        ├── 015_areas_template_manager.sql  (template_path e manager_id su areas)
+        └── 016_rls_area_aware.sql  (current_user_area_id() e is_manager(); RLS area-aware su tutte le tabelle; manager solo SELECT su users — privilege escalation prevention; API route usano serviceClient per tutte le write su public.users)
 ```

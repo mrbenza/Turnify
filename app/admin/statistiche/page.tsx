@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import type { EquityScore } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import GraficoEquita from '@/components/admin/statistiche/GraficoEquita'
@@ -22,10 +22,8 @@ export default async function StatistichePage() {
 
   const areaId = profile.area_id ?? ''
 
-  const serviceClient = createServiceClient()
-
   /* ---- Nome area per badge navbar ---- */
-  const { data: areaData } = await serviceClient
+  const { data: areaData } = await supabase
     .from('areas').select('nome').eq('id', areaId).maybeSingle()
   const areaNome = areaData?.nome ?? undefined
 

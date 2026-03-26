@@ -20,6 +20,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
+  // service_role: PATCH usa UPDATE areas (no policy write); manteniamo coerenza nel file
   const serviceClient = createServiceClient()
   const { data, error } = await serviceClient
     .from('areas')
@@ -58,6 +59,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'workers_per_day deve essere 1 o 2' }, { status: 400 })
   }
 
+  // service_role: UPDATE areas — la tabella non ha policy write nel DB
   const serviceClient = createServiceClient()
 
   // Leggi ID della riga area dell'utente

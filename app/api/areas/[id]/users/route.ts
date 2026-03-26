@@ -6,7 +6,7 @@ async function getAuthProfile() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { user: null, profile: null }
   const { data: profile } = await supabase
-    .from('users').select('ruolo').eq('id', user.id).single()
+    .from('users').select('ruolo, area_id').eq('id', user.id).single()
   return { user, profile }
 }
 
@@ -26,6 +26,13 @@ export async function GET(
   }
 
   const { id } = await params
+
+  // Manager: può leggere solo la propria area
+  if (profile?.ruolo === 'manager' && profile.area_id !== id) {
+    return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  }
+
+  // service_role: SELECT users cross-area (admin vede tutte le aree)
   const serviceClient = createServiceClient()
 
   const { data, error } = await serviceClient
@@ -72,6 +79,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Il campo "user_id" è obbligatorio' }, { status: 400 })
   }
 
+  // service_role: UPDATE users.area_id — RLS su users non prevede write per admin tramite client normale
   const serviceClient = createServiceClient()
 
   // Verifica che l'area di destinazione esista

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { Shift, ShiftType } from '@/lib/supabase/types'
+import type { ShiftType } from '@/lib/supabase/types'
 
 function isWeekendDay(year: number, month: number, day: number): boolean {
   const dow = new Date(year, month, day).getDay()
@@ -25,6 +25,11 @@ export async function POST(request: Request) {
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  }
+
+  // Manager deve avere un'area assegnata
+  if (profile.ruolo === 'manager' && !profile.area_id) {
+    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
   }
 
   // Parse body
@@ -93,7 +98,6 @@ export async function POST(request: Request) {
 
     const dow = new Date(year, month - 1, day).getDay() // 0=Dom, 6=Sab
     const isWeekendDate = dow === 0 || dow === 6
-    const isHolidayOnWeekend = isHoliday && isWeekendDate
 
     // Calcola la coppia da escludere in base allo scheduling_mode
     let excludeSat: string
@@ -158,12 +162,16 @@ export async function POST(request: Request) {
     )
   }
 
-  // Fetch nome dipendente per denormalizzarlo nel turno
+  // Verifica che il dipendente appartenga alla stessa area del caller (se manager)
   const { data: targetUser } = await supabase
     .from('users')
-    .select('nome')
+    .select('nome, area_id')
     .eq('id', user_id)
     .single()
+
+  if (profile.ruolo !== 'admin' && targetUser?.area_id !== profile.area_id) {
+    return NextResponse.json({ error: 'Utente non appartenente alla tua area.' }, { status: 403 })
+  }
 
   // Insert shift — adminId comes from session, not from client
   const { data, error } = await supabase

@@ -1,5 +1,5 @@
 -- ============================================================
--- schema.sql — Schema completo Turnify (migrations 001-015)
+-- schema.sql — Schema completo Turnify (migrations 001-016)
 -- Idempotente: DROP POLICY IF EXISTS prima di ogni CREATE.
 --
 -- Per un DB completamente vuoto: eseguire questo file.
@@ -192,19 +192,42 @@ as $$
   );
 $$;
 
+-- Helper: area_id dell'utente corrente (migration 016)
+create or replace function public.current_user_area_id()
+returns uuid language sql security definer
+set search_path = ''
+as $$
+  select area_id from public.users where id = auth.uid()
+$$;
+
+create or replace function public.is_manager()
+returns boolean language sql security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.users
+    where id = auth.uid() and ruolo = 'manager' and attivo = true
+  )
+$$;
+
 -- ---- USERS ----
-drop policy if exists "users: legge se stesso"            on public.users;
+drop policy if exists "users: legge se stesso"             on public.users;
 drop policy if exists "users: admin o manager legge tutti" on public.users;
-drop policy if exists "users: admin o manager gestisce"   on public.users;
+drop policy if exists "users: admin o manager gestisce"    on public.users;
+drop policy if exists "users: admin tutto"                 on public.users;
+drop policy if exists "users: manager propria area"        on public.users;
 
 create policy "users: legge se stesso" on public.users
   for select using (id = auth.uid());
 
-create policy "users: admin o manager legge tutti" on public.users
-  for select using (public.is_admin_or_manager());
+create policy "users: admin tutto" on public.users
+  for all using (public.is_admin());
 
-create policy "users: admin o manager gestisce" on public.users
-  for all using (public.is_admin_or_manager());
+create policy "users: manager propria area" on public.users
+  for all using (
+    public.is_manager()
+    and area_id = public.current_user_area_id()
+  );
 
 -- ---- HOLIDAYS ----
 drop policy if exists "holidays: tutti leggono"    on public.holidays;
@@ -221,68 +244,79 @@ drop policy if exists "month_status: tutti leggono"             on public.month_
 drop policy if exists "month_status: admin o manager inserisce" on public.month_status;
 drop policy if exists "month_status: admin o manager aggiorna"  on public.month_status;
 drop policy if exists "month_status: admin o manager elimina"   on public.month_status;
+drop policy if exists "month_status: admin tutto"               on public.month_status;
+drop policy if exists "month_status: autenticati leggono"       on public.month_status;
+drop policy if exists "month_status: manager propria area"      on public.month_status;
 
-create policy "month_status: tutti leggono" on public.month_status
-  for select using (true);
+create policy "month_status: autenticati leggono" on public.month_status
+  for select using (auth.role() = 'authenticated');
 
-create policy "month_status: admin o manager inserisce" on public.month_status
-  for insert with check (public.is_admin_or_manager());
+create policy "month_status: admin tutto" on public.month_status
+  for all using (public.is_admin());
 
-create policy "month_status: admin o manager aggiorna" on public.month_status
-  for update using (public.is_admin_or_manager());
-
-create policy "month_status: admin o manager elimina" on public.month_status
-  for delete using (public.is_admin_or_manager());
+create policy "month_status: manager propria area" on public.month_status
+  for all using (
+    public.is_manager()
+    and area_id = public.current_user_area_id()
+  );
 
 -- ---- AVAILABILITY ----
-drop policy if exists "availability: utente vede le sue"          on public.availability;
-drop policy if exists "availability: utente inserisce pending"    on public.availability;
-drop policy if exists "availability: utente aggiorna se pending"  on public.availability;
-drop policy if exists "availability: admin o manager vede tutto"  on public.availability;
+drop policy if exists "availability: utente vede le sue"             on public.availability;
+drop policy if exists "availability: utente inserisce pending"       on public.availability;
+drop policy if exists "availability: utente aggiorna se pending"     on public.availability;
+drop policy if exists "availability: admin o manager vede tutto"     on public.availability;
 drop policy if exists "availability: admin o manager gestisce tutto" on public.availability;
+drop policy if exists "availability: admin tutto"                    on public.availability;
+drop policy if exists "availability: dipendente gestisce le sue"     on public.availability;
+drop policy if exists "availability: manager propria area"           on public.availability;
 
-create policy "availability: utente vede le sue" on public.availability
-  for select using (user_id = auth.uid());
+create policy "availability: dipendente gestisce le sue" on public.availability
+  for all using (user_id = auth.uid());
 
-create policy "availability: utente inserisce pending" on public.availability
-  for insert with check (user_id = auth.uid());
+create policy "availability: admin tutto" on public.availability
+  for all using (public.is_admin());
 
-create policy "availability: utente aggiorna se pending" on public.availability
-  for update using (user_id = auth.uid() and status = 'pending');
-
-create policy "availability: admin o manager vede tutto" on public.availability
-  for select using (public.is_admin_or_manager());
-
-create policy "availability: admin o manager gestisce tutto" on public.availability
-  for all using (public.is_admin_or_manager());
+create policy "availability: manager propria area" on public.availability
+  for all using (
+    public.is_manager()
+    and area_id = public.current_user_area_id()
+  );
 
 -- ---- SHIFTS ----
-drop policy if exists "shifts: utente vede i suoi"          on public.shifts;
+drop policy if exists "shifts: utente vede i suoi"             on public.shifts;
 drop policy if exists "shifts: admin o manager gestisce tutto" on public.shifts;
+drop policy if exists "shifts: admin tutto"                    on public.shifts;
+drop policy if exists "shifts: dipendente vede i suoi"         on public.shifts;
+drop policy if exists "shifts: manager propria area"           on public.shifts;
 
-create policy "shifts: utente vede i suoi" on public.shifts
+create policy "shifts: dipendente vede i suoi" on public.shifts
   for select using (user_id = auth.uid());
 
-create policy "shifts: admin o manager gestisce tutto" on public.shifts
-  for all using (public.is_admin_or_manager());
+create policy "shifts: admin tutto" on public.shifts
+  for all using (public.is_admin());
+
+create policy "shifts: manager propria area" on public.shifts
+  for all using (
+    public.is_manager()
+    and area_id = public.current_user_area_id()
+  );
 
 -- ---- EMAIL_SETTINGS ----
 drop policy if exists "email_settings: admin o manager legge"     on public.email_settings;
 drop policy if exists "email_settings: admin o manager inserisce" on public.email_settings;
 drop policy if exists "email_settings: admin o manager aggiorna"  on public.email_settings;
 drop policy if exists "email_settings: admin o manager elimina"   on public.email_settings;
+drop policy if exists "email_settings: admin tutto"               on public.email_settings;
+drop policy if exists "email_settings: manager propria area"      on public.email_settings;
 
-create policy "email_settings: admin o manager legge" on public.email_settings
-  for select using (public.is_admin_or_manager());
+create policy "email_settings: admin tutto" on public.email_settings
+  for all using (public.is_admin());
 
-create policy "email_settings: admin o manager inserisce" on public.email_settings
-  for insert with check (public.is_admin_or_manager());
-
-create policy "email_settings: admin o manager aggiorna" on public.email_settings
-  for update using (public.is_admin_or_manager());
-
-create policy "email_settings: admin o manager elimina" on public.email_settings
-  for delete using (public.is_admin_or_manager());
+create policy "email_settings: manager propria area" on public.email_settings
+  for all using (
+    public.is_manager()
+    and area_id = public.current_user_area_id()
+  );
 
 -- ============================================================
 -- FUNZIONE: get_equity_scores

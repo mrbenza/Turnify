@@ -71,6 +71,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Nessun campo da aggiornare' }, { status: 400 })
   }
 
+  // service_role: UPDATE areas + UPDATE users in cascata (areas senza policy write; users solo SELECT per manager)
   const serviceClient = createServiceClient()
 
   // Leggi il manager attuale prima di modificare: serve per il confronto in cascata.
@@ -143,6 +144,7 @@ export async function DELETE(
   }
 
   const { id } = await params
+  // service_role: DELETE areas + controlli su users/shifts/availability (areas senza policy write)
   const serviceClient = createServiceClient()
 
   // Controlla che l'area esista e non sia 'Default'

@@ -33,6 +33,9 @@ export async function PATCH(
     return NextResponse.json({ error: 'ID utente mancante' }, { status: 400 })
   }
 
+  // service_role: UPDATE users + UPDATE areas (RLS su users è solo SELECT per manager; areas non ha policy write)
+  const serviceClient = createServiceClient()
+
   let body: { attivo?: boolean; ruolo?: string }
   try {
     body = await request.json()
@@ -65,7 +68,7 @@ export async function PATCH(
       )
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await serviceClient
       .from('users')
       .update({ ruolo: body.ruolo as UserRole })
       .eq('id', id)
@@ -78,7 +81,6 @@ export async function PATCH(
     }
 
     // Sincronizza areas.manager_id
-    const serviceClient = createServiceClient()
     if (body.ruolo === 'manager' && data?.area_id) {
       // Diventa manager → assegnalo come manager dell'area
       await serviceClient
@@ -104,18 +106,34 @@ export async function PATCH(
       return NextResponse.json({ error: 'Campo obbligatorio: attivo (boolean)' }, { status: 400 })
     }
 
-    // Impedisci di disabilitare utenti admin
-    const { data: targetProfile } = await supabase
+    // Impedisci di disabilitare utenti admin; controlla anche area per i manager
+    const { data: targetProfile } = await serviceClient
       .from('users')
-      .select('ruolo')
+      .select('ruolo, area_id')
       .eq('id', id)
       .maybeSingle()
 
-    if (targetProfile?.ruolo === 'admin') {
+    if (!targetProfile) {
+      return NextResponse.json({ error: 'Utente non trovato.' }, { status: 404 })
+    }
+
+    if (targetProfile.ruolo === 'admin') {
       return NextResponse.json(
         { error: 'Non è possibile modificare lo stato di un amministratore.' },
         { status: 403 }
       )
+    }
+
+    // Manager: può agire solo sulla propria area
+    if (profile?.ruolo === 'manager') {
+      const { data: callerProfile } = await supabase
+        .from('users')
+        .select('area_id')
+        .eq('id', user.id)
+        .single()
+      if (targetProfile.area_id !== callerProfile?.area_id) {
+        return NextResponse.json({ error: 'Non autorizzato.' }, { status: 403 })
+      }
     }
 
     const update: Partial<Omit<User, 'id'>> = { attivo: body.attivo }
@@ -125,7 +143,7 @@ export async function PATCH(
       update.disattivato_at = null
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await serviceClient
       .from('users')
       .update(update)
       .eq('id', id)
@@ -205,7 +223,7 @@ export async function DELETE(
     )
   }
 
-  // Elimina auth user tramite service client
+  // service_role: auth.admin.deleteUser() — richiede service key
   const serviceClient = createServiceClient()
   const { error: authDeleteError } = await serviceClient.auth.admin.deleteUser(id)
   if (authDeleteError) {
@@ -213,8 +231,8 @@ export async function DELETE(
     return NextResponse.json({ error: 'Errore durante l\'eliminazione dell\'utente.' }, { status: 500 })
   }
 
-  // Elimina record da public.users
-  const { error: dbDeleteError } = await supabase
+  // Elimina record da public.users (cascade da auth.users potrebbe già averlo fatto)
+  const { error: dbDeleteError } = await serviceClient
     .from('users')
     .delete()
     .eq('id', id)

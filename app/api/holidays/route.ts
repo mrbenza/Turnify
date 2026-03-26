@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { Holiday } from '@/lib/supabase/types'
 
 const MANDATORY_NAMES = [
   'Capodanno',

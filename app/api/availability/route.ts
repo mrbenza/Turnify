@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { Availability } from '@/lib/supabase/types'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
     )
   }
 
-  // Blocco: mese locked — vale sia per nuove righe che per aggiornamenti
+  // Blocco: mese locked o confirmed — immutabile in entrambi i casi
   const dateMonth = parseInt(date.split('-')[1])
   const { data: monthStatus } = await supabase
     .from('month_status')
@@ -70,7 +69,7 @@ export async function POST(request: Request) {
     .eq('area_id', areaId)
     .maybeSingle()
 
-  if (monthStatus?.status === 'locked') {
+  if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
     return NextResponse.json(
       { error: 'La disponibilità non è modificabile per un mese confermato.' },
       { status: 403 }
