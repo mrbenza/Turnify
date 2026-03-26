@@ -1,10 +1,16 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Availability, Shift, Holiday, MonthStatus, SchedulingMode } from '@/lib/supabase/types'
+import type { User, Availability, Shift, Holiday, MonthStatus, SchedulingMode, Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import CalendarioGlobale from '@/components/admin/disponibilita/CalendarioGlobale'
+import { sortByNome } from '@/lib/utils/sort'
+import AreaSelector from '@/components/admin/disponibilita/AreaSelector'
 
-export default async function DisponibilitaPage() {
+export default async function DisponibilitaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ area?: string }>
+}) {
   const supabase = await createClient()
 
   /* ---- Auth ---- */
@@ -19,9 +25,28 @@ export default async function DisponibilitaPage() {
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
 
-  const areaId = profile.area_id ?? ''
+  const isAdmin = profile?.ruolo === 'admin'
 
   const serviceClient = createServiceClient()
+
+  /* ---- Area selezione ---- */
+  // Admin: può scegliere qualsiasi area via ?area=<id>, default alla prima
+  // Manager: sempre la propria area
+  let areas: Area[] = []
+  if (isAdmin) {
+    const { data } = await serviceClient.from('areas').select('*')
+    areas = sortByNome(data ?? [])
+  }
+
+  const { area: areaParam } = await searchParams
+  let areaId: string
+  if (isAdmin) {
+    areaId = (areaParam && areas.some((a) => a.id === areaParam))
+      ? areaParam
+      : (areas[0]?.id ?? profile.area_id ?? '')
+  } else {
+    areaId = profile.area_id ?? ''
+  }
 
   /* ---- Nome area per badge navbar ---- */
   const { data: areaData } = await serviceClient
@@ -67,11 +92,16 @@ export default async function DisponibilitaPage() {
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-full px-4 py-6 space-y-6">
 
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Disponibilità globale</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Visualizza e assegna turni — solo sabati, domeniche e festività
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">Disponibilità globale</h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Visualizza e assegna turni — solo sabati, domeniche e festività
+              </p>
+            </div>
+            {isAdmin && areas.length > 1 && (
+              <AreaSelector areas={areas} selectedAreaId={areaId} />
+            )}
           </div>
 
           <section
@@ -88,9 +118,10 @@ export default async function DisponibilitaPage() {
               initialYear={year}
               initialLocked={isLocked}
               initialConfirmed={monthStatus?.status === 'confirmed'}
-              isAdmin={profile?.ruolo === 'admin'}
+              isAdmin={isAdmin}
               schedulingMode={schedulingMode}
               workersPerDay={workersPerDay}
+              areaId={areaId}
             />
           </section>
         </main>

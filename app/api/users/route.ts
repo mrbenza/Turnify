@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   // --- 3. Parsing e validazione del body ---
-  let body: { nome?: unknown; email?: unknown; ruolo?: unknown }
+  let body: { nome?: unknown; email?: unknown; ruolo?: unknown; area_id?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -63,8 +63,10 @@ export async function POST(request: Request) {
   // --- 4. Crea auth user con service role (la service key non lascia mai il server) ---
   const serviceClient = createServiceClient()
 
-  // Il nuovo utente eredita l'area del chiamante (manager → sua area, admin → area Default)
-  const areaId = callerProfile.area_id
+  // Admin può specificare un'area diversa nel body (es. import storico); manager usa sempre la sua area
+  const areaId = (callerProfile.ruolo === 'admin' && typeof body.area_id === 'string' && body.area_id)
+    ? body.area_id
+    : callerProfile.area_id
 
   const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
     email,

@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import type { User, Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import ListaUtenti from '@/components/admin/utenti/ListaUtenti'
+import { sortByNome } from '@/lib/utils/sort'
 
 export default async function UtentiPage() {
   const supabase = await createClient()
@@ -38,7 +39,7 @@ export default async function UtentiPage() {
   /* ---- Aree (per filtro admin) ---- */
   const serviceClient = createServiceClient()
   const areas: Area[] = isAdmin
-    ? ((await serviceClient.from('areas').select('*').order('nome')).data ?? []) as Area[]
+    ? sortByNome(((await serviceClient.from('areas').select('*')).data ?? []) as Area[])
     : []
 
   /* ---- Last login via service client ---- */

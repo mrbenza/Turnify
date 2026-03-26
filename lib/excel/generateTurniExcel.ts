@@ -155,8 +155,13 @@ export async function generateTurniExcel(
 
   let sheetXml = await zip.files[sheetPath].async('string')
 
-  if (areaNome) sheetXml = setInlineStr(sheetXml, 'A1', areaNome)
-  if (managerNome) sheetXml = setInlineStr(sheetXml, 'B51', managerNome)
+  // In A1 scrive solo la prima parte del nome (es. "Area4 - Toscana" → "AREA 4")
+  if (areaNome) {
+    const dashIdx = areaNome.indexOf(' - ')
+    const shortName = dashIdx !== -1 ? areaNome.slice(0, dashIdx) : areaNome
+    sheetXml = setInlineStr(sheetXml, 'A1', shortName.toUpperCase())
+  }
+  if (managerNome) sheetXml = setInlineStr(sheetXml, 'C51', managerNome)
   sheetXml = setNumCell(sheetXml, 'A3', excelSerial(year, month, 1))
   const now = new Date()
   sheetXml = setNumCell(sheetXml, 'C5', excelSerial(now.getFullYear(), now.getMonth() + 1, now.getDate()))
@@ -183,7 +188,10 @@ export async function generateTurniExcel(
   zip.remove('xl/calcChain.xml')
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-  const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
+  const areaShort = areaNome
+    ? (areaNome.indexOf(' - ') !== -1 ? areaNome.slice(0, areaNome.indexOf(' - ')) : areaNome).replace(/\s+/g, '')
+    : 'turni'
+  const fileName = `${areaShort}_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
   return { buffer, fileName, shiftsByDate }
 }

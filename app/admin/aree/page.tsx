@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import GestioneAree from '@/components/admin/aree/GestioneAree'
 import type { Area, User } from '@/lib/supabase/types'
+import { sortByNome } from '@/lib/utils/sort'
 
 export default async function AreePage() {
   const supabase = await createClient()
@@ -26,7 +27,7 @@ export default async function AreePage() {
     .select('*')
     .order('nome', { ascending: true })
 
-  const areas: Area[] = areasData ?? []
+  const areas: Area[] = sortByNome(areasData ?? [])
 
   /* ---- Carica tutti gli utenti (manager + dipendenti, non admin) ---- */
   const { data: usersData } = await supabase

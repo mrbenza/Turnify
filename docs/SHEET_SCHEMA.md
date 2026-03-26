@@ -155,7 +155,9 @@ Indirizzi email aggiuntivi che ricevono la notifica "mese confermato".
 | descrizione | text | nullable, es. "Lista distribuzione" |
 | attivo | boolean | default true |
 | created_at | timestamptz | default now() |
+| area_id | uuid | FK → areas.id — isolamento per area; ogni manager gestisce solo le proprie email settings |
 
+**Ownership:** il POST include `area_id` dal profilo del manager; PATCH e DELETE filtrano per `area_id` (un manager non puo modificare email settings di altre aree).
 **RLS:** admin e manager leggono; solo admin e manager scrivono.
 
 ---
@@ -230,3 +232,4 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-03-24 | Tabella `areas`: scheduling_mode, workers_per_day, template_path, manager_id | 011_areas.sql |
 | 2026-03-24 | `shifts.reperibile_order`: 1=colonna D (1° rep.), 2=colonna E (2° rep.) | 012_reperibile_order.sql |
 | 2026-03-24 | Multi-area: `area_id` su users/shifts/availability/month_status; unique (month,year,area_id) | 013_multi_area.sql |
+| 2026-03-25 | `area_id` su email_settings: POST include area_id, PATCH/DELETE filtrano per area_id (ownership check per area) | (API change, no migration) |

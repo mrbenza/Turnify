@@ -61,10 +61,11 @@ export default async function AdminDashboardPage() {
   if (isAdmin) {
     const serviceClient = createServiceClient()
 
-    const [usersRes, authListRes, templateRes] = await Promise.all([
+    const [usersRes, authListRes, templateRes, areasRes] = await Promise.all([
       supabase.from('users').select('ruolo, attivo'),
       serviceClient.auth.admin.listUsers({ perPage: 1000 }),
       serviceClient.storage.from('templates').list(),
+      serviceClient.from('areas').select('id', { count: 'exact', head: true }).neq('nome', 'Default'),
     ])
 
     const users = (usersRes.data ?? []) as { ruolo: string; attivo: boolean }[]
@@ -75,13 +76,16 @@ export default async function AdminDashboardPage() {
     const authUsers = authListRes.data?.users ?? []
     const maiLoggati = authUsers.filter((u: { last_sign_in_at?: string }) => !u.last_sign_in_at).length
 
+    const areasCount = areasRes.count ?? 0
+
     const templateFiles = (templateRes.data ?? []) as { name: string; updated_at?: string }[]
     const templateAttuale = templateFiles.length > 0
       ? (templateFiles.find((f) => f.name === 'AREA4.xlsx') ?? templateFiles[0])
       : null
 
     const roleBadges = [
-      { label: 'Area Manager', count: viewableUsers.filter((u) => u.ruolo === 'manager').length, style: 'bg-blue-50 text-blue-700' },
+      { label: 'Aree',         count: areasCount,                                                   style: 'bg-green-50 text-green-700' },
+      { label: 'Area Manager', count: viewableUsers.filter((u) => u.ruolo === 'manager').length,    style: 'bg-blue-50 text-blue-700' },
       { label: 'ATC',          count: viewableUsers.filter((u) => u.ruolo === 'dipendente').length, style: 'bg-gray-100 text-gray-600' },
     ]
 

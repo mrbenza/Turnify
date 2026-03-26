@@ -77,6 +77,22 @@ export async function PATCH(
       return NextResponse.json({ error: 'Errore durante l\'aggiornamento del ruolo.' }, { status: 500 })
     }
 
+    // Sincronizza areas.manager_id
+    const serviceClient = createServiceClient()
+    if (body.ruolo === 'manager' && data?.area_id) {
+      // Diventa manager → assegnalo come manager dell'area
+      await serviceClient
+        .from('areas')
+        .update({ manager_id: id })
+        .eq('id', data.area_id)
+    } else if (body.ruolo !== 'manager') {
+      // Non è più manager → rimuovilo da manager_id se ci era
+      await serviceClient
+        .from('areas')
+        .update({ manager_id: null })
+        .eq('manager_id', id)
+    }
+
     return NextResponse.json(data)
   }
 

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, EmailSetting } from '@/lib/supabase/types'
 
-async function getAdminOrError(supabase: SupabaseClient<Database>): Promise<{ user: { id: string } } | NextResponse> {
+async function getAdminOrError(supabase: SupabaseClient<Database>): Promise<{ user: { id: string }; areaId: string } | NextResponse> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
@@ -11,7 +11,7 @@ async function getAdminOrError(supabase: SupabaseClient<Database>): Promise<{ us
 
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
@@ -19,7 +19,11 @@ async function getAdminOrError(supabase: SupabaseClient<Database>): Promise<{ us
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
-  return { user }
+  if (!profile?.area_id) {
+    return NextResponse.json({ error: 'Profilo utente non trovato.' }, { status: 403 })
+  }
+
+  return { user, areaId: profile.area_id }
 }
 
 export async function PATCH(
@@ -52,6 +56,7 @@ export async function PATCH(
     .from('email_settings')
     .update({ attivo: body.attivo })
     .eq('id', id)
+    .eq('area_id', authResult.areaId)
     .select()
     .single()
 
@@ -82,6 +87,7 @@ export async function DELETE(
     .from('email_settings')
     .delete()
     .eq('id', id)
+    .eq('area_id', authResult.areaId)
 
   if (error) {
     console.error('Errore eliminazione email setting:', error)

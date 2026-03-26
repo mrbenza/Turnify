@@ -4,7 +4,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { version } from '@/package.json'
+import pkg from '@/package.json'
+const version: string = pkg.version
 
 /* ------------------------------------------------------------------ */
 /* Navigation item definitions                                         */

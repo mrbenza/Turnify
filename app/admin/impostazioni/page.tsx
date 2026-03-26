@@ -34,7 +34,7 @@ export default async function ImpostazioniPage() {
 
   /* ---- Parallel fetches ---- */
   const [emailSettingsRes, areaConfigRes] = await Promise.all([
-    supabase.from('email_settings').select('*').order('created_at', { ascending: true }),
+    supabase.from('email_settings').select('*').eq('area_id', areaId).order('created_at', { ascending: true }),
     serviceClient.from('areas').select('scheduling_mode, workers_per_day, nome').eq('id', areaId).single(),
   ])
 

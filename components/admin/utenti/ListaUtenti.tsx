@@ -60,13 +60,16 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [filterAreaId, setFilterAreaId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const areaMap = new Map<string, string>(areas.map((a) => [a.id, a.nome]))
   const isAdmin = areas.length > 0
 
-  const filtered = filterAreaId
-    ? dipendentes.filter((u) => u.area_id === filterAreaId)
-    : dipendentes
+  const filtered = dipendentes.filter((u) => {
+    if (filterAreaId && u.area_id !== filterAreaId) return false
+    if (searchQuery && !u.nome.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    return true
+  })
 
   /* Build a fast lookup map for last logins */
   const lastLoginMap = new Map<string, string | null>(
@@ -163,34 +166,35 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
         </button>
       </div>
 
-      {/* Filtro per area — solo admin */}
-      {isAdmin && areas.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Filtra per area">
-          <button
-            onClick={() => setFilterAreaId(null)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-              filterAreaId === null
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+      {/* Filtri */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        {isAdmin && areas.length > 1 && (
+          <select
+            value={filterAreaId ?? ''}
+            onChange={(e) => setFilterAreaId(e.target.value || null)}
+            className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-label="Filtra per area"
           >
-            Tutte le aree
-          </button>
-          {areas.map((area) => (
-            <button
-              key={area.id}
-              onClick={() => setFilterAreaId(area.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                filterAreaId === area.id
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {area.nome}
-            </button>
-          ))}
+            <option value="">Tutte le aree</option>
+            {areas.map((area) => (
+              <option key={area.id} value={area.id}>{area.nome}</option>
+            ))}
+          </select>
+        )}
+        <div className="relative">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cerca per nome…"
+            aria-label="Cerca utente per nome"
+            className="text-sm border border-gray-300 rounded-lg pl-8 pr-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 w-48"
+          />
         </div>
-      )}
+      </div>
 
       {/* Error */}
       {errorMsg && (

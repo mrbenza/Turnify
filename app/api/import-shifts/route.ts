@@ -148,11 +148,55 @@ export async function POST(request: NextRequest) {
 
   // 1. Cerca per nome area (A1)
   if (areaNomeFile) {
-    const { data: areaByName } = await serviceClient
+    // Prima prova match esatto (case-insensitive)
+    const { data: exactMatch } = await serviceClient
       .from('areas')
       .select('id, nome, manager_id')
       .ilike('nome', areaNomeFile)
       .single()
+
+    let areaByName = exactMatch
+
+    // Se non trovato, prova match per prefisso (es. "Area4" → "Area4 - Piemonte")
+    if (!areaByName) {
+      const { data: prefixMatches } = await serviceClient
+        .from('areas')
+        .select('id, nome, manager_id')
+        .ilike('nome', `${areaNomeFile}%`)
+
+      if (prefixMatches && prefixMatches.length === 1) {
+        areaByName = prefixMatches[0]
+        areaWarning = `Area identificata per prefisso: "${areaNomeFile}" → "${areaByName.nome}"`
+      } else if (prefixMatches && prefixMatches.length > 1) {
+        return NextResponse.json({
+          error: `Nome area ambiguo: "${areaNomeFile}" corrisponde a più aree (${prefixMatches.map(a => a.nome).join(', ')}). Specifica il nome completo nel file.`,
+        }, { status: 400 })
+      }
+    }
+
+    // Se ancora non trovato, prova match normalizzato (lowercase + rimozione spazi)
+    // Es. "AREA 6" → "area6" matcha "Area6 - Liguria" → "area6"
+    if (!areaByName) {
+      const normalizeStr = (s: string) => s.toLowerCase().replace(/\s+/g, '')
+      const normalizedFile = normalizeStr(areaNomeFile)
+
+      const { data: allAreas } = await serviceClient
+        .from('areas')
+        .select('id, nome, manager_id')
+
+      const normalizedMatches = (allAreas ?? []).filter(
+        a => normalizeStr(a.nome).startsWith(normalizedFile)
+      )
+
+      if (normalizedMatches.length === 1) {
+        areaByName = normalizedMatches[0]
+        areaWarning = `Area identificata per nome normalizzato: "${areaNomeFile}" → "${areaByName.nome}"`
+      } else if (normalizedMatches.length > 1) {
+        return NextResponse.json({
+          error: `Nome area ambiguo: "${areaNomeFile}" corrisponde a più aree (${normalizedMatches.map(a => a.nome).join(', ')}). Specifica il nome completo nel file.`,
+        }, { status: 400 })
+      }
+    }
 
     if (areaByName) {
       targetAreaId = areaByName.id
@@ -167,7 +211,8 @@ export async function POST(request: NextRequest) {
         if (mgr) {
           const cognomeDB = toCognome(mgr.nome)
           if (cognomeDB.toLowerCase() !== managerCognomeFile.toLowerCase()) {
-            areaWarning = `Manager nel file ("${managerCognomeFile}") non corrisponde al manager dell'area nel DB ("${cognomeDB}") — importazione comunque effettuata su ${areaByName.nome}`
+            const existingWarning = areaWarning ? `${areaWarning}. ` : ''
+            areaWarning = `${existingWarning}Manager nel file ("${managerCognomeFile}") non corrisponde al manager dell'area nel DB ("${cognomeDB}") — importazione comunque effettuata su ${areaByName.nome}`
           }
         }
       }

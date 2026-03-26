@@ -121,6 +121,8 @@ turnify/
 │   ├── email/
 │   │   └── sendTurniEmail.ts    ← invia email Brevo con allegato Excel, BCC destinatari
 │   └── utils/
+│       ├── dates.ts
+│       └── sort.ts              ← sortByNome con Intl.Collator numeric (ordinamento naturale aree)
 └── supabase/
     └── migrations/
         ├── 001_initial_schema.sql
@@ -369,11 +371,45 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 ## TODO
 
 ### Media priorita
-- **Multi-area** (in corso): `area_id` su tutte le tabelle principali (migration 013). Email settings isolate per area. Selettore area su `/admin/disponibilita`. 14 aree demo con dati realistici. Gestione aree UI con trasferimento manager in cascata. Pagina `/admin/equita` (panoramica cross-area). Export area-aware (nome area in A1, manager in B51). Ancora da fare: selettore area in navbar manager, scheduling_mode dinamico per area, import storico area-aware.
+- **Multi-area** (quasi completato): implementazione avanzata. Ancora da fare: selettore area in navbar manager (se manager gestisce piu aree), scheduling_mode dinamico per area in `CalendarioGlobale`.
 
 ---
 
 ## Changelog
+
+### [2026-03-26] — CODE AGENT + UI AGENT + DOCS AGENT — Multi-area: bug fix area matching import, area_id su crea-utente e resolve, manager sync cambio ruolo, export Excel (nome file, A1, C51), ordinamento naturale aree, ricerca utenti, dashboard nome area
+
+**File modificati:**
+- `app/api/import-shifts/route.ts`
+- `app/api/import-shifts/resolve/route.ts`
+- `app/api/users/route.ts`
+- `app/api/users/[id]/route.ts`
+- `lib/excel/generateTurniExcel.ts`
+- `components/admin/disponibilita/CalendarioGlobale.tsx`
+- `lib/utils/sort.ts` (nuovo)
+- `components/admin/utenti/ListaUtenti.tsx`
+- `app/user/page.tsx`
+- `components/admin/NavbarAdmin.tsx`
+- Template rinominato: `AREA4.xlsx` → `template_turni.xlsx` su Supabase Storage
+
+**Sommario:** Completamento multi-area: fix area matching a 3 livelli nell'import, area_id propagato correttamente in creazione utenti e resolve, cambio ruolo manager sincronizza automaticamente `areas.manager_id`, export Excel con nome file area-aware e team leader in C51, ordinamento naturale aree (Area1...Area10...Area11), ricerca utenti per nome, nome area in dashboard dipendente.
+
+**Dettagli:**
+1. `import-shifts/route.ts` — area matching ora a 3 livelli: esatto → prefisso ilike → normalizzato (rimozione spazi e lowercase). "AREA 6" ora matcha correttamente "Area6 - Veneto".
+2. `import-shifts/resolve/route.ts` — Fix bug: usava `profile.area_id` (area admin = Default). Ora legge `area_id` dal body della request per assegnare il dipendente all'area corretta.
+3. `users/route.ts` — Accetta `area_id` opzionale nel body; se il caller e admin, usa l'`area_id` dal body invece di quello del profilo admin.
+4. `users/[id]/route.ts` — Fix cambio ruolo: se il nuovo ruolo e `manager`, aggiorna automaticamente `areas.manager_id` per l'area dell'utente. Se il ruolo scende da `manager`, rimuove `areas.manager_id` se era assegnato.
+5. `generateTurniExcel.ts` — Nome file ora `Area4_Marzo_2026.xlsx` (parte corta del nome area senza spazi). Cella A1 scrive la parte prima di ` - ` in uppercase (es. "AREA 4"). Team leader scritto in C51 merged (C51:D52) invece di B51.
+6. `CalendarioGlobale.tsx` — Fix navigazione mesi: query `month_status` ora filtra per `area_id`.
+7. `lib/utils/sort.ts` — Nuovo file con funzione `sortByNome` usando `Intl.Collator({ numeric: true })`. Garantisce ordinamento naturale: Area1, Area2, ..., Area10, Area11.
+8. `ListaUtenti.tsx` — Aggiunto campo "Cerca per nome" nella pagina utenti admin.
+9. `app/user/page.tsx` — Nome area mostrato a destra del saluto nella dashboard dipendente.
+10. `NavbarAdmin.tsx` — Fix warning: `import pkg from '@/package.json'; const version = pkg.version` per leggere la versione senza casting non sicuri.
+11. Template Excel — Rinominato da `AREA4.xlsx` a `template_turni.xlsx` su Supabase Storage. Celle A1 e C51 svuotate per renderlo universale (vengono popolate a runtime da `generateTurniExcel`). Copia originale salvata in `docs/AREA4_originale.xlsx`.
+
+**Status:** Completato
+
+---
 
 ### [2026-03-25] — CODE AGENT + UI AGENT + DOCS AGENT — Multi-area: gestione aree UI, equità cross-area, export area-aware, fix seed
 

@@ -133,10 +133,10 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 | Route | Metodo | Auth | Cosa fa |
 |-------|--------|------|---------|
 | `/api/availability` | POST | dipendente | Crea/aggiorna disponibilità. Blocca se mese locked/approved |
-| `/api/shifts` | POST | admin/manager | Assegna turno. Calcola shift_type. Blocca se mese locked |
+| `/api/shifts` | POST | admin/manager | Assegna turno. Calcola shift_type. Blocca se mese locked. In `sun_next_sat`: Dom usa `day + 6`, Sab usa `day - 6` per validazione conflitti (fix: rimossa condizione `isHolidayOnWeekend` che forzava `weekend_full`) |
 | `/api/shifts/[id]` | DELETE | admin/manager | Elimina turno. Blocca se mese locked |
-| `/api/users` | POST | admin/manager | Crea utente (auth + db). Rollback se DB fallisce |
-| `/api/users/[id]` | PATCH | admin/manager | Modifica ruolo (admin only) o attivo/disattivato_at |
+| `/api/users` | POST | admin/manager | Crea utente (auth + db). Rollback se DB fallisce. Accetta `area_id` opzionale nel body; se caller e admin, usa `area_id` dal body (non quello del profilo admin) |
+| `/api/users/[id]` | PATCH | admin/manager | Modifica ruolo (admin only) o attivo/disattivato_at. Se ruolo cambia a `manager`: aggiorna automaticamente `areas.manager_id` per l'area dell'utente. Se ruolo scende da `manager`: rimuove `areas.manager_id` se era assegnato |
 | `/api/users/[id]` | DELETE | admin | Elimina utente. Richiede attivo=false |
 | `/api/month` | POST | admin/manager | Lock (`locked`) o unlock (`open`) mese. Unlock resetta email_inviata=false |
 | `/api/holidays` | GET | admin/manager | Lista festività |
@@ -149,8 +149,8 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 | `/api/email-settings/[id]` | PATCH | admin/manager | Toggle attivo; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/email-settings/[id]` | DELETE | admin/manager | Elimina; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/templates` | POST | admin | Upload .xlsx a Storage bucket `templates` |
-| `/api/import-shifts` | POST | admin | Importa storico da Excel area-aware. Legge nome area da A1 e cognome manager da B51. Match area per nome (ilike) + cross-check manager; fallback per cognome manager se il nome area non viene riconosciuto. Filtra dipendenti per `area_id`. Inserisce turni con `area_id`. Aggiorna `month_status` per `(month, year, area_id)` |
-| `/api/import-shifts/resolve` | POST | admin | Risolve turni pending (utente non trovato al momento dell'import) |
+| `/api/import-shifts` | POST | admin | Importa storico da Excel area-aware. Legge nome area da A1 e cognome manager da B51. Match area a 3 livelli: (1) esatto, (2) prefisso ilike, (3) normalizzato (rimozione spazi + lowercase) — es. "AREA 6" matcha "Area6 - Veneto". Cross-check cognome manager; fallback per cognome manager se il nome area non viene riconosciuto. Filtra dipendenti per `area_id`. Inserisce turni con `area_id`. Aggiorna `month_status` per `(month, year, area_id)` |
+| `/api/import-shifts/resolve` | POST | admin | Risolve turni pending (utente non trovato al momento dell'import). Legge `area_id` dal body della request per assegnare il dipendente all'area corretta (fix: non usa piu `profile.area_id` che puntava all'area Default dell'admin) |
 | `/api/config` | GET | admin/manager | Legge `scheduling_mode` e `workers_per_day` dalla tabella `areas` (riga Default) |
 | `/api/config` | PATCH | admin/manager | Aggiorna `scheduling_mode` e/o `workers_per_day` |
 | `/api/areas/[id]` | PATCH | admin | Modifica area (nome, scheduling_mode, manager). Aggiornamento area eseguito prima degli effetti collaterali: se il nome è duplicato (409) la cascata non viene eseguita. Trasferimento manager in cascata: azzera `manager_id` dell'area precedente del nuovo manager; aggiorna `users.area_id` del nuovo manager |
@@ -178,10 +178,11 @@ generateTurniExcel(month, year, serviceClient, templateName?, areaId?)
 ```
 - Query shifts + users dal DB (filtrati per `areaId` se fornito)
 - Recupera nome area e cognome manager da DB tramite `areaId`
-- Scarica template da Storage bucket `templates`
+- Scarica template da Storage bucket `templates` (default: `template_turni.xlsx`)
 - Trova foglio "Dati" via workbook.xml + rels
-- Popola celle: **A1** (nome area), A3 (serial primo giorno), C5 (serial oggi), A10-A40 (date), D10-E40 (cognomi, rossi se weekend), **B51** (cognome manager)
-- A1 e B51 erano hardcoded ("AREA 4", "Marco Lucchesi") — ora letti dal DB tramite `areaId`
+- Popola celle: **A1** (parte prima di ` - ` del nome area, uppercase; es. "Area4 - Toscana" → "AREA 4"), A3 (serial primo giorno), C5 (serial oggi), A10-A40 (date), D10-E40 (cognomi, rossi se weekend), **C51** (cognome manager, merged C51:D52)
+- Nome file: parte corta nome area senza spazi + mese + anno (es. `Area4_Marzo_2026.xlsx`)
+- A1 e C51 sono vuote nel template `template_turni.xlsx` — vengono popolate a runtime
 - Rimuove calcChain.xml
 - Restituisce buffer + nome file
 
@@ -241,7 +242,13 @@ Props: `initialUsers, initialAvailability, initialShifts, initialHolidays, initi
 - `isAdmin=true && isConfirmed=true` → mostra bottone "Sblocca" (admin può sbloccare anche confirmed)
 - `isConfirmed=false && locked=true` → mostra "Annulla conferma" (manager può sbloccare locked)
 
-**Navigazione mese:** fetch parallelo availability + shifts + holidays + month_status, aggiorna tutti gli stati inclusi locked/confirmed.
+**Navigazione mese:** fetch parallelo availability + shifts + holidays + month_status, aggiorna tutti gli stati inclusi locked/confirmed. La query `month_status` filtra per `area_id` (fix: in precedenza ignorava l'area, mostrando lo stato del mese sbagliato per aree diverse).
+
+**`getPairedDate` — logica `sun_next_sat` (fix 2026-03-26):**
+In modalità `sun_next_sat`, il blocco `sun_next_sat` viene valutato prima del blocco `holiday`. Questo garantisce che anche una domenica festiva (es. Pasqua) usi `d + 6` per trovare il sabato accoppiato, non `d + 7` come accadeva in precedenza. La distanza corretta è sempre 6 giorni: Dom 5 Apr → Sab 11 Apr. Il blocco holiday non sovrascrive più questo calcolo.
+
+**`handleRemove` — rimozione singola:**
+La funzione rimuove esclusivamente il turno del giorno cliccato. Non esiste logica di pairing inverso: rimuovere Sab 11 non tocca Dom 5 e viceversa. Questo è il comportamento voluto e definitivo.
 
 #### `ExportForm`
 Props: `users, templates`
@@ -320,13 +327,15 @@ Upload .xlsx (ImportaStorico)
   → POST /api/import-shifts (FormData)
   → parsea ZIP, legge foglio "Dati"
   → legge A1 (nome area) e B51 (cognome manager)
-  → risolvi area target:
-      1. cerca per nome in areas (ilike A1)
-         → se trovata: cross-check cognome manager (B51) vs DB
+  → risolvi area target (matching a 3 livelli):
+      1. esatto: nome area in areas = A1
+      2. prefisso ilike: areas.nome ilike `A1%`
+      3. normalizzato: rimozione spazi + lowercase (es. "AREA 6" → "area6" matcha "Area6 - Veneto")
+         → se trovata con (1/2/3): cross-check cognome manager (B51) vs DB
            → mismatch: areaWarning incluso nella risposta
-      2. fallback: se A1 non matcha, cerca manager per cognome (B51)
+      4. fallback: se A1 non matcha nemmeno normalizzato, cerca manager per cognome (B51)
          → area trovata tramite manager: areaWarning incluso
-      3. nessuna area trovata → 400 con messaggio diagnostico
+      5. nessuna area trovata → 400 con messaggio diagnostico
   → estrae mese da cella A3 (Excel serial date)
   → costruisce cognomeMap filtrato per area_id (solo dipendenti dell'area)
   → per ogni riga 10-40: legge D (1° reperibile) + E (2° reperibile)
@@ -426,7 +435,7 @@ turnify/
 │   │   ├── disponibilita/AreaSelector.tsx
 │   │   ├── turni/ListaTurni.tsx
 │   │   ├── export/ExportForm.tsx
-│   │   ├── utenti/ListaUtenti.tsx + AddUserModal.tsx
+│   │   ├── utenti/ListaUtenti.tsx + AddUserModal.tsx  ← ricerca per nome aggiunta
 │   │   ├── statistiche/GraficoEquita.tsx
 │   │   ├── impostazioni/GestioneEmail.tsx
 │   │   ├── sistema/GestioneTemplate.tsx + AggiornamentoCalendario.tsx + ImportaStorico.tsx
@@ -447,7 +456,8 @@ turnify/
 │   ├── email/
 │   │   └── sendTurniEmail.ts
 │   └── utils/
-│       └── dates.ts
+│       ├── dates.ts
+│       └── sort.ts             ← sortByNome con Intl.Collator({ numeric: true }) per ordinamento naturale aree
 ├── docs/
 │   ├── ARCHITECTURE.md  (questo file)
 │   ├── TODO.md

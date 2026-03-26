@@ -84,6 +84,7 @@ export type EmailSetting = {
   email: string
   descrizione: string | null
   attivo: boolean
+  area_id: string
   created_at: string
 }
 

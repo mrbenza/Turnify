@@ -35,6 +35,7 @@ interface FileResult {
 interface CreateModalState {
   fileResultId: number
   cognome: string
+  areaId: string
   pendingShifts: { date: string; shift_type: string; reperibile_order: 1 | 2 }[]
 }
 
@@ -319,6 +320,7 @@ export default function ImportaStorico() {
                                   onClick={() => setCreateModal({
                                     fileResultId: fr.id,
                                     cognome,
+                                    areaId: fr.result!.areaId,
                                     pendingShifts: fr.result!.pendingShifts[cognome] ?? [],
                                   })}
                                   className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
@@ -403,6 +405,7 @@ export default function ImportaStorico() {
       {createModal && (
         <CreaUtenteModal
           cognome={createModal.cognome}
+          areaId={createModal.areaId}
           pendingShifts={createModal.pendingShifts}
           onClose={() => setCreateModal(null)}
           onCreated={handleCreated}
@@ -418,12 +421,13 @@ export default function ImportaStorico() {
 
 interface CreaUtenteModalProps {
   cognome: string
+  areaId: string
   pendingShifts: { date: string; shift_type: string; reperibile_order: 1 | 2 }[]
   onClose: () => void
   onCreated: (cognome: string) => void
 }
 
-function CreaUtenteModal({ cognome, pendingShifts, onClose, onCreated }: CreaUtenteModalProps) {
+function CreaUtenteModal({ cognome, areaId, pendingShifts, onClose, onCreated }: CreaUtenteModalProps) {
   const [nome, setNome] = useState(cognome)
   const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
@@ -442,7 +446,7 @@ function CreaUtenteModal({ cognome, pendingShifts, onClose, onCreated }: CreaUte
       const userRes = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo: 'dipendente' }),
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo: 'dipendente', area_id: areaId }),
       })
       const userJson = await userRes.json().catch(() => ({}))
       if (!userRes.ok) throw new Error(userJson.error ?? 'Errore creazione utente')
@@ -452,7 +456,7 @@ function CreaUtenteModal({ cognome, pendingShifts, onClose, onCreated }: CreaUte
         const resolveRes = await fetch('/api/import-shifts/resolve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userJson.id, user_nome: userJson.nome, shifts: pendingShifts }),
+          body: JSON.stringify({ user_id: userJson.id, user_nome: userJson.nome, area_id: areaId, shifts: pendingShifts }),
         })
         const resolveJson = await resolveRes.json().catch(() => ({}))
         if (!resolveRes.ok) throw new Error(resolveJson.error ?? 'Errore inserimento turni')

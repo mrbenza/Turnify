@@ -99,21 +99,21 @@ export async function POST(request: Request) {
     let excludeSat: string
     let excludeSun: string
 
-    if (isHolidayOnWeekend || schedulingMode === 'weekend_full') {
-      // Festivo su weekend (tutti i modi) o weekend_full: coppia Sab+Dom stessa settimana
+    if (schedulingMode === 'weekend_full') {
+      // weekend_full: coppia Sab+Dom stessa settimana
       const satDay = dow === 6 ? day : day - 1
       excludeSat = `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
       excludeSun = `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
     } else if (schedulingMode === 'sun_next_sat' && isWeekendDate) {
       if (dow === 0) {
-        // Dom: coppia = Dom + Sab+7
+        // Dom (anche festiva): coppia = Dom + Sab+6
         excludeSun = date
-        const nextSat = new Date(year, month - 1, day + 7)
+        const nextSat = new Date(year, month - 1, day + 6)
         excludeSat = `${nextSat.getFullYear()}-${String(nextSat.getMonth() + 1).padStart(2, '0')}-${String(nextSat.getDate()).padStart(2, '0')}`
       } else {
-        // Sab: coppia = Dom-7 + Sab
+        // Sab: coppia = Dom-6 + Sab
         excludeSat = date
-        const prevSun = new Date(year, month - 1, day - 7)
+        const prevSun = new Date(year, month - 1, day - 6)
         excludeSun = `${prevSun.getFullYear()}-${String(prevSun.getMonth() + 1).padStart(2, '0')}-${String(prevSun.getDate()).padStart(2, '0')}`
       }
     } else {
