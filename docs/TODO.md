@@ -14,23 +14,49 @@ Funzionalita da implementare in ordine di priorita.
 
 ### Multi-area con scheduling modes diversi
 - **Obiettivo**: supportare piu aree aziendali, ognuna con la propria logica di turnazione e i propri dipendenti
-- **Stato attuale**: tabella `areas` creata (migration 011), API `/api/config` per leggere/aggiornare `scheduling_mode` e `workers_per_day`; riga "Default" inserita automaticamente
+- **Stato attuale (2026-03-25)**: implementazione multi-area avanzata. `area_id` su tutte le tabelle principali (migration 013). UI selettore area su `/admin/disponibilita`. Email settings isolate per area. 14 aree seed con dati demo realistici.
 - **Scheduling modes previsti**:
   | Mode | Comportamento |
   |------|--------------|
   | `weekend_full` | Sab+Dom con conferma: assegni uno, il sistema propone l'altro |
   | `single_day` | Sab e Dom indipendenti, assegnabili a persone diverse |
   | `sun_next_sat` | Chi lavora Dom lavora anche il Sab della settimana successiva |
+- **Completato**:
+  1. `area_id` su `users`, `availability`, `shifts`, `month_status` (migration 013)
+  2. Seed 14 aree (Area1-Area14, regioni italiane), 1 manager + 8-18 dipendenti per area, 15.780 disponibilità per weekend 2026
+  3. API email_settings: POST include `area_id` nel profilo e nell'insert; PATCH/DELETE filtrano per `area_id`
+  4. UI `/admin/disponibilita`: accetta `searchParams`, selettore area via `<AreaSelector>` (dropdown)
+  5. `components/admin/disponibilita/AreaSelector.tsx`: nuovo componente `<select>` client-side per navigare tra aree
+  6. `components/admin/utenti/ListaUtenti.tsx`: filtro area pill → `<select>` dropdown
+  7. Dashboard admin: badge "Aree" (verde) accanto ad Area Manager e ATC
+- **Completato (2026-03-25)**:
+  8. Gestione aree UI: dropdown manager in modal Modifica area mostra `Nome — NomeArea` se manager già assegnato, banner ambra se si seleziona manager già occupato
+  9. API PATCH `/api/areas/[id]`: trasferimento manager in cascata (azzera `manager_id` dell'area precedente, aggiorna `users.area_id` del nuovo manager)
+  10. Pagina `/admin/equita` (solo admin): panoramica equità cross-area con badge salute (verde/giallo/rosso), ranking espandibile per area, filtro mese/anno con toggle "Questo mese / Tutti i tempi"
+  11. API `/api/equity-overview`: aggrega `get_equity_scores` in parallelo per tutte le aree, ritorna array `AreaEquitySummary`
+  12. NavbarAdmin: voce "Equità" aggiunta per admin (tra Aree e Sistema)
+  13. Export Excel area-aware: `generateTurniExcel` scrive nome area in A1 e cognome manager in B51 letti da DB tramite `areaId` (rimossi valori hardcoded)
+  14. Seed DB fix: Area2-Liguria con `manager_id` impostato (Marco Ferrari); nomi utenti resi unici con suffisso numerico
+- **Completato (2026-03-26)**:
+  15. `import-shifts/route.ts`: area matching a 3 livelli (esatto → prefisso ilike → normalizzato)
+  16. `import-shifts/resolve/route.ts`: fix `area_id` letto dal body della request (non da `profile.area_id` dell'admin)
+  17. `users/route.ts`: accetta `area_id` opzionale nel body; se caller e admin, usa quello del body
+  18. `users/[id]/route.ts`: cambio ruolo → manager aggiorna `areas.manager_id`; cambio da manager rimuove `areas.manager_id`
+  19. `generateTurniExcel.ts`: nome file area-aware (`Area4_Marzo_2026.xlsx`); A1 parte corta uppercase; team leader in C51 (non B51)
+  20. `CalendarioGlobale.tsx`: navigazione mesi filtra `month_status` per `area_id`
+  21. `lib/utils/sort.ts`: nuovo file con `sortByNome` (Intl.Collator numeric)
+  22. `ListaUtenti.tsx`: campo "Cerca per nome"
+  23. `app/user/page.tsx`: nome area mostrato nel saluto dashboard dipendente
+  24. `NavbarAdmin.tsx`: fix warning import pkg.version
+  25. Template Excel: rinominato `AREA4.xlsx` → `template_turni.xlsx`; celle A1/C51 svuotate per universalita
 - **Ancora da fare**:
-  1. Aggiungere `area_id` su `users`, `availability`, `shifts`, `month_status`
-  2. Seed: assegnare tutti gli utenti esistenti all'area "Default"
-  3. API: filtro `area_id` su shifts, availability, export, month_status
-  4. UI admin: pagina Sistema con gestione aree (crea area, assegna manager, assegna dipendenti, carica template)
-  5. NavbarAdmin manager: selettore area se manager ha piu aree
-  6. CalendarioGlobale: logica dinamica per `scheduling_mode`
-  7. Export: usa `areas.template_path` invece di template globale
-  8. Statistiche: per area
-- **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente. I dipendenti sanno che Dom → Sab+7 è la regola; il Sab solitario è accettabile solo alla prima assegnazione o se il Sab è un festivo comandato.
+  1. NavbarAdmin manager: selettore area se manager ha piu aree
+  2. CalendarioGlobale: logica dinamica per `scheduling_mode` per area
+- **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente.
+
+### ✅ Bug pairing Dom↔Sab — NESSUNA MODIFICA NECESSARIA (pairing con conferma già implementato 2026-03-24)
+
+---
 
 ### ✅ Import storico — 2° reperibile — NESSUNA MODIFICA NECESSARIA
 - Colonna D = 1° reperibile (sempre presente), colonna E = 2° reperibile (presente solo se il manager ha assegnato 2 persone)
@@ -47,8 +73,22 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 
 ---
 
+### ✅ Bug pairing Dom↔Sab con festività in mezzo (sun_next_sat) — RISOLTO (2026-03-26)
+- `getPairedDate` in `CalendarioGlobale.tsx`: blocco `sun_next_sat` ora precede il blocco `holiday`; domenica festiva (es. Pasqua) usa correttamente `d + 6` per trovare il sabato successivo (non `d + 7` come in precedenza)
+- `app/api/shifts/route.ts`: rimossa condizione `isHolidayOnWeekend` che forzava `weekend_full` anche in `sun_next_sat`; validazione conflitti corretta: Dom usa `day + 6`, Sab usa `day - 6`
+- `handleRemove` in `CalendarioGlobale.tsx`: rimuove solo il turno del giorno cliccato (nessun pairing inverso — comportamento voluto)
+- DB Area4 aprile 2026: eliminato Sab 4 apr (orfano, domenica accoppiata in marzo), aggiunto Sab 2 mag (coppia Dom 26 apr). Coppie corrette: (Dom 5, Sab 11), (Dom 12, Sab 18), (Dom 19, Sab 25), (Dom 26, Sab 2 mag)
+
+---
+
 ## Completato
 
+- **[2026-03-26] Fix sun_next_sat: distanza Dom→Sab corretta (±6)** — `CalendarioGlobale.tsx` `getPairedDate`: blocco `sun_next_sat` precede `holiday`, distanza corretta `d+6`. `app/api/shifts/route.ts`: rimossa `isHolidayOnWeekend` che forzava `weekend_full` in `sun_next_sat`. Rimozione turno: `handleRemove` agisce solo sul giorno cliccato (no pairing inverso). DB: disponibilità Area4 aprile 2026 allineate alle coppie corrette.
+- **[2026-03-26] Multi-area completamento** — `import-shifts/route.ts`: area matching a 3 livelli (esatto → ilike → normalizzato). `import-shifts/resolve/route.ts`: `area_id` dal body (fix area Default). `users/route.ts`: `area_id` opzionale nel body. `users/[id]/route.ts`: cambio ruolo sincronizza `areas.manager_id`. `generateTurniExcel.ts`: nome file `Area4_Marzo_2026.xlsx`, A1 uppercase parte corta, team leader C51. `CalendarioGlobale.tsx`: navigazione mesi filtrata per area. `lib/utils/sort.ts`: `sortByNome` con Intl.Collator numeric. `ListaUtenti.tsx`: ricerca per nome. `app/user/page.tsx`: nome area nel saluto. `NavbarAdmin.tsx`: fix import pkg.version. Template rinominato `template_turni.xlsx` con A1/C51 universali.
+- **[2026-03-25] Import storico area-aware** — `app/api/import-shifts/route.ts`: lettura nome area da cella A1 e cognome manager da B51. Match area per nome (ilike) con cross-check manager; fallback automatico per cognome manager se il nome area non viene riconosciuto. Filtro dipendenti per `area_id` durante la costruzione del `cognomeMap`. `area_id` incluso in ogni record inserito in `shifts`. `month_status` aggiornato per `(month, year, area_id)`. Fix bug cascata in `PATCH /api/areas/[id]`: aggiornamento area ora precede gli effetti collaterali sul manager, eliminando lo stato inconsistente in caso di errore sul nome duplicato.
+- **[2026-03-25] Multi-area — gestione aree UI, equità cross-area, export area-aware, fix seed** — `GestioneAree.tsx`: dropdown manager con etichetta area e banner ambra. API PATCH `/api/areas/[id]` con trasferimento manager in cascata. Nuova pagina `/admin/equita` (solo admin) con panoramica cross-area e badge salute. API `/api/equity-overview`. NavbarAdmin: voce "Equità" per admin. `generateTurniExcel`: A1 (nome area) e B51 (cognome manager) da DB via `areaId`. Seed: Area2-Liguria con manager; nomi utenti unici.
+- **[2026-03-25] Multi-area — bug fix email settings e UI selettore area** — Email settings isolate per area: POST include `area_id` nel profilo e nell'insert; PATCH/DELETE filtrano con `.eq('area_id', authResult.areaId)`. Pagina `/admin/disponibilita` accetta `searchParams` e usa `AreaSelector` per navigare tra aree. Filtro area in `ListaUtenti` convertito da pill a `<select>` dropdown. Badge "Aree" in dashboard admin.
+- **[2026-03-25] Seed DB 14 aree** — Create Area1-Area14 con regioni italiane (Piemonte, Liguria, Lombardia, Veneto, Emilia-Romagna, Toscana, Lazio, Campania, Puglia, Sicilia, Sardegna, Abruzzo, Calabria, Marche). Ogni area ha 1 manager e 8-18 dipendenti. 15.780 disponibilita fittizie per tutti i dipendenti per i weekend del 2026.
 - **[2026-03-24] reperibile_order su shifts (migration 012)** — Colonna `reperibile_order` (1 o 2) su `shifts`. Import: D→1, E→2. Export: ordina per `reperibile_order` → D/E sempre corretti. API `/api/shifts`: calcola automaticamente 1° o 2° in base a chi è già assegnato nel giorno; unifica il check `workers_per_day` per entrambi i valori. Drawer: badge "1°"/"2°" in Assegnati.
 - **[2026-03-24] Storico festivi nel drawer** — Per ogni festivo obbligatorio, sotto ogni nome utente appare "lavorato [nome] '[anno]" se ha lavorato quel festivo in anni precedenti. Query client-side su `holidays` (mandatory, year < corrente) + `shifts` su quelle date. Score non modificato.
 - **[2026-03-24] Pairing con conferma (tutti i modi)** — `weekend_full`: click Sab chiede conferma per Dom e viceversa. `sun_next_sat`: click Dom chiede conferma per Sab+7. In entrambi i casi il manager può scegliere "Solo Sab" / "Solo Dom". L'auto-pairing silenzioso è stato rimosso completamente. Dialog dinamico: testo e bottoni si adattano al giorno abbinato.

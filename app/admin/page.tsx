@@ -61,10 +61,11 @@ export default async function AdminDashboardPage() {
   if (isAdmin) {
     const serviceClient = createServiceClient()
 
-    const [usersRes, authListRes, templateRes] = await Promise.all([
+    const [usersRes, authListRes, templateRes, areasRes] = await Promise.all([
       supabase.from('users').select('ruolo, attivo'),
       serviceClient.auth.admin.listUsers({ perPage: 1000 }),
       serviceClient.storage.from('templates').list(),
+      serviceClient.from('areas').select('id', { count: 'exact', head: true }).neq('nome', 'Default'),
     ])
 
     const users = (usersRes.data ?? []) as { ruolo: string; attivo: boolean }[]
@@ -75,13 +76,16 @@ export default async function AdminDashboardPage() {
     const authUsers = authListRes.data?.users ?? []
     const maiLoggati = authUsers.filter((u: { last_sign_in_at?: string }) => !u.last_sign_in_at).length
 
+    const areasCount = areasRes.count ?? 0
+
     const templateFiles = (templateRes.data ?? []) as { name: string; updated_at?: string }[]
     const templateAttuale = templateFiles.length > 0
       ? (templateFiles.find((f) => f.name === 'AREA4.xlsx') ?? templateFiles[0])
       : null
 
     const roleBadges = [
-      { label: 'Area Manager', count: viewableUsers.filter((u) => u.ruolo === 'manager').length, style: 'bg-blue-50 text-blue-700' },
+      { label: 'Aree',         count: areasCount,                                                   style: 'bg-green-50 text-green-700' },
+      { label: 'Area Manager', count: viewableUsers.filter((u) => u.ruolo === 'manager').length,    style: 'bg-blue-50 text-blue-700' },
       { label: 'ATC',          count: viewableUsers.filter((u) => u.ruolo === 'dipendente').length, style: 'bg-gray-100 text-gray-600' },
     ]
 
@@ -201,6 +205,14 @@ export default async function AdminDashboardPage() {
   /* MANAGER branch                                                    */
   /* ================================================================ */
 
+  const areaId = profile.area_id ?? ''
+
+  // Nome area per il badge in navbar
+  const serviceClient = createServiceClient()
+  const { data: areaData } = await serviceClient
+    .from('areas').select('nome').eq('id', areaId).maybeSingle()
+  const areaNome = areaData?.nome ?? undefined
+
   const now = new Date()
   const currMonth = now.getMonth() + 1
   const currYear = now.getFullYear()
@@ -216,20 +228,24 @@ export default async function AdminDashboardPage() {
     supabase
       .from('month_status')
       .select('*')
+      .eq('area_id', areaId)
       .or(`and(month.eq.${currMonth},year.eq.${currYear}),and(month.eq.${nextMonth},year.eq.${nextYear})`),
     supabase
       .from('shifts')
       .select('id', { count: 'exact', head: true })
+      .eq('area_id', areaId)
       .gte('date', `${currYear}-${currMonthStr}-01`)
       .lte('date', `${currYear}-${currMonthStr}-${String(daysInCurr).padStart(2, '0')}`),
     supabase
       .from('shifts')
       .select('id', { count: 'exact', head: true })
+      .eq('area_id', areaId)
       .gte('date', `${nextYear}-${nextMonthStr}-01`)
       .lte('date', `${nextYear}-${nextMonthStr}-${String(daysInNext).padStart(2, '0')}`),
     supabase
       .from('shifts')
       .select('*')
+      .eq('area_id', areaId)
       .gte('date', `${currYear}-${currMonthStr}-01`)
       .lte('date', `${currYear}-${currMonthStr}-${String(daysInCurr).padStart(2, '0')}`)
       .order('date', { ascending: true }),
@@ -237,10 +253,12 @@ export default async function AdminDashboardPage() {
       .from('users')
       .select('*')
       .eq('ruolo', 'dipendente')
+      .eq('area_id', areaId)
       .order('nome', { ascending: true }),
     supabase
       .from('availability')
       .select('user_id')
+      .eq('area_id', areaId)
       .gte('date', `${nextYear}-${nextMonthStr}-01`)
       .lte('date', `${nextYear}-${nextMonthStr}-${String(daysInNext).padStart(2, '0')}`),
   ])
@@ -266,7 +284,11 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} ruolo="manager" />
+      <NavbarAdmin
+        nomeAdmin={profile?.nome}
+        ruolo="manager"
+        areaNome={areaNome}
+      />
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useCallback } from 'react'
-import type { Availability, Holiday, Shift } from '@/lib/supabase/types'
+import type { Availability, Holiday, Shift, SchedulingMode } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -13,6 +13,7 @@ interface CalendarioDisponibilitaProps {
   holidays: Holiday[]
   shifts: Shift[]
   lockedMonths: Set<string>
+  schedulingMode?: SchedulingMode
 }
 
 type DayState =
@@ -58,6 +59,7 @@ export default function CalendarioDisponibilita({
   holidays,
   shifts,
   lockedMonths,
+  schedulingMode = 'weekend_full',
 }: CalendarioDisponibilitaProps) {
   const today = new Date()
   const todayStr = toDateString(today.getFullYear(), today.getMonth(), today.getDate())
@@ -125,20 +127,48 @@ export default function CalendarioDisponibilita({
     return true
   }
 
-  /* ---- Calcola il giorno partner del weekend (Sab↔Dom), null se festivo ---- */
+  /* ---- Calcola il giorno partner in base al scheduling_mode ----
+   *
+   * weekend_full  → Sab↔Dom della stessa settimana (Sab+1=Dom, Dom-1=Sab)
+   * sun_next_sat  → Dom↔Sab della settimana successiva (Dom+6=Sab, Sab-6=Dom)
+   * single_day    → nessun abbinamento
+   */
   function getWeekendPartner(dateStr: string): string | null {
+    if (schedulingMode === 'single_day') return null
+
     const [y, m, d] = dateStr.split('-').map(Number)
-    const dow = new Date(y, m - 1, d).getDay()
-    if (dow === 6) {
-      const sun = new Date(y, m - 1, d + 1)
-      const sunStr = toDateString(sun.getFullYear(), sun.getMonth(), sun.getDate())
-      return holidayDates.has(sunStr) ? null : sunStr
+    const dow = new Date(y, m - 1, d).getDay() // 0=Dom, 6=Sab
+
+    if (schedulingMode === 'weekend_full') {
+      if (dow === 6) {
+        // Sab → Dom successiva
+        const sun = new Date(y, m - 1, d + 1)
+        const sunStr = toDateString(sun.getFullYear(), sun.getMonth(), sun.getDate())
+        return holidayDates.has(sunStr) ? null : sunStr
+      }
+      if (dow === 0) {
+        // Dom → Sab precedente
+        const sat = new Date(y, m - 1, d - 1)
+        const satStr = toDateString(sat.getFullYear(), sat.getMonth(), sat.getDate())
+        return holidayDates.has(satStr) ? null : satStr
+      }
     }
-    if (dow === 0) {
-      const sat = new Date(y, m - 1, d - 1)
-      const satStr = toDateString(sat.getFullYear(), sat.getMonth(), sat.getDate())
-      return holidayDates.has(satStr) ? null : satStr
+
+    if (schedulingMode === 'sun_next_sat') {
+      if (dow === 0) {
+        // Dom → Sab della settimana successiva (+6)
+        const sat = new Date(y, m - 1, d + 6)
+        const satStr = toDateString(sat.getFullYear(), sat.getMonth(), sat.getDate())
+        return holidayDates.has(satStr) ? null : satStr
+      }
+      if (dow === 6) {
+        // Sab → Dom della settimana precedente (-6)
+        const sun = new Date(y, m - 1, d - 6)
+        const sunStr = toDateString(sun.getFullYear(), sun.getMonth(), sun.getDate())
+        return holidayDates.has(sunStr) ? null : sunStr
+      }
     }
+
     return null
   }
 
@@ -175,8 +205,9 @@ export default function CalendarioDisponibilita({
             if (!ex) {
               updated = [...updated, {
                 id: `temp-${dt}`, user_id: userId, date: dt,
-                available: newAvailable, status: 'pending',
+                available: newAvailable, status: 'pending' as const,
                 created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                area_id: '',
               }]
             } else {
               updated = updated.map((a) => a.date === dt ? { ...a, available: newAvailable } : a)

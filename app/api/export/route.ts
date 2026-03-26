@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
 
   const { data: profile } = await supabase
-    .from('users').select('ruolo').eq('id', user.id).single()
+    .from('users').select('ruolo, area_id').eq('id', user.id).single()
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager')
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
 
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     .select('status, email_inviata')
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', profile.area_id)
     .maybeSingle()
 
   if (!monthStatus || (monthStatus.status !== 'locked' && monthStatus.status !== 'confirmed')) {
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
   let fileName: string
   let excelShiftsByDate: Map<string, string[]>
   try {
-    const result = await generateTurniExcel(month, year, serviceClient, searchParams.get('template'))
+    const result = await generateTurniExcel(month, year, serviceClient, searchParams.get('template'), profile.area_id)
     buffer = result.buffer
     fileName = result.fileName
     excelShiftsByDate = result.shiftsByDate
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
       .from('availability')
       .update({ status: 'approved' })
       .eq('status', 'pending')
+      .eq('area_id', profile.area_id)
       .gte('date', from)
       .lte('date', to)
 
@@ -70,6 +72,7 @@ export async function GET(request: NextRequest) {
       .update({ status: 'confirmed' })
       .eq('month', month)
       .eq('year', year)
+      .eq('area_id', profile.area_id)
   } catch (err) {
     console.error('Errore aggiornamento stato post-export (non bloccante):', err)
   }
@@ -78,7 +81,7 @@ export async function GET(request: NextRequest) {
   if (!monthStatus?.email_inviata && !noEmail) {
     try {
       const [{ data: employees }, { data: extraEmails }] = await Promise.all([
-        serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true),
+        serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', profile.area_id),
         serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true),
       ])
 
@@ -94,6 +97,7 @@ export async function GET(request: NextRequest) {
         .update({ email_inviata: true, email_inviata_at: new Date().toISOString() })
         .eq('month', month)
         .eq('year', year)
+        .eq('area_id', profile.area_id)
     } catch (err) {
       console.error('Errore invio email turni (non bloccante):', err)
     }

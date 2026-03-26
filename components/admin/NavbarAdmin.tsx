@@ -4,7 +4,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { version } from '@/package.json'
+import pkg from '@/package.json'
+const version: string = pkg.version
 
 /* ------------------------------------------------------------------ */
 /* Navigation item definitions                                         */
@@ -39,6 +40,26 @@ const ADMIN_NAV_ITEMS = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/aree',
+    label: 'Aree',
+    shortLabel: 'Aree',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/equita',
+    label: 'Equità',
+    shortLabel: 'Equità',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h18M3 18h18" />
       </svg>
     ),
   },
@@ -119,12 +140,13 @@ const MANAGER_MORE_ITEMS = [
 interface SidebarContentProps {
   pathname: string
   nomeAdmin?: string
+  areaNome?: string
   allNavItems: { href: string; label: string; icon: React.ReactNode }[]
   onLinkClick: () => void
   onLogout: () => void
 }
 
-function SidebarContent({ pathname, nomeAdmin, allNavItems, onLinkClick, onLogout }: SidebarContentProps) {
+function SidebarContent({ pathname, nomeAdmin, areaNome, allNavItems, onLinkClick, onLogout }: SidebarContentProps) {
   function isActive(href: string): boolean {
     if (href === '/admin') return pathname === '/admin'
     return pathname.startsWith(href)
@@ -141,6 +163,13 @@ function SidebarContent({ pathname, nomeAdmin, allNavItems, onLinkClick, onLogou
           <span className="text-[10px] text-gray-300 ml-auto">v{version}</span>
         </div>
       </div>
+
+      {/* Area badge — solo per manager */}
+      {areaNome && (
+        <div className="mx-3 mt-3 px-3 py-1.5 rounded-lg bg-blue-50 text-xs font-medium text-blue-700 truncate">
+          {areaNome}
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5" aria-label="Navigazione admin">
@@ -199,9 +228,11 @@ function SidebarContent({ pathname, nomeAdmin, allNavItems, onLinkClick, onLogou
 interface NavbarAdminProps {
   nomeAdmin?: string
   ruolo?: 'admin' | 'manager'
+  /** Nome dell'area del manager — mostrato come badge nella sidebar. Solo per ruolo manager. */
+  areaNome?: string
 }
 
-export default function NavbarAdmin({ nomeAdmin, ruolo }: NavbarAdminProps) {
+export default function NavbarAdmin({ nomeAdmin, ruolo, areaNome }: NavbarAdminProps) {
   const pathname = usePathname()
   const router = useRouter()
   /* moreOpen controls the "Altro" overflow sheet on mobile */
@@ -239,6 +270,7 @@ export default function NavbarAdmin({ nomeAdmin, ruolo }: NavbarAdminProps) {
         <SidebarContent
           pathname={pathname}
           nomeAdmin={nomeAdmin}
+          areaNome={areaNome}
           allNavItems={allNavItems}
           onLinkClick={() => {}}
           onLogout={handleLogout}
@@ -328,12 +360,15 @@ export default function NavbarAdmin({ nomeAdmin, ruolo }: NavbarAdminProps) {
               <div className="w-10 h-1 rounded-full bg-gray-300" />
             </div>
 
-            {/* Admin name */}
-            {nomeAdmin && (
-              <p className="px-5 pt-1 pb-2 text-xs text-gray-400 border-b border-gray-100">
-                {nomeAdmin}
-              </p>
-            )}
+            {/* Admin name + area */}
+            <div className="px-5 pt-1 pb-2 border-b border-gray-100">
+              {nomeAdmin && (
+                <p className="text-xs text-gray-400">{nomeAdmin}</p>
+              )}
+              {areaNome && (
+                <p className="text-xs font-medium text-blue-600 mt-0.5">{areaNome}</p>
+              )}
+            </div>
 
             {/* Secondary links */}
             <ul className="py-2">

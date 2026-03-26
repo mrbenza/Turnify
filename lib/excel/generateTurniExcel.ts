@@ -80,14 +80,22 @@ export async function generateTurniExcel(
   year: number,
   serviceClient: SupabaseClient,
   templateName?: string | null,
+  areaId?: string,
 ): Promise<GenerateResult> {
   const daysInMonth = new Date(year, month, 0).getDate()
   const from = `${year}-${String(month).padStart(2, '0')}-01`
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
+  let shiftsQuery = serviceClient.from('shifts').select('date, user_id, reperibile_order').gte('date', from).lte('date', to)
+  if (areaId) shiftsQuery = shiftsQuery.eq('area_id', areaId)
+  shiftsQuery = shiftsQuery.order('date').order('reperibile_order')
+
+  let usersQuery = serviceClient.from('users').select('id, nome')
+  if (areaId) usersQuery = usersQuery.eq('area_id', areaId)
+
   const [{ data: shifts }, { data: users }] = await Promise.all([
-    serviceClient.from('shifts').select('date, user_id, reperibile_order').gte('date', from).lte('date', to).order('date').order('reperibile_order'),
-    serviceClient.from('users').select('id, nome'),
+    shiftsQuery,
+    usersQuery,
   ])
 
   const userMap = new Map<string, string>(
@@ -101,6 +109,31 @@ export async function generateTurniExcel(
   for (const s of shifts ?? []) {
     if (!shiftsByDate.has(s.date)) shiftsByDate.set(s.date, [])
     shiftsByDate.get(s.date)!.push(userMap.get(s.user_id) ?? s.user_id)
+  }
+
+  // Recupera nome area e manager se areaId fornito
+  let areaNome: string | null = null
+  let managerNome: string | null = null
+  if (areaId) {
+    const { data: area } = await serviceClient
+      .from('areas')
+      .select('nome, manager_id')
+      .eq('id', areaId)
+      .single()
+    if (area) {
+      areaNome = area.nome
+      if (area.manager_id) {
+        const { data: manager } = await serviceClient
+          .from('users')
+          .select('nome')
+          .eq('id', area.manager_id)
+          .single()
+        if (manager) {
+          const idx = manager.nome.indexOf(' ')
+          managerNome = idx === -1 ? manager.nome : manager.nome.slice(idx + 1)
+        }
+      }
+    }
   }
 
   // Scarica template dallo storage
@@ -122,6 +155,13 @@ export async function generateTurniExcel(
 
   let sheetXml = await zip.files[sheetPath].async('string')
 
+  // In A1 scrive solo la prima parte del nome (es. "Area4 - Toscana" → "AREA 4")
+  if (areaNome) {
+    const dashIdx = areaNome.indexOf(' - ')
+    const shortName = dashIdx !== -1 ? areaNome.slice(0, dashIdx) : areaNome
+    sheetXml = setInlineStr(sheetXml, 'A1', shortName.toUpperCase())
+  }
+  if (managerNome) sheetXml = setInlineStr(sheetXml, 'C51', managerNome)
   sheetXml = setNumCell(sheetXml, 'A3', excelSerial(year, month, 1))
   const now = new Date()
   sheetXml = setNumCell(sheetXml, 'C5', excelSerial(now.getFullYear(), now.getMonth() + 1, now.getDate()))
@@ -148,7 +188,10 @@ export async function generateTurniExcel(
   zip.remove('xl/calcChain.xml')
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-  const fileName = `turni_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
+  const areaShort = areaNome
+    ? (areaNome.indexOf(' - ') !== -1 ? areaNome.slice(0, areaNome.indexOf(' - ')) : areaNome).replace(/\s+/g, '')
+    : 'turni'
+  const fileName = `${areaShort}_${MONTH_NAMES_IT[month - 1]}_${year}.xlsx`
 
   return { buffer, fileName, shiftsByDate }
 }

@@ -95,7 +95,8 @@ turnify/
 │       ├── dashboard/
 │       │   └── TurniCollapsibili.tsx ← sezione turni collassabile nella dashboard manager
 │       ├── disponibilita/
-│       │   └── CalendarioGlobale.tsx
+│       │   ├── CalendarioGlobale.tsx
+│       │   └── AreaSelector.tsx             ← select client-side per navigazione tra aree
 │       ├── turni/
 │       │   └── ListaTurni.tsx       ← weekend Sab+Dom raggruppati in una riga
 │       ├── statistiche/
@@ -120,6 +121,8 @@ turnify/
 │   ├── email/
 │   │   └── sendTurniEmail.ts    ← invia email Brevo con allegato Excel, BCC destinatari
 │   └── utils/
+│       ├── dates.ts
+│       └── sort.ts              ← sortByNome con Intl.Collator numeric (ordinamento naturale aree)
 └── supabase/
     └── migrations/
         ├── 001_initial_schema.sql
@@ -280,6 +283,7 @@ Status:
 | email | text | unique |
 | descrizione | text | nullable |
 | attivo | boolean | default true |
+| area_id | uuid | FK → areas.id — ownership per area; ogni manager gestisce solo le proprie |
 
 ---
 
@@ -346,6 +350,8 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 | `009_fix_users_role_constraint.sql` | Fix constraint users.ruolo (admin\|manager\|dipendente) |
 | `010_simplify_equity_scores.sql` | Semplifica score: solo festivi_attivi×2, rimuove fest_comandate |
 | `011_areas.sql` | Tabella `areas` con scheduling_mode e workers_per_day; riga "Default" inserita automaticamente |
+| `012_reperibile_order.sql` | Colonna `reperibile_order` su shifts (1 = col D, 2 = col E) |
+| `013_multi_area.sql` | `area_id` su users/shifts/availability/month_status; unique (month, year, area_id) |
 
 3. Configurare le variabili d'ambiente (`.env.local` in sviluppo, pannello Vercel in produzione)
 4. Creare il primo admin: Authentication → Users → Add user, poi inserire riga in `users` con `ruolo = 'admin'`
@@ -365,14 +371,97 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 ## TODO
 
 ### Media priorita
-- **Multi-area**: tabella `areas` gia creata (migration 011) con `scheduling_mode` e `workers_per_day`; API `/api/config` per leggere/aggiornare la configurazione. Ancora da implementare: `area_id` su users/shifts/availability/month_status, UI multi-area, selettore area in navbar.
-
-### Bassa priorita
-- Rotazione festivi comandati (chi lavora Natale non lo riprende per ~10 anni)
+- **Multi-area** (quasi completato): implementazione avanzata. Ancora da fare: selettore area in navbar manager (se manager gestisce piu aree), scheduling_mode dinamico per area in `CalendarioGlobale`.
 
 ---
 
 ## Changelog
+
+### [2026-03-26] — CODE AGENT + UI AGENT + DOCS AGENT — Multi-area: bug fix area matching import, area_id su crea-utente e resolve, manager sync cambio ruolo, export Excel (nome file, A1, C51), ordinamento naturale aree, ricerca utenti, dashboard nome area
+
+**File modificati:**
+- `app/api/import-shifts/route.ts`
+- `app/api/import-shifts/resolve/route.ts`
+- `app/api/users/route.ts`
+- `app/api/users/[id]/route.ts`
+- `lib/excel/generateTurniExcel.ts`
+- `components/admin/disponibilita/CalendarioGlobale.tsx`
+- `lib/utils/sort.ts` (nuovo)
+- `components/admin/utenti/ListaUtenti.tsx`
+- `app/user/page.tsx`
+- `components/admin/NavbarAdmin.tsx`
+- Template rinominato: `AREA4.xlsx` → `template_turni.xlsx` su Supabase Storage
+
+**Sommario:** Completamento multi-area: fix area matching a 3 livelli nell'import, area_id propagato correttamente in creazione utenti e resolve, cambio ruolo manager sincronizza automaticamente `areas.manager_id`, export Excel con nome file area-aware e team leader in C51, ordinamento naturale aree (Area1...Area10...Area11), ricerca utenti per nome, nome area in dashboard dipendente.
+
+**Dettagli:**
+1. `import-shifts/route.ts` — area matching ora a 3 livelli: esatto → prefisso ilike → normalizzato (rimozione spazi e lowercase). "AREA 6" ora matcha correttamente "Area6 - Veneto".
+2. `import-shifts/resolve/route.ts` — Fix bug: usava `profile.area_id` (area admin = Default). Ora legge `area_id` dal body della request per assegnare il dipendente all'area corretta.
+3. `users/route.ts` — Accetta `area_id` opzionale nel body; se il caller e admin, usa l'`area_id` dal body invece di quello del profilo admin.
+4. `users/[id]/route.ts` — Fix cambio ruolo: se il nuovo ruolo e `manager`, aggiorna automaticamente `areas.manager_id` per l'area dell'utente. Se il ruolo scende da `manager`, rimuove `areas.manager_id` se era assegnato.
+5. `generateTurniExcel.ts` — Nome file ora `Area4_Marzo_2026.xlsx` (parte corta del nome area senza spazi). Cella A1 scrive la parte prima di ` - ` in uppercase (es. "AREA 4"). Team leader scritto in C51 merged (C51:D52) invece di B51.
+6. `CalendarioGlobale.tsx` — Fix navigazione mesi: query `month_status` ora filtra per `area_id`.
+7. `lib/utils/sort.ts` — Nuovo file con funzione `sortByNome` usando `Intl.Collator({ numeric: true })`. Garantisce ordinamento naturale: Area1, Area2, ..., Area10, Area11.
+8. `ListaUtenti.tsx` — Aggiunto campo "Cerca per nome" nella pagina utenti admin.
+9. `app/user/page.tsx` — Nome area mostrato a destra del saluto nella dashboard dipendente.
+10. `NavbarAdmin.tsx` — Fix warning: `import pkg from '@/package.json'; const version = pkg.version` per leggere la versione senza casting non sicuri.
+11. Template Excel — Rinominato da `AREA4.xlsx` a `template_turni.xlsx` su Supabase Storage. Celle A1 e C51 svuotate per renderlo universale (vengono popolate a runtime da `generateTurniExcel`). Copia originale salvata in `docs/AREA4_originale.xlsx`.
+
+**Status:** Completato
+
+---
+
+### [2026-03-25] — CODE AGENT + UI AGENT + DOCS AGENT — Multi-area: gestione aree UI, equità cross-area, export area-aware, fix seed
+
+**File modificati:**
+- `components/admin/aree/GestioneAree.tsx`
+- `app/api/areas/[id]/route.ts` (nuovo)
+- `app/api/equity-overview/route.ts` (nuovo)
+- `app/admin/equita/page.tsx` (nuovo)
+- `components/admin/NavbarAdmin.tsx`
+- `lib/excel/generateTurniExcel.ts`
+- `supabase/seed_demo.sql`
+
+**Sommario:** Gestione aree con UX trasferimento manager; nuova pagina equità cross-area solo admin; export Excel area-aware (A1/B51 da DB); fix seed Area2-Liguria e nomi duplicati.
+
+**Dettagli:**
+1. `GestioneAree.tsx` — Dropdown manager mostra `Nome — NomeArea` se già assegnato altrove, solo `Nome` se libero. Banner ambra inline avvisa l'impatto del cambio prima del salvataggio. Nessun modal annidato.
+2. `areas/[id]/route.ts` — PATCH con trasferimento manager in cascata: azzera `manager_id` dell'area precedente del nuovo manager e aggiorna `users.area_id` del nuovo manager alla nuova area.
+3. `equity-overview/route.ts` — Nuova API GET che chiama `get_equity_scores` in parallelo per tutte le aree e ritorna array `AreaEquitySummary`.
+4. `admin/equita/page.tsx` — Pagina solo admin con panoramica equità cross-area: score medio/min/max/delta per area, badge salute (verde ≤ 2, giallo 3–5, rosso > 5), ranking espandibile, filtro mese/anno.
+5. `NavbarAdmin.tsx` — Voce "Equità" aggiunta per admin tra Aree e Sistema.
+6. `generateTurniExcel.ts` — Scrive nome area in A1 e cognome manager in B51 letti dal DB tramite `areaId` (rimossi i valori hardcoded "AREA 4" e "Marco Lucchesi").
+7. `seed_demo.sql` — Area2-Liguria: aggiunto `manager_id` mancante (Marco Ferrari). Nomi utenti resi unici con suffisso numerico per eliminare duplicati.
+
+**Status:** Completato
+
+---
+
+### [2026-03-25] — CODE AGENT + UI AGENT — Multi-area: bug fix email settings, selettore area disponibilita, UI miglioramenti
+
+**File modificati:**
+- `app/api/email-settings/route.ts`
+- `app/api/email-settings/[id]/route.ts`
+- `app/admin/impostazioni/page.tsx`
+- `app/admin/disponibilita/page.tsx`
+- `components/admin/disponibilita/AreaSelector.tsx` (nuovo)
+- `components/admin/utenti/ListaUtenti.tsx`
+- `app/admin/page.tsx`
+
+**Sommario:** Bug fix ownership email settings per area; selettore area su calendario disponibilita admin; miglioramenti UI filtri e dashboard.
+
+**Dettagli:**
+1. `email-settings/route.ts` POST — include `area_id` dal profilo utente nell'insert, garantendo che ogni manager crei email settings solo per la propria area.
+2. `email-settings/[id]/route.ts` PATCH e DELETE — aggiunto filtro `.eq('area_id', authResult.areaId)` come ownership check: un manager non puo modificare o eliminare email settings di altre aree.
+3. `admin/impostazioni/page.tsx` — query email_settings filtrata per `areaId` per visualizzare solo le proprie.
+4. `admin/disponibilita/page.tsx` — accetta `searchParams`, fetcha tutte le aree se admin, usa `?area=<id>` come parametro per l'area attiva.
+5. `AreaSelector.tsx` — nuovo componente `<select>` client-side che naviga tra aree tramite `router.push` con query string `?area=<id>`.
+6. `ListaUtenti.tsx` — filtro area convertito da pill a `<select>` dropdown per migliore usabilita.
+7. `admin/page.tsx` — aggiunto badge "Aree" (verde) accanto ad Area Manager e ATC nella sezione Utenti della dashboard admin.
+
+**Status:** Completato
+
+---
 
 ### [2026-03-24] — DOCS AGENT — Documentazione aggiornata
 

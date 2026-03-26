@@ -10,6 +10,9 @@ const MONTH_NAMES_IT = [
 interface ImportResult {
   month: number
   year: number
+  areaId: string
+  areaNome: string
+  areaWarning: string | null
   imported: number
   skipped: number
   unmatched: string[]
@@ -32,6 +35,7 @@ interface FileResult {
 interface CreateModalState {
   fileResultId: number
   cognome: string
+  areaId: string
   pendingShifts: { date: string; shift_type: string; reperibile_order: 1 | 2 }[]
 }
 
@@ -251,6 +255,23 @@ export default function ImportaStorico() {
                 </div>
               ) : fr.result && (
                 <div className="space-y-1.5">
+                  {/* Area rilevata */}
+                  <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-4 py-2.5">
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Area: <strong>{fr.result.areaNome || '—'}</strong></span>
+                  </div>
+                  {/* Warning area/manager mismatch */}
+                  {fr.result.areaWarning && (
+                    <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-2.5">
+                      <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>{fr.result.areaWarning}</span>
+                    </div>
+                  )}
                   <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-4 py-2.5">
                     <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -299,6 +320,7 @@ export default function ImportaStorico() {
                                   onClick={() => setCreateModal({
                                     fileResultId: fr.id,
                                     cognome,
+                                    areaId: fr.result!.areaId,
                                     pendingShifts: fr.result!.pendingShifts[cognome] ?? [],
                                   })}
                                   className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
@@ -383,6 +405,7 @@ export default function ImportaStorico() {
       {createModal && (
         <CreaUtenteModal
           cognome={createModal.cognome}
+          areaId={createModal.areaId}
           pendingShifts={createModal.pendingShifts}
           onClose={() => setCreateModal(null)}
           onCreated={handleCreated}
@@ -398,12 +421,13 @@ export default function ImportaStorico() {
 
 interface CreaUtenteModalProps {
   cognome: string
+  areaId: string
   pendingShifts: { date: string; shift_type: string; reperibile_order: 1 | 2 }[]
   onClose: () => void
   onCreated: (cognome: string) => void
 }
 
-function CreaUtenteModal({ cognome, pendingShifts, onClose, onCreated }: CreaUtenteModalProps) {
+function CreaUtenteModal({ cognome, areaId, pendingShifts, onClose, onCreated }: CreaUtenteModalProps) {
   const [nome, setNome] = useState(cognome)
   const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
@@ -422,7 +446,7 @@ function CreaUtenteModal({ cognome, pendingShifts, onClose, onCreated }: CreaUte
       const userRes = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo: 'dipendente' }),
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo: 'dipendente', area_id: areaId }),
       })
       const userJson = await userRes.json().catch(() => ({}))
       if (!userRes.ok) throw new Error(userJson.error ?? 'Errore creazione utente')
@@ -432,7 +456,7 @@ function CreaUtenteModal({ cognome, pendingShifts, onClose, onCreated }: CreaUte
         const resolveRes = await fetch('/api/import-shifts/resolve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userJson.id, user_nome: userJson.nome, shifts: pendingShifts }),
+          body: JSON.stringify({ user_id: userJson.id, user_nome: userJson.nome, area_id: areaId, shifts: pendingShifts }),
         })
         const resolveJson = await resolveRes.json().catch(() => ({}))
         if (!resolveRes.ok) throw new Error(resolveJson.error ?? 'Errore inserimento turni')

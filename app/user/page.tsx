@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import type { User } from '@/lib/supabase/types'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import type { User, SchedulingMode } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
 import CalendarioDisponibilita from '@/components/user/CalendarioDisponibilita'
 import StoricoTurni, { type ShiftRow } from '@/components/user/StoricoTurni'
@@ -21,6 +21,18 @@ export default async function UserPage() {
     .select('*')
     .eq('id', authUser.id)
     .single<User>()
+
+  const areaId = profile?.area_id ?? ''
+
+  // Scheduling mode dall'area del dipendente
+  const serviceClient = createServiceClient()
+  const { data: areaConfig } = await serviceClient
+    .from('areas')
+    .select('scheduling_mode, nome')
+    .eq('id', areaId)
+    .maybeSingle()
+  const schedulingMode: SchedulingMode = (areaConfig?.scheduling_mode as SchedulingMode) ?? 'weekend_full'
+  const areaNome: string | null = areaConfig?.nome ?? null
 
   const now = new Date()
 
@@ -56,7 +68,8 @@ export default async function UserPage() {
 
     supabase
       .from('month_status')
-      .select('*'),
+      .select('*')
+      .eq('area_id', areaId),
 
     supabase
       .from('shifts')
@@ -99,13 +112,18 @@ export default async function UserPage() {
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-8">
         {/* Welcome */}
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">
-            Ciao, {nomeUtente.split(' ')[0]}
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Segna la tua disponibilità per i turni di reperibilità
-          </p>
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">
+              Ciao, {nomeUtente.split(' ')[0]}
+            </h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Segna la tua disponibilità per i turni di reperibilità
+            </p>
+          </div>
+          {areaNome && (
+            <span className="text-sm text-gray-500 whitespace-nowrap">{areaNome}</span>
+          )}
         </div>
 
         {/* Calendario */}
@@ -125,6 +143,7 @@ export default async function UserPage() {
             holidays={holidays}
             shifts={shifts}
             lockedMonths={lockedMonths}
+            schedulingMode={schedulingMode}
           />
         </section>
 

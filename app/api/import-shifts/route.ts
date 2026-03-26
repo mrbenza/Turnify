@@ -9,13 +9,38 @@ function fromExcelSerial(serial: number): Date {
   return new Date(epoch + serial * 86400000)
 }
 
-/** Estrae il testo da una cella (supporta inlineStr plain e rich text) */
-function getCellText(xml: string, addr: string): string {
-  const cellRe = new RegExp('<c r="' + addr + '"[^>]*>([\\s\\S]*?)</c>')
+/** Carica shared strings dal file Excel */
+async function getSharedStrings(zip: JSZip): Promise<string[]> {
+  const sstFile = zip.files['xl/sharedStrings.xml']
+  if (!sstFile) return []
+  const xml = await sstFile.async('string')
+  const matches = [...xml.matchAll(/<si>([\s\S]*?)<\/si>/g)]
+  return matches.map(m => {
+    const tMatches = [...m[1].matchAll(/<t[^>]*>([^<]*)<\/t>/g)]
+    return tMatches.map(t => t[1]).join('').trim()
+  })
+}
+
+/**
+ * Estrae il testo da una cella.
+ * Supporta: inlineStr (plain e rich text) e shared strings (t="s").
+ */
+function getCellText(xml: string, addr: string, sharedStrings: string[]): string {
+  const cellRe = new RegExp('<c r="' + addr + '"([^>]*)>([\\s\\S]*?)</c>')
   const cellMatch = xml.match(cellRe)
   if (!cellMatch) return ''
-  const inner = cellMatch[1]
-  // Estrai tutti i tag <t>...</t> e concatena (gestisce rich text multi-run)
+  const attrs = cellMatch[1]
+  const inner = cellMatch[2]
+
+  // Shared string
+  if (attrs.includes('t="s"')) {
+    const vMatch = inner.match(/<v>(\d+)<\/v>/)
+    if (!vMatch) return ''
+    const idx = parseInt(vMatch[1], 10)
+    return sharedStrings[idx] ?? ''
+  }
+
+  // inlineStr / rich text
   const tMatches = [...inner.matchAll(/<t[^>]*>([^<]*)<\/t>/g)]
   return tMatches.map(m => m[1]).join('').trim()
 }
@@ -44,6 +69,12 @@ async function getDatiSheetPath(zip: JSZip): Promise<string | null> {
   if (!relM) return null
   const target = relM[1]
   return target.startsWith('xl/') ? target : `xl/${target}`
+}
+
+/** Estrae il cognome da un nome completo (tutto dopo il primo spazio) */
+function toCognome(nome: string): string {
+  const idx = nome.indexOf(' ')
+  return idx === -1 ? nome : nome.slice(idx + 1)
 }
 
 export async function POST(request: NextRequest) {
@@ -78,7 +109,6 @@ export async function POST(request: NextRequest) {
 
   const file = fileEntry as File
 
-  // Validazione: solo .xlsx
   if (!file.name.endsWith('.xlsx')) {
     return NextResponse.json({ error: 'Formato non supportato — caricare un file .xlsx' }, { status: 400 })
   }
@@ -98,9 +128,131 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Foglio "Dati" non trovato nel file Excel' }, { status: 400 })
   }
 
-  const sheetXml = await zip.files[sheetPath].async('string')
+  const [sheetXml, sharedStrings] = await Promise.all([
+    zip.files[sheetPath].async('string'),
+    getSharedStrings(zip),
+  ])
 
-  // Estrai mese/anno da A3 (Excel serial date del primo giorno del mese)
+  // ----------------------------------------------------------------
+  // Leggi area e manager dal file
+  // ----------------------------------------------------------------
+  const areaNomeFile = getCellText(sheetXml, 'A1', sharedStrings)
+  const managerCognomeFile = getCellText(sheetXml, 'B51', sharedStrings)
+
+  // ----------------------------------------------------------------
+  // Risolvi area nel DB
+  // ----------------------------------------------------------------
+  const serviceClient = createServiceClient()
+  let targetAreaId: string | null = null
+  let areaWarning: string | null = null
+
+  // 1. Cerca per nome area (A1)
+  if (areaNomeFile) {
+    // Prima prova match esatto (case-insensitive)
+    const { data: exactMatch } = await serviceClient
+      .from('areas')
+      .select('id, nome, manager_id')
+      .ilike('nome', areaNomeFile)
+      .single()
+
+    let areaByName = exactMatch
+
+    // Se non trovato, prova match per prefisso (es. "Area4" → "Area4 - Piemonte")
+    if (!areaByName) {
+      const { data: prefixMatches } = await serviceClient
+        .from('areas')
+        .select('id, nome, manager_id')
+        .ilike('nome', `${areaNomeFile}%`)
+
+      if (prefixMatches && prefixMatches.length === 1) {
+        areaByName = prefixMatches[0]
+        areaWarning = `Area identificata per prefisso: "${areaNomeFile}" → "${areaByName.nome}"`
+      } else if (prefixMatches && prefixMatches.length > 1) {
+        return NextResponse.json({
+          error: `Nome area ambiguo: "${areaNomeFile}" corrisponde a più aree (${prefixMatches.map(a => a.nome).join(', ')}). Specifica il nome completo nel file.`,
+        }, { status: 400 })
+      }
+    }
+
+    // Se ancora non trovato, prova match normalizzato (lowercase + rimozione spazi)
+    // Es. "AREA 6" → "area6" matcha "Area6 - Liguria" → "area6"
+    if (!areaByName) {
+      const normalizeStr = (s: string) => s.toLowerCase().replace(/\s+/g, '')
+      const normalizedFile = normalizeStr(areaNomeFile)
+
+      const { data: allAreas } = await serviceClient
+        .from('areas')
+        .select('id, nome, manager_id')
+
+      const normalizedMatches = (allAreas ?? []).filter(
+        a => normalizeStr(a.nome).startsWith(normalizedFile)
+      )
+
+      if (normalizedMatches.length === 1) {
+        areaByName = normalizedMatches[0]
+        areaWarning = `Area identificata per nome normalizzato: "${areaNomeFile}" → "${areaByName.nome}"`
+      } else if (normalizedMatches.length > 1) {
+        return NextResponse.json({
+          error: `Nome area ambiguo: "${areaNomeFile}" corrisponde a più aree (${normalizedMatches.map(a => a.nome).join(', ')}). Specifica il nome completo nel file.`,
+        }, { status: 400 })
+      }
+    }
+
+    if (areaByName) {
+      targetAreaId = areaByName.id
+
+      // Cross-check manager (B51)
+      if (managerCognomeFile && areaByName.manager_id) {
+        const { data: mgr } = await serviceClient
+          .from('users')
+          .select('nome')
+          .eq('id', areaByName.manager_id)
+          .single()
+        if (mgr) {
+          const cognomeDB = toCognome(mgr.nome)
+          if (cognomeDB.toLowerCase() !== managerCognomeFile.toLowerCase()) {
+            const existingWarning = areaWarning ? `${areaWarning}. ` : ''
+            areaWarning = `${existingWarning}Manager nel file ("${managerCognomeFile}") non corrisponde al manager dell'area nel DB ("${cognomeDB}") — importazione comunque effettuata su ${areaByName.nome}`
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Fallback: cerca per cognome manager (B51)
+  if (!targetAreaId && managerCognomeFile) {
+    const { data: allManagers } = await serviceClient
+      .from('users')
+      .select('id, nome')
+      .eq('ruolo', 'manager')
+
+    const matchedMgr = (allManagers ?? []).find(
+      u => toCognome(u.nome).toLowerCase() === managerCognomeFile.toLowerCase()
+    )
+
+    if (matchedMgr) {
+      const { data: areaByMgr } = await serviceClient
+        .from('areas')
+        .select('id, nome')
+        .eq('manager_id', matchedMgr.id)
+        .single()
+
+      if (areaByMgr) {
+        targetAreaId = areaByMgr.id
+        areaWarning = `Area identificata tramite manager "${managerCognomeFile}" → ${areaByMgr.nome} (nome area nel file: "${areaNomeFile || 'non trovato'}")`
+      }
+    }
+  }
+
+  if (!targetAreaId) {
+    return NextResponse.json({
+      error: `Area non riconosciuta. Nome area nel file: "${areaNomeFile || '—'}", Manager: "${managerCognomeFile || '—'}". Verifica che il file sia stato generato da Turnify.`,
+    }, { status: 400 })
+  }
+
+  // ----------------------------------------------------------------
+  // Estrai mese/anno da A3
+  // ----------------------------------------------------------------
   const a3Value = getCellNumber(sheetXml, 'A3')
   if (a3Value === null) {
     return NextResponse.json({ error: 'Impossibile determinare il mese dal file — cella A3 mancante o non numerica' }, { status: 400 })
@@ -108,19 +260,20 @@ export async function POST(request: NextRequest) {
 
   const firstDay = fromExcelSerial(a3Value)
   const year = firstDay.getUTCFullYear()
-  const month = firstDay.getUTCMonth() + 1 // 1-based
+  const month = firstDay.getUTCMonth() + 1
 
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || year < 2020 || year > 2100) {
     return NextResponse.json({ error: 'Impossibile determinare il mese dal file — data non valida in A3' }, { status: 400 })
   }
 
-  // Build cognome → user map (solo dipendenti attivi)
-  const serviceClient = createServiceClient()
-
+  // ----------------------------------------------------------------
+  // Build cognome → user map (solo dipendenti dell'area trovata)
+  // ----------------------------------------------------------------
   const { data: usersData, error: usersError } = await serviceClient
     .from('users')
     .select('id, nome')
     .eq('ruolo', 'dipendente')
+    .eq('area_id', targetAreaId)
 
   if (usersError) {
     console.error('Errore fetch utenti:', usersError)
@@ -129,13 +282,14 @@ export async function POST(request: NextRequest) {
 
   const cognomeMap = new Map<string, { id: string; nome: string }[]>()
   for (const u of (usersData ?? []) as { id: string; nome: string }[]) {
-    const idx = u.nome.indexOf(' ')
-    const cognome = idx === -1 ? u.nome : u.nome.slice(idx + 1)
+    const cognome = toCognome(u.nome)
     if (!cognomeMap.has(cognome)) cognomeMap.set(cognome, [])
     cognomeMap.get(cognome)!.push(u)
   }
 
-  // Fetch holidays per il mese importato
+  // ----------------------------------------------------------------
+  // Fetch holidays
+  // ----------------------------------------------------------------
   const monthStr = String(month).padStart(2, '0')
   const daysInMonth = new Date(year, month, 0).getDate()
   const fromDate = `${year}-${monthStr}-01`
@@ -153,7 +307,9 @@ export async function POST(request: NextRequest) {
       .map((h: { date: string }) => h.date)
   )
 
+  // ----------------------------------------------------------------
   // Itera righe 10-40 (giorni 1-31)
+  // ----------------------------------------------------------------
   const DATA_START = 10
   const shiftsToInsert: {
     date: string
@@ -162,6 +318,7 @@ export async function POST(request: NextRequest) {
     shift_type: 'reperibilita' | 'weekend' | 'festivo'
     reperibile_order: 1 | 2
     created_by: string
+    area_id: string
   }[] = []
   const unmatched: string[] = []
   const ambiguous: string[] = []
@@ -169,22 +326,16 @@ export async function POST(request: NextRequest) {
 
   for (let day = 1; day <= 31; day++) {
     const row = DATA_START + day - 1
-
-    // Verifica che la data sia valida per questo mese
     if (day > daysInMonth) break
 
     const dateStr = `${year}-${monthStr}-${String(day).padStart(2, '0')}`
-    const dow = new Date(year, month - 1, day).getDay() // 0=Sun, 6=Sat
+    const dow = new Date(year, month - 1, day).getDay()
     const isWeekend = dow === 0 || dow === 6
     const isHoliday = holidayDates.has(dateStr)
     const shiftType = isHoliday ? 'festivo' : isWeekend ? 'weekend' : 'reperibilita'
 
-    const cellsToCheck: { addr: string; order: 1 | 2 }[] = [
-      { addr: `D${row}`, order: 1 },
-      { addr: `E${row}`, order: 2 },
-    ]
-    for (const { addr, order } of cellsToCheck) {
-      const cognome = getCellText(sheetXml, addr)
+    for (const { addr, order } of [{ addr: `D${row}`, order: 1 as const }, { addr: `E${row}`, order: 2 as const }]) {
+      const cognome = getCellText(sheetXml, addr, sharedStrings)
       if (!cognome) continue
 
       const matches = cognomeMap.get(cognome)
@@ -208,11 +359,14 @@ export async function POST(request: NextRequest) {
         shift_type: shiftType,
         reperibile_order: order,
         created_by: user.id,
+        area_id: targetAreaId,
       })
     }
   }
 
-  // Upsert turni (onConflict: 'date,user_id' — ignora duplicati)
+  // ----------------------------------------------------------------
+  // Upsert turni
+  // ----------------------------------------------------------------
   let inserted: unknown[] = []
   if (shiftsToInsert.length > 0) {
     const { data: insertedData, error: insertError } = await serviceClient
@@ -228,7 +382,9 @@ export async function POST(request: NextRequest) {
     inserted = insertedData ?? []
   }
 
-  // Chiudi il mese: confirmed se passato, locked se mese corrente
+  // ----------------------------------------------------------------
+  // Chiudi il mese
+  // ----------------------------------------------------------------
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
@@ -241,31 +397,33 @@ export async function POST(request: NextRequest) {
     locked_at: new Date().toISOString(),
   }
 
-  // Prova update prima (record già esistente), poi insert se non esiste
   const { data: existingStatus } = await serviceClient
     .from('month_status')
     .select('id')
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', targetAreaId)
     .single()
 
   if (existingStatus) {
-    const { error: updateError } = await serviceClient
+    await serviceClient
       .from('month_status')
       .update(lockPayload)
       .eq('month', month)
       .eq('year', year)
-    if (updateError) console.error('Errore update month_status:', updateError)
+      .eq('area_id', targetAreaId)
   } else {
-    const { error: insertError } = await serviceClient
+    await serviceClient
       .from('month_status')
-      .insert({ month, year, ...lockPayload })
-    if (insertError) console.error('Errore insert month_status:', insertError)
+      .insert({ month, year, area_id: targetAreaId, ...lockPayload })
   }
 
   return NextResponse.json({
     month,
     year,
+    areaId: targetAreaId,
+    areaNome: areaNomeFile,
+    areaWarning,
     imported: inserted.length,
     skipped: shiftsToInsert.length - inserted.length,
     unmatched: [...new Set(unmatched)],

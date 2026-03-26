@@ -14,12 +14,16 @@ export async function POST(request: Request) {
   // Admin check
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  }
+
+  if (!profile?.area_id) {
+    return NextResponse.json({ error: 'Profilo utente non trovato.' }, { status: 403 })
   }
 
   // Parse body
@@ -49,6 +53,7 @@ export async function POST(request: Request) {
       email: trimmedEmail,
       descrizione: descrizione?.trim() || null,
       attivo: true,
+      area_id: profile.area_id,
     })
     .select()
     .single()

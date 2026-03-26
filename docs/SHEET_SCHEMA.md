@@ -16,8 +16,9 @@ Anagrafica utenti della piattaforma.
 | ruolo | text | `admin` \| `manager` \| `dipendente` (constraint aggiornato in migration 009) |
 | attivo | boolean | default true — disattivare invece di cancellare |
 | data_creazione | timestamptz | default now() |
+| area_id | uuid | FK → areas.id ON DELETE RESTRICT (migration 013) |
 
-**Indici:** `email` (unique)
+**Indici:** `email` (unique), `area_id`
 **RLS:**
 - `admin` puo leggere tutti gli utenti tranne altri admin; puo scrivere su tutti i ruoli
 - `manager` legge solo utenti con `ruolo = 'dipendente'` o se stesso
@@ -38,6 +39,7 @@ Disponibilita inserite dai dipendenti (sabato, domenica, festivi attivi).
 | status | text | `pending` \| `approved` \| `locked` |
 | created_at | timestamptz | default now() |
 | updated_at | timestamptz | aggiornato ad ogni modifica |
+| area_id | uuid | FK → areas.id ON DELETE RESTRICT (migration 013) |
 
 **Status:**
 - `pending` → dipendente puo ancora modificare
@@ -61,6 +63,7 @@ Turni assegnati dal manager. Separata da `availability` per design.
 | reperibile_order | smallint | `1` = 1° reperibile (colonna D Excel) \| `2` = 2° reperibile (colonna E Excel); default 1 |
 | created_by | uuid | FK → users.id (manager che ha assegnato) |
 | created_at | timestamptz | default now() |
+| area_id | uuid | FK → areas.id ON DELETE RESTRICT (migration 013) |
 
 **Valori shift_type:**
 - `weekend` — sabato o domenica non festivi
@@ -105,15 +108,16 @@ Controlla lo stato e il lock di ogni mese.
 | status | text | `open` \| `locked` \| `confirmed` |
 | locked_by | uuid | FK → users.id (manager che ha bloccato) |
 | locked_at | timestamptz | quando e stato bloccato |
-| email_inviata | boolean | default false — true dopo invio notifica (non ancora implementato) |
-| email_inviata_at | timestamptz | nullable — timestamp invio (non ancora implementato) |
+| email_inviata | boolean | default false — true dopo invio notifica |
+| email_inviata_at | timestamptz | nullable — timestamp invio |
+| area_id | uuid | FK → areas.id ON DELETE RESTRICT (migration 013) |
 
 **Status:**
 - `open` → mese in lavorazione, disponibilita modificabili
 - `locked` → confermato dal manager, pronto per export Excel, disponibilita immutabili
 - `confirmed` → Excel generato/scaricato; impostato automaticamente dall'API `/api/export` al momento del download
 
-**Constraint:** unique su `(month, year)`
+**Constraint:** unique su `(month, year, area_id)` — ogni area ha il proprio stato mensile
 **RLS:** admin e manager possono scrivere; tutti possono leggere.
 
 ---
@@ -137,6 +141,7 @@ Aree aziendali con logica di turnazione propria (migration 011). Multi-area non 
 - `sun_next_sat` — Dom assegnata propone il Sab+7 della settimana successiva
 
 **Nota:** riga "Default" inserita automaticamente alla prima configurazione tramite API `/api/config`.
+Tutti i record esistenti in `users`, `shifts`, `availability`, `month_status` sono stati assegnati all'area Default con migration 013.
 
 ---
 
@@ -150,7 +155,9 @@ Indirizzi email aggiuntivi che ricevono la notifica "mese confermato".
 | descrizione | text | nullable, es. "Lista distribuzione" |
 | attivo | boolean | default true |
 | created_at | timestamptz | default now() |
+| area_id | uuid | FK → areas.id — isolamento per area; ogni manager gestisce solo le proprie email settings |
 
+**Ownership:** il POST include `area_id` dal profilo del manager; PATCH e DELETE filtrano per `area_id` (un manager non puo modificare email settings di altre aree).
 **RLS:** admin e manager leggono; solo admin e manager scrivono.
 
 ---
@@ -224,3 +231,5 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-03-22 | Semplifica score: rimuove fest_comandate, solo festivi_attivi×2 | 010_simplify_equity_scores.sql |
 | 2026-03-24 | Tabella `areas`: scheduling_mode, workers_per_day, template_path, manager_id | 011_areas.sql |
 | 2026-03-24 | `shifts.reperibile_order`: 1=colonna D (1° rep.), 2=colonna E (2° rep.) | 012_reperibile_order.sql |
+| 2026-03-24 | Multi-area: `area_id` su users/shifts/availability/month_status; unique (month,year,area_id) | 013_multi_area.sql |
+| 2026-03-25 | `area_id` su email_settings: POST include area_id, PATCH/DELETE filtrano per area_id (ownership check per area) | (API change, no migration) |

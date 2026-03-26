@@ -11,6 +11,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
 
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('area_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!userProfile?.area_id) {
+    return NextResponse.json({ error: 'Profilo utente non trovato.' }, { status: 403 })
+  }
+
+  const areaId = userProfile.area_id
+
   // Parse body
   let body: { date?: string; available?: boolean }
   try {
@@ -55,6 +67,7 @@ export async function POST(request: Request) {
     .select('status')
     .eq('month', dateMonth)
     .eq('year', dateYear)
+    .eq('area_id', areaId)
     .maybeSingle()
 
   if (monthStatus?.status === 'locked') {
@@ -109,6 +122,7 @@ export async function POST(request: Request) {
         date,
         available,
         status: 'pending',
+        area_id: areaId,
       })
       .select()
       .single()

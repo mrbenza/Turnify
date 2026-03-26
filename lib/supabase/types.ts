@@ -15,6 +15,7 @@ export type User = {
   attivo: boolean
   data_creazione: string
   disattivato_at: string | null
+  area_id: string
 }
 
 export type Holiday = {
@@ -34,6 +35,7 @@ export type MonthStatus = {
   locked_at: string | null
   email_inviata: boolean
   email_inviata_at: string | null
+  area_id: string
 }
 
 export type Availability = {
@@ -44,6 +46,7 @@ export type Availability = {
   status: AvailabilityStatus
   created_at: string
   updated_at: string
+  area_id: string
 }
 
 export type Shift = {
@@ -55,6 +58,7 @@ export type Shift = {
   reperibile_order: number
   created_by: string
   created_at: string
+  area_id: string
 }
 
 export type EquityScore = {
@@ -80,6 +84,7 @@ export type EmailSetting = {
   email: string
   descrizione: string | null
   attivo: boolean
+  area_id: string
   created_at: string
 }
 
@@ -93,7 +98,15 @@ export type Database = {
         Row: User
         Insert: Omit<User, 'data_creazione' | 'disattivato_at'> & { disattivato_at?: string | null }
         Update: Partial<Omit<User, 'id'>>
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'users_area_id_fkey'
+            columns: ['area_id']
+            isOneToOne: false
+            referencedRelation: 'areas'
+            referencedColumns: ['id']
+          },
+        ]
       }
       holidays: {
         Row: Holiday
@@ -108,7 +121,15 @@ export type Database = {
           email_inviata_at?: string | null
         }
         Update: Partial<Omit<MonthStatus, 'id'>>
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'month_status_area_id_fkey'
+            columns: ['area_id']
+            isOneToOne: false
+            referencedRelation: 'areas'
+            referencedColumns: ['id']
+          },
+        ]
       }
       availability: {
         Row: Availability
@@ -120,6 +141,13 @@ export type Database = {
             columns: ['user_id']
             isOneToOne: false
             referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'availability_area_id_fkey'
+            columns: ['area_id']
+            isOneToOne: false
+            referencedRelation: 'areas'
             referencedColumns: ['id']
           },
         ]
@@ -143,6 +171,13 @@ export type Database = {
             referencedRelation: 'users'
             referencedColumns: ['id']
           },
+          {
+            foreignKeyName: 'shifts_area_id_fkey'
+            columns: ['area_id']
+            isOneToOne: false
+            referencedRelation: 'areas'
+            referencedColumns: ['id']
+          },
         ]
       }
       email_settings: {
@@ -163,7 +198,7 @@ export type Database = {
     }
     Functions: {
       get_equity_scores: {
-        Args: { p_month: number; p_year: number }
+        Args: { p_month: number; p_year: number; p_area_id?: string }
         Returns: EquityScore[]
       }
       is_admin: {

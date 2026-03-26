@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   // Admin check
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     .select('id')
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', profile.area_id)
     .single()
 
   if (existing) {
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
       .update(lockPayload)
       .eq('month', month)
       .eq('year', year)
+      .eq('area_id', profile.area_id)
     if (error) {
       console.error(`Errore ${action} mese:`, error)
       return NextResponse.json({ error: 'Errore durante l\'operazione sul mese.' }, { status: 500 })
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
   } else {
     const { error } = await serviceClient
       .from('month_status')
-      .insert({ month, year, ...lockPayload })
+      .insert({ month, year, area_id: profile.area_id, ...lockPayload })
     if (error) {
       console.error(`Errore ${action} mese:`, error)
       return NextResponse.json({ error: 'Errore durante l\'operazione sul mese.' }, { status: 500 })

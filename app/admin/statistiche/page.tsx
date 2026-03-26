@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import type { EquityScore } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import GraficoEquita from '@/components/admin/statistiche/GraficoEquita'
@@ -13,12 +13,21 @@ export default async function StatistichePage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo, nome')
+    .select('ruolo, nome, area_id')
     .eq('id', authUser.id)
-    .single<{ ruolo: string; nome: string }>()
+    .single<{ ruolo: string; nome: string; area_id: string }>()
 
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
   if (profile?.ruolo === 'admin') redirect('/admin')
+
+  const areaId = profile.area_id ?? ''
+
+  const serviceClient = createServiceClient()
+
+  /* ---- Nome area per badge navbar ---- */
+  const { data: areaData } = await serviceClient
+    .from('areas').select('nome').eq('id', areaId).maybeSingle()
+  const areaNome = areaData?.nome ?? undefined
 
   /* ---- Initial equity scores for current month ---- */
   const now = new Date()
@@ -28,13 +37,18 @@ export default async function StatistichePage() {
   const { data: initialScores } = await supabase.rpc('get_equity_scores', {
     p_month: month + 1,
     p_year: year,
+    p_area_id: areaId,
   })
 
-  const scores = initialScores ?? []
+  const scores = (initialScores ?? []) as EquityScore[]
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
+      <NavbarAdmin
+        nomeAdmin={profile?.nome}
+        ruolo={profile?.ruolo as 'admin' | 'manager'}
+        areaNome={areaNome}
+      />
 
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -80,6 +94,7 @@ export default async function StatistichePage() {
               initialScores={scores}
               initialMonth={month}
               initialYear={year}
+              areaId={areaId}
             />
           </section>
         </main>

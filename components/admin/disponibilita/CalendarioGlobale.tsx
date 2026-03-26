@@ -31,6 +31,7 @@ interface CalendarioGlobaleProps {
   isAdmin: boolean
   schedulingMode: SchedulingMode
   workersPerDay: 1 | 2
+  areaId: string
 }
 
 /** Selected day for the side drawer */
@@ -86,7 +87,14 @@ function getPairedDate(dateStr: string, mode: SchedulingMode, isHoliday: boolean
   const dow = new Date(y, m - 1, d).getDay() // 0=Dom, 6=Sab
   const isWeekend = dow === 0 || dow === 6
 
-  // Festivi su Sab/Dom: in tutti i modi abbina con l'altro giorno dello stesso weekend
+  if (mode === 'sun_next_sat') {
+    // In sun_next_sat: Dom (anche festiva) → Sab+6; Sab non genera abbinamento
+    if (dow !== 0) return null
+    const nextSat = new Date(y, m - 1, d + 6)
+    return toDateString(nextSat.getFullYear(), nextSat.getMonth(), nextSat.getDate())
+  }
+
+  // Festivi su Sab/Dom (weekend_full / single_day): abbina con l'altro giorno dello stesso weekend
   if (isHoliday && isWeekend) {
     const partner = dow === 6
       ? new Date(y, m - 1, d + 1) // Sab → Dom
@@ -100,12 +108,6 @@ function getPairedDate(dateStr: string, mode: SchedulingMode, isHoliday: boolean
       ? new Date(y, m - 1, d + 1) // Sab → Dom
       : new Date(y, m - 1, d - 1) // Dom → Sab
     return toDateString(partner.getFullYear(), partner.getMonth(), partner.getDate())
-  }
-
-  if (mode === 'sun_next_sat') {
-    if (dow !== 0) return null // solo domenica genera abbinamento
-    const nextSat = new Date(y, m - 1, d + 7)
-    return toDateString(nextSat.getFullYear(), nextSat.getMonth(), nextSat.getDate())
   }
 
   // single_day: nessun auto-pairing
@@ -150,6 +152,7 @@ export default function CalendarioGlobale({
   isAdmin,
   schedulingMode,
   workersPerDay,
+  areaId,
 }: CalendarioGlobaleProps) {
   /* ---- Core state ---- */
   const [viewMonth, setViewMonth] = useState(initialMonth)
@@ -328,7 +331,7 @@ export default function CalendarioGlobale({
         supabase.from('availability').select('*').gte('date', from).lte('date', to),
         supabase.from('shifts').select('*').gte('date', from).lte('date', to),
         supabase.from('holidays').select('*').gte('date', from).lte('date', to),
-        supabase.from('month_status').select('*').eq('month', newMonth + 1).eq('year', newYear).maybeSingle(),
+        supabase.from('month_status').select('*').eq('month', newMonth + 1).eq('year', newYear).eq('area_id', areaId).maybeSingle(),
       ])
 
       setAvailability(availRes.data ?? [])

@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   // Admin check
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const { data: areaConfig } = await supabase
     .from('areas')
     .select('scheduling_mode, workers_per_day')
-    .limit(1)
+    .eq('id', profile.area_id)
     .single()
   const schedulingMode = areaConfig?.scheduling_mode ?? 'weekend_full'
   const workersPerDay = areaConfig?.workers_per_day ?? 2
@@ -75,6 +75,7 @@ export async function POST(request: Request) {
     .from('shifts')
     .select('id')
     .eq('date', date)
+    .eq('area_id', profile.area_id)
 
   const existingCount = existingForDay?.length ?? 0
   if (existingCount >= workersPerDay) {
@@ -98,21 +99,21 @@ export async function POST(request: Request) {
     let excludeSat: string
     let excludeSun: string
 
-    if (isHolidayOnWeekend || schedulingMode === 'weekend_full') {
-      // Festivo su weekend (tutti i modi) o weekend_full: coppia Sab+Dom stessa settimana
+    if (schedulingMode === 'weekend_full') {
+      // weekend_full: coppia Sab+Dom stessa settimana
       const satDay = dow === 6 ? day : day - 1
       excludeSat = `${year}-${String(month).padStart(2, '0')}-${String(satDay).padStart(2, '0')}`
       excludeSun = `${year}-${String(month).padStart(2, '0')}-${String(satDay + 1).padStart(2, '0')}`
     } else if (schedulingMode === 'sun_next_sat' && isWeekendDate) {
       if (dow === 0) {
-        // Dom: coppia = Dom + Sab+7
+        // Dom (anche festiva): coppia = Dom + Sab+6
         excludeSun = date
-        const nextSat = new Date(year, month - 1, day + 7)
+        const nextSat = new Date(year, month - 1, day + 6)
         excludeSat = `${nextSat.getFullYear()}-${String(nextSat.getMonth() + 1).padStart(2, '0')}-${String(nextSat.getDate()).padStart(2, '0')}`
       } else {
-        // Sab: coppia = Dom-7 + Sab
+        // Sab: coppia = Dom-6 + Sab
         excludeSat = date
-        const prevSun = new Date(year, month - 1, day - 7)
+        const prevSun = new Date(year, month - 1, day - 6)
         excludeSun = `${prevSun.getFullYear()}-${String(prevSun.getMonth() + 1).padStart(2, '0')}-${String(prevSun.getDate()).padStart(2, '0')}`
       }
     } else {
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
       .from('shifts')
       .select('date')
       .eq('user_id', user_id)
+      .eq('area_id', profile.area_id)
       .in('shift_type', ['weekend', 'festivo'])
       .gte('date', monthStart)
       .lte('date', monthEnd)
@@ -146,6 +148,7 @@ export async function POST(request: Request) {
     .select('status')
     .eq('month', month)
     .eq('year', year)
+    .eq('area_id', profile.area_id)
     .maybeSingle()
 
   if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
@@ -172,6 +175,7 @@ export async function POST(request: Request) {
       shift_type: shiftType,
       reperibile_order,
       created_by: user.id,
+      area_id: profile.area_id,
     })
     .select()
     .single()

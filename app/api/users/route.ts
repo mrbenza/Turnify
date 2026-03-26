@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   // --- 2. Verifica che il chiamante sia admin ---
   const { data: callerProfile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
@@ -31,8 +31,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
+  if (!callerProfile?.area_id) {
+    return NextResponse.json({ error: 'Profilo chiamante non trovato.' }, { status: 403 })
+  }
+
   // --- 3. Parsing e validazione del body ---
-  let body: { nome?: unknown; email?: unknown; ruolo?: unknown }
+  let body: { nome?: unknown; email?: unknown; ruolo?: unknown; area_id?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -59,6 +63,11 @@ export async function POST(request: Request) {
   // --- 4. Crea auth user con service role (la service key non lascia mai il server) ---
   const serviceClient = createServiceClient()
 
+  // Admin può specificare un'area diversa nel body (es. import storico); manager usa sempre la sua area
+  const areaId = (callerProfile.ruolo === 'admin' && typeof body.area_id === 'string' && body.area_id)
+    ? body.area_id
+    : callerProfile.area_id
+
   const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
     email,
     password: '1234',
@@ -79,7 +88,7 @@ export async function POST(request: Request) {
   // --- 5. Inserisce il profilo in public.users ---
   const { data: newUser, error: dbError } = await serviceClient
     .from('users')
-    .insert({ id: authUserId, nome, email, ruolo, attivo: true })
+    .insert({ id: authUserId, nome, email, ruolo, attivo: true, area_id: areaId })
     .select()
     .single()
 

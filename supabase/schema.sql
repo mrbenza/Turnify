@@ -1,9 +1,9 @@
 -- ============================================================
--- schema.sql — Schema completo Turnify (migrations 001-010)
+-- schema.sql — Schema completo Turnify (migrations 001-015)
 -- Idempotente: DROP POLICY IF EXISTS prima di ogni CREATE.
 --
 -- Per un DB completamente vuoto: eseguire questo file.
--- Per un DB con schema esistente: eseguire reset.sql poi seed_demo.sql.
+-- Per pulire i dati senza toccare la struttura: eseguire clean_db.sql.
 -- Eseguire nel SQL Editor di Supabase (service_role).
 -- ============================================================
 
@@ -23,7 +23,8 @@ create table if not exists public.users (
                               check (ruolo in ('admin', 'manager', 'dipendente')),
   attivo          boolean     not null default true,
   data_creazione  timestamptz not null default now(),
-  disattivato_at  timestamptz
+  disattivato_at  timestamptz,
+  area_id         uuid        -- FK aggiunta dopo creazione areas (migration 013)
 );
 
 -- ============================================================
@@ -50,7 +51,8 @@ create table if not exists public.month_status (
   locked_at        timestamptz,
   email_inviata    boolean     not null default false,
   email_inviata_at timestamptz,
-  unique (month, year)
+  area_id          uuid,       -- FK aggiunta dopo creazione areas (migration 013)
+  unique (month, year, area_id)
 );
 
 -- ============================================================
@@ -65,6 +67,7 @@ create table if not exists public.availability (
                          check (status in ('pending', 'approved', 'locked')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  area_id    uuid,       -- FK aggiunta dopo creazione areas (migration 013)
   unique (user_id, date)
 );
 
@@ -98,6 +101,7 @@ create table if not exists public.shifts (
                                check (reperibile_order in (1, 2)),
   created_by       uuid        not null references public.users(id),
   created_at       timestamptz not null default now(),
+  area_id          uuid,       -- FK aggiunta dopo creazione areas (migration 013)
   unique (date, user_id)
 );
 
@@ -116,16 +120,39 @@ create table if not exists public.areas (
   created_at       timestamptz not null default now()
 );
 
+-- Riga default
+insert into public.areas (nome) values ('Default') on conflict (nome) do nothing;
+
 -- ============================================================
--- TABELLA: email_settings
+-- TABELLA: email_settings (migration 015: area_id aggiunto)
 -- ============================================================
 create table if not exists public.email_settings (
   id          uuid        primary key default uuid_generate_v4(),
-  email       text        not null unique,
+  email       text        not null,
   descrizione text,
   attivo      boolean     not null default true,
-  created_at  timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  area_id     uuid        not null references public.areas(id) on delete cascade,
+  unique (email, area_id)
 );
+
+-- ============================================================
+-- FK area_id (migration 013 — dopo creazione areas)
+-- ============================================================
+alter table public.users        add constraint users_area_id_fkey
+  foreign key (area_id) references public.areas(id) on delete restrict;
+alter table public.shifts       add constraint shifts_area_id_fkey
+  foreign key (area_id) references public.areas(id) on delete restrict;
+alter table public.availability add constraint availability_area_id_fkey
+  foreign key (area_id) references public.areas(id) on delete restrict;
+alter table public.month_status add constraint month_status_area_id_fkey
+  foreign key (area_id) references public.areas(id) on delete restrict;
+
+create index if not exists idx_users_area_id          on public.users(area_id);
+create index if not exists idx_shifts_area_id         on public.shifts(area_id);
+create index if not exists idx_availability_area_id   on public.availability(area_id);
+create index if not exists idx_month_status_area_id   on public.month_status(area_id);
+create index if not exists idx_email_settings_area_id on public.email_settings(area_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -136,6 +163,11 @@ alter table public.month_status   enable row level security;
 alter table public.availability   enable row level security;
 alter table public.shifts         enable row level security;
 alter table public.email_settings enable row level security;
+alter table public.areas          enable row level security;
+
+drop policy if exists "areas_select_authenticated" on public.areas;
+create policy "areas_select_authenticated" on public.areas
+  for select using (auth.role() = 'authenticated');
 
 -- Funzioni helper
 create or replace function public.is_admin()
@@ -257,7 +289,11 @@ create policy "email_settings: admin o manager elimina" on public.email_settings
 -- normale=1pt, festivo attivo (mandatory=true)=3pt
 -- p_month=0 → tutti i tempi
 -- ============================================================
-create or replace function public.get_equity_scores(p_month integer, p_year integer)
+create or replace function public.get_equity_scores(
+  p_month   integer,
+  p_year    integer,
+  p_area_id uuid default null
+)
 returns table (
   user_id      uuid,
   nome         text,
@@ -284,8 +320,11 @@ as $$
         and extract(year  from s.date)::integer = p_year
       )
     )
+    and (p_area_id is null or s.area_id = p_area_id)
   left join public.holidays h on s.date = h.date
-  where u.ruolo = 'dipendente' and u.attivo = true
+  where u.ruolo = 'dipendente'
+    and u.attivo = true
+    and (p_area_id is null or u.area_id = p_area_id)
   group by u.id, u.nome
   order by score asc;
 $$;
