@@ -80,7 +80,7 @@ export async function GET(
     .filter(s => s.shift_type === 'festivo')
     .map(s => s.date)
 
-  let holidayMap = new Map<string, { name: string; mandatory: boolean }>()
+  const holidayMap = new Map<string, { name: string; mandatory: boolean }>()
   if (festivoDates.length > 0) {
     const { data: holidays } = await serviceClient
       .from('holidays')

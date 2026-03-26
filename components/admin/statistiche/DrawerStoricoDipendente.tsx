@@ -52,14 +52,21 @@ export default function DrawerStoricoDipendente({ userId, onClose }: Props) {
   const isOpen = Boolean(userId)
 
   useEffect(() => {
-    if (!userId) { setData(null); return }
-    setLoading(true)
-    setError(null)
-    fetch(`/api/users/${userId}/shifts`)
-      .then(r => r.json())
-      .then((d: StoricoDipendente) => setData(d))
-      .catch(() => setError('Impossibile caricare lo storico.'))
-      .finally(() => setLoading(false))
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    ;(async () => {
+      if (!userId) { setData(null); return }
+      setLoading(true)
+      setError(null)
+      try {
+        const r = await fetch(`/api/users/${userId}/shifts`)
+        const d: StoricoDipendente = await r.json()
+        setData(d)
+      } catch {
+        setError('Impossibile caricare lo storico.')
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [userId])
 
   // Chiudi con Escape
