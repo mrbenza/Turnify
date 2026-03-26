@@ -66,6 +66,16 @@ Funzionalita da implementare in ordine di priorita.
 
 ---
 
+## Bug noti / Debito tecnico
+
+### `GraficoEquita.tsx` — `fetchScores` non in dep array di useEffect
+- **File**: `components/admin/statistiche/GraficoEquita.tsx`
+- **Problema**: `fetchScores` è definita dentro il componente e usata nell'`useEffect`, ma non inserita nel dep array per evitare loop infiniti. La regola `react-hooks/exhaustive-deps` è soppressa con `eslint-disable`.
+- **Fix corretto**: wrappare `fetchScores` in `useCallback` con i suoi parametri come dipendenze, poi inserirla nel dep array dell'effect.
+- **Impatto attuale**: nessuno funzionale — il comportamento è corretto. Solo debito tecnico.
+
+---
+
 ## Bassa priorita
 
 ### ✅ Rotazione festivi comandati — COMPLETATO (2026-03-24)
