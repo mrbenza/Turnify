@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { User, Shift, MonthStatus } from '@/lib/supabase/types'
+import type { Shift, MonthStatus } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import ListaTurni from '@/components/admin/turni/ListaTurni'
 

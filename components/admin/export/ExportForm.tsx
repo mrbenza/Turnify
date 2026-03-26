@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Shift, User } from '@/lib/supabase/types'
+import type { User } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Types & constants                                                   */

@@ -1,6 +1,5 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { EmailSetting } from '@/lib/supabase/types'
 
 export async function POST(request: Request) {
   const supabase = await createClient()

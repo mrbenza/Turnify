@@ -57,7 +57,8 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
 
   useEffect(() => {
     fetchScores(filterMonth, filterYear, viewMode)
-  }, [filterMonth, filterYear, viewMode]) // fetchScores is defined inside component intentionally
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMonth, filterYear, viewMode])
 
   /* Sort by score ascending (lower score = priority) */
   const sorted = [...scores].sort((a, b) => a.score - b.score)

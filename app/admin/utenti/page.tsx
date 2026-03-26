@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Area } from '@/lib/supabase/types'
+import type { Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import ListaUtenti from '@/components/admin/utenti/ListaUtenti'
 import { sortByNome } from '@/lib/utils/sort'

@@ -1,4 +1,4 @@
-import type { Shift, MonthStatus, ShiftType } from '@/lib/supabase/types'
+import type { Shift, ShiftType } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */

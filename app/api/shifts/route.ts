@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { Shift, ShiftType } from '@/lib/supabase/types'
+import type { ShiftType } from '@/lib/supabase/types'
 
 function isWeekendDay(year: number, month: number, day: number): boolean {
   const dow = new Date(year, month, day).getDay()
@@ -98,7 +98,6 @@ export async function POST(request: Request) {
 
     const dow = new Date(year, month - 1, day).getDay() // 0=Dom, 6=Sab
     const isWeekendDate = dow === 0 || dow === 6
-    const isHolidayOnWeekend = isHoliday && isWeekendDate
 
     // Calcola la coppia da escludere in base allo scheduling_mode
     let excludeSat: string

@@ -52,7 +52,6 @@ export default function DrawerStoricoDipendente({ userId, onClose }: Props) {
   const isOpen = Boolean(userId)
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     ;(async () => {
       if (!userId) { setData(null); return }
       setLoading(true)

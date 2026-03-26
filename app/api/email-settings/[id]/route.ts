@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database, EmailSetting } from '@/lib/supabase/types'
+import type { Database } from '@/lib/supabase/types'
 
 async function getAdminOrError(supabase: SupabaseClient<Database>): Promise<{ user: { id: string }; areaId: string } | NextResponse> {
   const { data: { user } } = await supabase.auth.getUser()

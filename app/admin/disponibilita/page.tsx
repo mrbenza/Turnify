@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Availability, Shift, Holiday, MonthStatus, SchedulingMode, Area } from '@/lib/supabase/types'
+import type { MonthStatus, SchedulingMode, Area } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import CalendarioGlobale from '@/components/admin/disponibilita/CalendarioGlobale'
 import { sortByNome } from '@/lib/utils/sort'

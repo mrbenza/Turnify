@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import type { User, Shift, MonthStatus, MonthStatusValue } from '@/lib/supabase/types'
+import type { User, MonthStatusValue } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import TurniCollapsibili from '@/components/admin/dashboard/TurniCollapsibili'
 

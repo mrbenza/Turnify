@@ -1,6 +1,5 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { User } from '@/lib/supabase/types'
 
 /**
  * POST /api/users
