@@ -35,7 +35,7 @@ export async function DELETE(
   }
 
   // Recupera il turno per verificare la data (filtra area per evitare info disclosure cross-area)
-  const shiftQuery = supabase.from('shifts').select('date').eq('id', id)
+  const shiftQuery = supabase.from('shifts').select('date, area_id').eq('id', id)
   const { data: existingShift } = await (
     profile.ruolo !== 'admin'
       ? shiftQuery.eq('area_id', profile.area_id)
@@ -46,13 +46,15 @@ export async function DELETE(
     const shiftDate = new Date(existingShift.date)
     const shiftMonth = shiftDate.getUTCMonth() + 1
     const shiftYear = shiftDate.getUTCFullYear()
+    // Per admin usa l'area_id del turno stesso (l'admin non ha area propria)
+    const effectiveAreaId = profile.ruolo === 'admin' ? existingShift.area_id : profile.area_id
 
     const { data: monthStatus } = await supabase
       .from('month_status')
       .select('status')
       .eq('month', shiftMonth)
       .eq('year', shiftYear)
-      .eq('area_id', profile.area_id)
+      .eq('area_id', effectiveAreaId)
       .maybeSingle()
 
     if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {

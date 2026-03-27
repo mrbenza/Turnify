@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   // Parse body
-  let body: { month?: number; year?: number; action?: string }
+  let body: { month?: number; year?: number; action?: string; area_id?: string }
   try {
     body = await request.json()
   } catch {
@@ -33,6 +33,19 @@ export async function POST(request: Request) {
 
   if (month === undefined || year === undefined || !action) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: month, year, action' }, { status: 400 })
+  }
+
+  // Admin non ha area propria: deve fornire area_id nel body
+  // Manager usa sempre la propria area dal profilo
+  const effectiveAreaId = profile.ruolo === 'admin'
+    ? (typeof body.area_id === 'string' ? body.area_id : null)
+    : profile.area_id
+
+  if (!effectiveAreaId) {
+    return NextResponse.json(
+      { error: profile.ruolo === 'admin' ? 'Campo obbligatorio: area_id' : 'Profilo manager non configurato: area mancante.' },
+      { status: 400 }
+    )
   }
 
   if (action !== 'lock' && action !== 'unlock') {
@@ -60,7 +73,7 @@ export async function POST(request: Request) {
     const { data: area } = await serviceClient
       .from('areas')
       .select('workers_per_day')
-      .eq('id', profile.area_id)
+      .eq('id', effectiveAreaId)
       .single()
 
     const workersPerDay = area?.workers_per_day ?? 2
@@ -96,7 +109,7 @@ export async function POST(request: Request) {
         .from('shifts')
         .select('date')
         .in('date', [...requiredDays])
-        .eq('area_id', profile.area_id)
+        .eq('area_id', effectiveAreaId)
 
       const countByDate = new Map<string, number>()
       for (const s of shifts ?? []) {
@@ -134,7 +147,7 @@ export async function POST(request: Request) {
     .select('id, status')
     .eq('month', month)
     .eq('year', year)
-    .eq('area_id', profile.area_id)
+    .eq('area_id', effectiveAreaId)
     .single()
 
   // Mese confirmed: solo admin può sbloccare
@@ -151,7 +164,7 @@ export async function POST(request: Request) {
       .update(lockPayload)
       .eq('month', month)
       .eq('year', year)
-      .eq('area_id', profile.area_id)
+      .eq('area_id', effectiveAreaId)
     if (error) {
       console.error(`Errore ${action} mese:`, error)
       return NextResponse.json({ error: 'Errore durante l\'operazione sul mese.' }, { status: 500 })
@@ -159,7 +172,7 @@ export async function POST(request: Request) {
   } else {
     const { error } = await serviceClient
       .from('month_status')
-      .insert({ month, year, area_id: profile.area_id, ...lockPayload })
+      .insert({ month, year, area_id: effectiveAreaId, ...lockPayload })
     if (error) {
       console.error(`Errore ${action} mese:`, error)
       return NextResponse.json({ error: 'Errore durante l\'operazione sul mese.' }, { status: 500 })

@@ -30,8 +30,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
-  if (!callerProfile?.area_id) {
-    return NextResponse.json({ error: 'Profilo chiamante non trovato.' }, { status: 403 })
+  // Manager deve avere un'area assegnata; admin opera globalmente senza area propria
+  if (callerProfile.ruolo === 'manager' && !callerProfile.area_id) {
+    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
   }
 
   // --- 3. Parsing e validazione del body ---

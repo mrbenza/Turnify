@@ -362,7 +362,7 @@ export default function CalendarioGlobale({
       const res = await fetch('/api/month', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: viewMonth + 1, year: viewYear, action: 'lock' }),
+        body: JSON.stringify({ month: viewMonth + 1, year: viewYear, action: 'lock', area_id: areaId }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
@@ -386,7 +386,7 @@ export default function CalendarioGlobale({
       const res = await fetch('/api/month', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: viewMonth + 1, year: viewYear, action: 'unlock' }),
+        body: JSON.stringify({ month: viewMonth + 1, year: viewYear, action: 'unlock', area_id: areaId }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
@@ -810,6 +810,36 @@ export default function CalendarioGlobale({
         {interactive && (
           <div className="mt-1 flex flex-wrap gap-0.5">
             {(() => {
+              if (locked) {
+                // Mese bloccato: usa shifts direttamente (include utenti disattivati)
+                const dayShifts = shifts
+                  .filter(s => s.date === dateStr)
+                  .sort((a, b) => a.reperibile_order - b.reperibile_order)
+                const visible = dayShifts.slice(0, 11)
+                const overflow = dayShifts.length - visible.length
+                return (
+                  <>
+                    {visible.map(s => {
+                      const nome = s.user_nome ?? 'U'
+                      const initials = nome.split(' ').filter(Boolean).slice(0, 2).map((w: string) => w[0].toUpperCase()).join('')
+                      return (
+                        <span
+                          key={s.id}
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] font-bold bg-red-500 text-white"
+                          title={`${nome}: Turno`}
+                          aria-hidden="true"
+                        >{initials}</span>
+                      )
+                    })}
+                    {overflow > 0 && (
+                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[9px] bg-gray-100 text-gray-400 font-medium" aria-hidden="true">
+                        +{overflow}
+                      </span>
+                    )}
+                  </>
+                )
+              }
+              // Mese non bloccato: logica normale con users attivi
               const relevant = users
                 .map(u => ({ u, s: getUserChipStatus(u.id, dateStr) }))
                 .filter(x => x.s !== 'unavailable')
@@ -909,6 +939,13 @@ export default function CalendarioGlobale({
                 </button>
               )}
             </>
+          ) : isAdmin ? (
+            <span className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-sm font-medium select-none">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Da confermare
+            </span>
           ) : (
             <button
               onClick={handleLockMonth}
@@ -1102,7 +1139,14 @@ export default function CalendarioGlobale({
                 const dateStr = selectedDay.dateStr
                 const suggestedId = getSuggestedUserId(dateStr)
 
-                const assigned   = users.filter(u => shiftMap.has(`${u.id}-${dateStr}`))
+                // Per mesi bloccati: costruisci lista assegnati direttamente dai turni
+                // (include anche utenti disattivati nel frattempo)
+                const assignedShifts = locked
+                  ? shifts.filter(s => s.date === dateStr).sort((a, b) => a.reperibile_order - b.reperibile_order)
+                  : []
+                const assigned = locked
+                  ? assignedShifts.map(s => users.find(u => u.id === s.user_id) ?? null).filter(Boolean) as User[]
+                  : users.filter(u => shiftMap.has(`${u.id}-${dateStr}`))
                 const dayFull    = assigned.length >= workersPerDay
                 const recOrder = { ideal: 0, neutral: 1, warning: 2, avoid: 3 }
                 const available  = dayFull ? [] : users
@@ -1130,45 +1174,73 @@ export default function CalendarioGlobale({
                     )}
 
                     {/* ── Assegnati oggi ── */}
-                    {assigned.length > 0 && (
-                      <section aria-label="Assegnati">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1.5">
-                          Assegnati ({assigned.length})
-                        </p>
-                        <ul className="space-y-1.5">
-                          {assigned.map(u => {
-                            const shift = shiftMap.get(`${u.id}-${dateStr}`)
-                            const order = shift?.reperibile_order ?? 1
-                            return (
-                            <li key={u.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-red-50 border border-red-100">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
-                                    <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1 py-0.5 rounded shrink-0">{order}°</span>
+                    {locked ? (
+                      // Mese bloccato: mostra direttamente dai turni (include utenti disattivati)
+                      assignedShifts.length > 0 && (
+                        <section aria-label="Assegnati">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1.5">
+                            Assegnati ({assignedShifts.length})
+                          </p>
+                          <ul className="space-y-1.5">
+                            {assignedShifts.map(s => (
+                              <li key={s.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-red-50 border border-red-100">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm font-medium text-gray-800 truncate">{s.user_nome ?? 'Utente'}</span>
+                                      <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1 py-0.5 rounded shrink-0">{s.reperibile_order}°</span>
+                                    </div>
                                   </div>
-                                  {selectedDay.holiday?.mandatory && (() => {
-                                    const note = getHolidayNote(u.id, selectedDay.holiday!.name)
-                                    return note ? <span className="text-[10px] text-orange-500">{note}</span> : null
-                                  })()}
                                 </div>
-                              </div>
-                              <div className="shrink-0">
-                                {loadingAction === `${u.id}-${dateStr}` ? <Spinner small /> : !locked ? (
-                                  <button
-                                    onClick={() => setPendingAction({ userId: u.id, dateStr, userName: u.nome, action: 'remove' })}
-                                    className="text-xs px-2.5 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-100 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
-                                  >Rimuovi</button>
-                                ) : (
+                                <div className="shrink-0">
                                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                )}
-                              </div>
-                            </li>
-                            )
-                          })}
-                        </ul>
-                      </section>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      )
+                    ) : (
+                      // Mese non bloccato: logica normale con users attivi
+                      assigned.length > 0 && (
+                        <section aria-label="Assegnati">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1.5">
+                            Assegnati ({assigned.length})
+                          </p>
+                          <ul className="space-y-1.5">
+                            {assigned.map(u => {
+                              const shift = shiftMap.get(`${u.id}-${dateStr}`)
+                              const order = shift?.reperibile_order ?? 1
+                              return (
+                              <li key={u.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-red-50 border border-red-100">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm font-medium text-gray-800 truncate">{u.nome}</span>
+                                      <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1 py-0.5 rounded shrink-0">{order}°</span>
+                                    </div>
+                                    {selectedDay.holiday?.mandatory && (() => {
+                                      const note = getHolidayNote(u.id, selectedDay.holiday!.name)
+                                      return note ? <span className="text-[10px] text-orange-500">{note}</span> : null
+                                    })()}
+                                  </div>
+                                </div>
+                                <div className="shrink-0">
+                                  {loadingAction === `${u.id}-${dateStr}` ? <Spinner small /> : (
+                                    <button
+                                      onClick={() => setPendingAction({ userId: u.id, dateStr, userName: u.nome, action: 'remove' })}
+                                      className="text-xs px-2.5 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-100 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+                                    >Rimuovi</button>
+                                  )}
+                                </div>
+                              </li>
+                              )
+                            })}
+                          </ul>
+                        </section>
+                      )
                     )}
 
                     {/* ── Disponibili ── */}
