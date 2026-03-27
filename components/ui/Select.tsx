@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useId } from 'react'
+import { useState, useRef, useEffect, useCallback, useId, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 
 export interface SelectOption {
@@ -17,6 +17,7 @@ interface Props {
   id?: string
   disabled?: boolean
   title?: string
+  searchable?: boolean
 }
 
 /**
@@ -33,13 +34,28 @@ export default function Select({
   id,
   disabled,
   title,
+  searchable,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
   const [activeIdx, setActiveIdx] = useState(-1)
+  const [searchQuery, setSearchQuery] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const dropdownContainerRef = useRef<HTMLDivElement>(null)
   const listId = useId()
+
+  // Filtra le opzioni in base alla query di ricerca (solo se searchable)
+  const filteredOptions = useMemo(
+    () =>
+      searchable
+        ? options.filter((o) =>
+            o.label.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+        : options,
+    [options, searchQuery, searchable]
+  )
 
   const selectedLabel = options.find((o) => o.value === value)?.label ?? ''
 
@@ -55,6 +71,18 @@ export default function Select({
     setOpen(true)
     setActiveIdx(Math.max(0, options.findIndex((o) => o.value === value)))
   }
+
+  // Reset ricerca alla chiusura del dropdown
+  useEffect(() => {
+    if (!open) setSearchQuery('')
+  }, [open])
+
+  // Auto-focus sull'input di ricerca all'apertura
+  useEffect(() => {
+    if (open && searchable) {
+      setTimeout(() => searchRef.current?.focus(), 0)
+    }
+  }, [open, searchable])
 
   function handleTriggerClick() {
     if (open) { close(); return }
@@ -73,7 +101,7 @@ export default function Select({
       case 'ArrowDown':
         e.preventDefault()
         if (!open) { openDropdown(); return }
-        setActiveIdx((i) => Math.min(i + 1, options.length - 1))
+        setActiveIdx((i) => Math.min(i + 1, filteredOptions.length - 1))
         break
       case 'ArrowUp':
         e.preventDefault()
@@ -84,8 +112,8 @@ export default function Select({
       case ' ':
         e.preventDefault()
         if (!open) { openDropdown(); return }
-        if (activeIdx >= 0 && activeIdx < options.length) {
-          handleSelect(options[activeIdx].value)
+        if (activeIdx >= 0 && activeIdx < filteredOptions.length) {
+          handleSelect(filteredOptions[activeIdx].value)
         }
         break
       case 'Escape':
@@ -97,13 +125,14 @@ export default function Select({
     }
   }
 
-  // Chiudi al click fuori
+  // Chiudi al click fuori (esclude il trigger e l'intero container del dropdown,
+  // incluso l'input di ricerca quando searchable=true)
   useEffect(() => {
     if (!open) return
     function handler(e: MouseEvent) {
       if (
         triggerRef.current?.contains(e.target as Node) ||
-        listRef.current?.contains(e.target as Node)
+        dropdownContainerRef.current?.contains(e.target as Node)
       ) return
       close()
     }
@@ -126,7 +155,7 @@ export default function Select({
     }
   }, [open])
 
-  // Scroll attivo nell'opzione selezionata
+  // Scroll verso l'opzione attiva nella lista
   useEffect(() => {
     if (!open || activeIdx < 0) return
     const li = listRef.current?.children[activeIdx] as HTMLElement | undefined
@@ -182,31 +211,60 @@ export default function Select({
       </button>
 
       {open && triggerRect && createPortal(
-        <ul
-          ref={listRef}
-          id={listId}
-          role="listbox"
-          aria-label={ariaLabel}
-          className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 overflow-y-auto"
+        <div
+          ref={dropdownContainerRef}
+          className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
           style={dropdownStyle}
         >
-          {options.map((opt, idx) => (
-            <li
-              key={opt.value}
-              role="option"
-              aria-selected={opt.value === value}
-              onMouseDown={(e) => { e.preventDefault(); handleSelect(opt.value) }}
-              onMouseEnter={() => setActiveIdx(idx)}
-              className={`
-                px-3 py-2 text-sm cursor-pointer select-none
-                ${opt.value === value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}
-                ${activeIdx === idx && opt.value !== value ? 'bg-gray-100' : ''}
-              `}
-            >
-              {opt.label}
-            </li>
-          ))}
-        </ul>,
+          {searchable && (
+            <div className="px-2 pt-2 pb-1 border-b border-gray-100">
+              <input
+                ref={searchRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setActiveIdx(0) }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, filteredOptions.length - 1)) }
+                  if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)) }
+                  if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && activeIdx < filteredOptions.length) { handleSelect(filteredOptions[activeIdx].value) } }
+                  if (e.key === 'Escape') { e.preventDefault(); close() }
+                }}
+                placeholder="Cerca..."
+                className="w-full text-sm px-2 py-1.5 rounded border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-gray-800"
+                aria-label="Cerca opzione"
+              />
+            </div>
+          )}
+          <ul
+            ref={listRef}
+            id={listId}
+            role="listbox"
+            aria-label={ariaLabel}
+            className="py-1 overflow-y-auto"
+            style={{ maxHeight: '13rem' }}
+          >
+            {filteredOptions.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-gray-400 select-none">Nessun risultato</li>
+            ) : (
+              filteredOptions.map((opt, idx) => (
+                <li
+                  key={opt.value}
+                  role="option"
+                  aria-selected={opt.value === value}
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(opt.value) }}
+                  onMouseEnter={() => setActiveIdx(idx)}
+                  className={`
+                    px-3 py-2 text-sm cursor-pointer select-none
+                    ${opt.value === value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}
+                    ${activeIdx === idx && opt.value !== value ? 'bg-gray-100' : ''}
+                  `}
+                >
+                  {opt.label}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>,
         document.body
       )}
     </>
