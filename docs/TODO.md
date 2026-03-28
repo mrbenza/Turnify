@@ -10,6 +10,16 @@ Funzionalita da implementare in ordine di priorita.
 
 ---
 
+## Bug noti (non bloccanti)
+
+### Utenti admin con area_id valorizzato
+- **Sintomo**: alcuni account admin (es. `admin3@turnify.test`) hanno `area_id` non null nel DB, mentre per design gli admin non devono avere area assegnata (scope globale).
+- **Impatto**: nessuno — il codice ignora `profile.area_id` per gli admin. Non causa errori né comportamenti scorretti.
+- **Fix**: azzerare manualmente `area_id = NULL` per tutti gli admin con area assegnata.
+- **SQL**: `UPDATE public.users SET area_id = NULL WHERE ruolo = 'admin' AND area_id IS NOT NULL;`
+
+---
+
 ## Media priorita
 
 ### Multi-area con scheduling modes diversi

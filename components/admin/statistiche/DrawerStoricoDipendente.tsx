@@ -48,8 +48,21 @@ export default function DrawerStoricoDipendente({ userId, onClose }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const drawerRef = useRef<HTMLDivElement>(null)
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]))
 
   const isOpen = Boolean(userId)
+
+  function toggleYear(year: number) {
+    setExpandedYears(prev => {
+      const next = new Set(prev)
+      next.has(year) ? next.delete(year) : next.add(year)
+      return next
+    })
+  }
+
+  useEffect(() => {
+    setExpandedYears(new Set([new Date().getFullYear()]))
+  }, [userId])
 
   useEffect(() => {
     ;(async () => {
@@ -79,14 +92,18 @@ export default function DrawerStoricoDipendente({ userId, onClose }: Props) {
   const chartMonths = data?.byMonth.slice(-12) ?? []
   const maxTurni = Math.max(...chartMonths.map(m => m.totale), 1)
 
-  // Raggruppa shifts per mese per la lista
-  const shiftsByMonth = new Map<string, StoricoShift[]>()
+  // Raggruppa shifts per anno → mese per la lista
+  const shiftsByYear = new Map<number, Map<string, StoricoShift[]>>()
   for (const s of data?.shifts ?? []) {
     const [y, m] = s.date.split('-').map(Number)
-    const key = `${MONTH_NAMES_IT[m - 1]} ${y}`
-    if (!shiftsByMonth.has(key)) shiftsByMonth.set(key, [])
-    shiftsByMonth.get(key)!.push(s)
+    if (!shiftsByYear.has(y)) shiftsByYear.set(y, new Map())
+    const monthKey = MONTH_NAMES_IT[m - 1]
+    const yearMap = shiftsByYear.get(y)!
+    if (!yearMap.has(monthKey)) yearMap.set(monthKey, [])
+    yearMap.get(monthKey)!.push(s)
   }
+  const sortedYears = Array.from(shiftsByYear.keys()).sort((a, b) => b - a)
+  const currentYear = new Date().getFullYear()
 
   const totale = data?.shifts.length ?? 0
   const festivi = data?.shifts.filter(s => s.shift_type === 'festivo').length ?? 0
@@ -226,26 +243,64 @@ export default function DrawerStoricoDipendente({ userId, onClose }: Props) {
                 </div>
               )}
 
-              {/* Lista completa turni */}
+              {/* Lista completa turni — collassabile per anno */}
               {data.shifts.length > 0 && (
                 <div className="px-5 py-4">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                     Tutti i turni
                   </p>
-                  <div className="space-y-4">
-                    {Array.from(shiftsByMonth.entries()).map(([label, shifts]) => (
-                      <div key={label}>
-                        <p className="text-xs font-medium text-gray-400 mb-1.5">{label}</p>
-                        <div className="space-y-1.5">
-                          {shifts.map((s, i) => (
-                            <div key={i} className="flex items-center justify-between py-1">
-                              <span className="text-sm text-gray-700">{formatDate(s.date)}</span>
-                              <ShiftBadge type={s.shift_type} name={s.holiday_name} />
+                  <div className="space-y-2">
+                    {sortedYears.map((year) => {
+                      const isExpanded = expandedYears.has(year)
+                      const monthsMap = shiftsByYear.get(year)!
+                      const yearTotal = Array.from(monthsMap.values()).reduce((acc, s) => acc + s.length, 0)
+                      const isCurrentYear = year === currentYear
+
+                      return (
+                        <div key={year} className="border border-gray-100 rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => toggleYear(year)}
+                            className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-700">{year}</span>
+                              {isCurrentYear && (
+                                <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                  in corso
+                                </span>
+                              )}
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">{yearTotal} turni</span>
+                              <svg
+                                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-3 py-3 space-y-4">
+                              {Array.from(monthsMap.entries()).map(([monthLabel, shifts]) => (
+                                <div key={monthLabel}>
+                                  <p className="text-xs font-medium text-gray-400 mb-1.5">{monthLabel}</p>
+                                  <div className="space-y-1.5">
+                                    {shifts.map((s, i) => (
+                                      <div key={i} className="flex items-center justify-between py-1">
+                                        <span className="text-sm text-gray-700">{formatDate(s.date)}</span>
+                                        <ShiftBadge type={s.shift_type} name={s.holiday_name} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
