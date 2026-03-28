@@ -82,7 +82,7 @@ Funzionalita da implementare in ordine di priorita.
 
 2. **Ridurre uso del service-role dove non necessario** — Documentare e giustificare ogni `createServiceClient()` nel codebase. Sostituire con il client normale + RLS dove è sufficiente.
 
-3. **Introdurre test per casi business critici** — Coprire almeno: creazione utente, lock mese completo/incompleto, blocco locked/confirmed su shifts/availability/import, isolamento per area.
+3. ✅ **Introdurre test per casi business critici** — 21 test Vitest su lock, immutabilità, isolamento area, privilege escalation. `npm test` < 300ms. (2026-03-29)
 
 4. **Strato unico di validazione input** — Unificare la validazione dei parametri delle route critiche (date, mese/anno, tipi enumerati) in utility condivise per ridurre duplicazioni e rischio di discrepanze.
 
