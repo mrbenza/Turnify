@@ -82,9 +82,9 @@ export default function CalendarioDisponibilita({
   const [, startTransition] = useTransition()
 
   /* ---- Navigation ---- */
-  const canGoPrev =
-    viewYear > today.getFullYear() ||
-    (viewYear === today.getFullYear() && viewMonth > today.getMonth())
+  // Permette di andare indietro fino a 12 mesi fa
+  const minNavDate = new Date(today.getFullYear() - 1, today.getMonth(), 1)
+  const canGoPrev = new Date(viewYear, viewMonth, 1) > minNavDate
 
   function goToPrev() {
     if (!canGoPrev) return
