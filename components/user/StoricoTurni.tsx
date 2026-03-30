@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import type { Shift, ShiftType } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
@@ -206,7 +206,7 @@ export default function StoricoTurni({ turni }: StoricoTurniProps) {
             {grouped.map(([year, rows]) => {
               const isExpanded = expandedYears.has(year)
               return (
-                <>
+                <React.Fragment key={year}>
                   {/* Year separator row */}
                   <tr key={`year-${year}`}>
                     <td colSpan={3} className="pt-2 pb-0 px-0">
@@ -247,7 +247,7 @@ export default function StoricoTurni({ turni }: StoricoTurniProps) {
                         </tr>
                       )
                     })}
-                </>
+                </React.Fragment>
               )
             })}
           </tbody>
