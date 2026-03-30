@@ -78,6 +78,7 @@ export default function CalendarioDisponibilita({
 
   const [savingDates, setSavingDates] = useState<Set<string>>(new Set())
   const [tooltip, setTooltip] = useState<{ date: string; msg: string } | null>(null)
+  const [bannerMsg, setBannerMsg] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   /* ---- Navigation ---- */
@@ -87,11 +88,13 @@ export default function CalendarioDisponibilita({
 
   function goToPrev() {
     if (!canGoPrev) return
+    setBannerMsg(null)
     if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1) }
     else setViewMonth((m) => m - 1)
   }
 
   function goToNext() {
+    setBannerMsg(null)
     if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1) }
     else setViewMonth((m) => m + 1)
   }
@@ -175,14 +178,24 @@ export default function CalendarioDisponibilita({
   /* ---- Click handler ---- */
   const handleDayClick = useCallback(
     async (dateStr: string) => {
+      const monthKey = dateStr.slice(0, 7)
+      if (lockedMonths.has(monthKey)) {
+        setBannerMsg('Il mese e confermato e non puoi piu modificare la disponibilita.')
+        return
+      }
+
       const state = getDayState(dateStr)
       if (!isClickable(dateStr, state)) {
         if (state === 'approved' || state === 'shift-confirmed' || state === 'shift-pending') {
           setTooltip({ date: dateStr, msg: 'Non modificabile' })
           setTimeout(() => setTooltip(null), 2000)
+        } else if (isBefore(dateStr, todayStr)) {
+          setBannerMsg('Non puoi modificare la disponibilità per giorni già trascorsi.')
         }
         return
       }
+
+      setBannerMsg(null)
 
       const existing = availabilityByDate[dateStr]
       const newAvailable = existing ? !existing.available : true
@@ -239,13 +252,14 @@ export default function CalendarioDisponibilita({
         )
       } catch (err) {
         console.error('Errore salvataggio disponibilità:', err)
+        setBannerMsg(err instanceof Error ? err.message : 'Errore durante il salvataggio. Riprova.')
         startTransition(() => setLocalAvailability(snapshot))
       } finally {
         setSavingDates(new Set())
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [localAvailability, availabilityList, userId, todayStr, holidayDates]
+    [availabilityByDate, localAvailability, lockedMonths, userId, todayStr, holidayDates]
   )
 
   /* ---- Build calendar grid ---- */
@@ -319,6 +333,16 @@ export default function CalendarioDisponibilita({
           </div>
         ))}
       </div>
+
+      {bannerMsg && (
+        <div
+          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          role="status"
+          aria-live="polite"
+        >
+          {bannerMsg}
+        </div>
+      )}
 
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1">
