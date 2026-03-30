@@ -88,7 +88,7 @@ export default async function UserPage() {
 
   const lockedMonths = new Set<string>(
     allMonthStatuses
-      .filter((m) => m.status === 'locked')
+      .filter((m) => m.status === 'locked' || m.status === 'confirmed')
       .map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`)
   )
 
