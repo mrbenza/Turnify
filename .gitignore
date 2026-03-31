@@ -48,3 +48,12 @@ next-env.d.ts
 
 # file eliminati / backup locali
 /_trash/
+
+# documentazione utente (work in progress, non pubblicare)
+/docs/*.html
+/docs/*.pdf
+/docs/*.png
+/docs/*.css
+
+# istruzioni agente AI (solo uso locale)
+CLAUDE.md
