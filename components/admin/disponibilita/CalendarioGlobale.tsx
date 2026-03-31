@@ -447,7 +447,7 @@ export default function CalendarioGlobale({
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingAction, shifts, schedulingMode, holidayMap])
+  }, [pendingAction, shifts, schedulingMode, holidayMap, areaId])
 
   /* ---- Assign Saturday pair (sun_next_sat confirmation) ---- */
   const handleAssignPair = useCallback(async () => {
@@ -476,7 +476,7 @@ export default function CalendarioGlobale({
     } finally {
       setLoadingAction(null)
     }
-  }, [pendingSaturdayPair])
+  }, [pendingSaturdayPair, areaId])
 
   /* ---- Remove shift ---- */
   const handleRemove = useCallback(async () => {
