@@ -59,12 +59,15 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
   const [monthStatus, setMonthStatus] = useState<string | null>(null)
   const [emailInviata, setEmailInviata] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [areaId, setAreaId] = useState<string | null>(null)
 
   const userMap = new Map<string, string>(users.map((u) => [u.id, u.nome]))
   const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
 
   /* ---- Fetch month status ---- */
-  async function fetchMonthStatus(month: number, year: number) {
+  async function fetchMonthStatus(month: number, year: number, overrideAreaId?: string) {
+    const currentAreaId = overrideAreaId ?? areaId
+    if (!currentAreaId) return
     try {
       const supabase = createClient()
       const { data } = await supabase
@@ -72,6 +75,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
         .select('status, email_inviata')
         .eq('month', month + 1)
         .eq('year', year)
+        .eq('area_id', currentAreaId)
         .maybeSingle()
       const status = data?.status ?? null
       setMonthStatus(status)
@@ -81,8 +85,19 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     } catch { /* non bloccante */ }
   }
 
-  // Carica stato al mount con il mese iniziale
-  useEffect(() => { fetchMonthStatus(filterMonth, filterYear) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Carica area_id utente al mount, poi fetch stato mese iniziale
+  useEffect(() => {
+    const run = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile } = await supabase.from('users').select('area_id').eq('id', user.id).single()
+      const id = profile?.area_id ?? null
+      setAreaId(id)
+      if (id) fetchMonthStatus(filterMonth, filterYear, id)
+    }
+    run()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- Load preview ---- */
   async function loadPreview(month: number, year: number) {
@@ -95,12 +110,14 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
       const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
       const to   = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-      const { data: rawShifts, error } = await supabase
+      let shiftsQuery = supabase
         .from('shifts')
         .select('*')
         .gte('date', from)
         .lte('date', to)
         .order('date', { ascending: true })
+      if (areaId) shiftsQuery = shiftsQuery.eq('area_id', areaId)
+      const { data: rawShifts, error } = await shiftsQuery
 
       if (error) throw error
 
@@ -134,7 +151,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     setPreview(null)
     setMonthStatus(null)
     setEmailInviata(false)
-    await fetchMonthStatus(month, year)
+    await fetchMonthStatus(month, year, areaId ?? undefined)
   }
 
   /* ---- Export XLSX ---- */

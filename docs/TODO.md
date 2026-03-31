@@ -10,6 +10,16 @@ Funzionalita da implementare in ordine di priorita.
 
 ---
 
+## Bug noti (non bloccanti)
+
+### Utenti admin con area_id valorizzato
+- **Sintomo**: alcuni account admin (es. `admin3@turnify.test`) hanno `area_id` non null nel DB, mentre per design gli admin non devono avere area assegnata (scope globale).
+- **Impatto**: nessuno — il codice ignora `profile.area_id` per gli admin. Non causa errori né comportamenti scorretti.
+- **Fix**: azzerare manualmente `area_id = NULL` per tutti gli admin con area assegnata.
+- **SQL**: `UPDATE public.users SET area_id = NULL WHERE ruolo = 'admin' AND area_id IS NOT NULL;`
+
+---
+
 ## Media priorita
 
 ### Multi-area con scheduling modes diversi
@@ -72,7 +82,7 @@ Funzionalita da implementare in ordine di priorita.
 
 2. **Ridurre uso del service-role dove non necessario** — Documentare e giustificare ogni `createServiceClient()` nel codebase. Sostituire con il client normale + RLS dove è sufficiente.
 
-3. **Introdurre test per casi business critici** — Coprire almeno: creazione utente, lock mese completo/incompleto, blocco locked/confirmed su shifts/availability/import, isolamento per area.
+3. ✅ **Introdurre test per casi business critici** — 21 test Vitest su lock, immutabilità, isolamento area, privilege escalation. `npm test` < 300ms. (2026-03-29)
 
 4. **Strato unico di validazione input** — Unificare la validazione dei parametri delle route critiche (date, mese/anno, tipi enumerati) in utility condivise per ridurre duplicazioni e rischio di discrepanze.
 

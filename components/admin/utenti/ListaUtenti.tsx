@@ -332,6 +332,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
       {showAddModal && (
         <AddUserModal
           isManager={isManager}
+          areas={areas}
           onClose={() => setShowAddModal(false)}
           onAdded={(newUser) => {
             setUsers((prev) => [...prev, newUser])
@@ -351,12 +352,14 @@ interface AddUserModalProps {
   onClose: () => void
   onAdded: (dipendente: User) => void
   isManager?: boolean
+  areas?: Area[]
 }
 
-function AddUserModal({ onClose, onAdded, isManager = false }: AddUserModalProps) {
+function AddUserModal({ onClose, onAdded, isManager = false, areas = [] }: AddUserModalProps) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [ruolo, setRuolo] = useState<UserRole>('dipendente')
+  const [areaId, setAreaId] = useState<string>(areas[0]?.id ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -375,7 +378,7 @@ function AddUserModal({ onClose, onAdded, isManager = false }: AddUserModalProps
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo }),
+        body: JSON.stringify({ nome: nome.trim(), email: email.trim(), ruolo, ...(!isManager && areaId ? { area_id: areaId } : {}) }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -452,6 +455,23 @@ function AddUserModal({ onClose, onAdded, isManager = false }: AddUserModalProps
                 ]}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
+            </div>
+          )}
+
+          {/* Area — solo per admin, non per manager (usa sempre la propria) */}
+          {!isManager && areas.length > 0 && (
+            <div>
+              <label htmlFor="add-area" className="block text-xs font-medium text-gray-700 mb-1">Area</label>
+              <select
+                id="add-area"
+                value={areaId}
+                onChange={(e) => setAreaId(e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id}>{a.nome}</option>
+                ))}
+              </select>
             </div>
           )}
 

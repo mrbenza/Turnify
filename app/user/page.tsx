@@ -35,13 +35,16 @@ export default async function UserPage() {
 
   const now = new Date()
 
-  // Calendar range: current month + next month
-  const fromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  const toStr = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10)
+  // Calendario: 12 mesi indietro fino a fine mese prossimo (per navigazione storica)
+  const calFromStr = new Date(now.getFullYear() - 1, now.getMonth(), 1).toISOString().slice(0, 10)
+  const calToStr   = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10)
 
-  // Storico range: last 12 months
-  const storicoFromStr = new Date(now.getFullYear() - 1, now.getMonth(), 1).toISOString().slice(0, 10)
-  const storicoToStr = now.toISOString().slice(0, 10)
+  // Availability: solo mese corrente + prossimo (quelli passati non sono modificabili)
+  const availFromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+
+  // Storico list: ultimi 12 mesi (per StoricoTurni con join month_status)
+  const storicoFromStr = calFromStr
+  const storicoToStr   = now.toISOString().slice(0, 10)
 
   // All fetches in parallel
   const [availabilityRes, holidaysRes, shiftsRes, monthStatusRes, storicoShiftsRes] = await Promise.all([
@@ -49,21 +52,21 @@ export default async function UserPage() {
       .from('availability')
       .select('*')
       .eq('user_id', authUser.id)
-      .gte('date', fromStr)
-      .lte('date', toStr),
+      .gte('date', availFromStr)
+      .lte('date', calToStr),
 
     supabase
       .from('holidays')
       .select('*')
-      .gte('date', fromStr)
-      .lte('date', toStr),
+      .gte('date', calFromStr)
+      .lte('date', calToStr),
 
     supabase
       .from('shifts')
       .select('*')
       .eq('user_id', authUser.id)
-      .gte('date', fromStr)
-      .lte('date', toStr),
+      .gte('date', calFromStr)
+      .lte('date', calToStr),
 
     supabase
       .from('month_status')
@@ -88,7 +91,7 @@ export default async function UserPage() {
 
   const lockedMonths = new Set<string>(
     allMonthStatuses
-      .filter((m) => m.status === 'locked')
+      .filter((m) => m.status === 'locked' || m.status === 'confirmed')
       .map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`)
   )
 
@@ -134,7 +137,7 @@ export default async function UserPage() {
             id="calendario-heading"
             className="text-base font-semibold text-gray-900 mb-4"
           >
-            Disponibilità
+            Calendario
           </h2>
           <CalendarioDisponibilita
             userId={authUser.id}

@@ -147,12 +147,43 @@ get_equity_scores(p_month int, p_year int)    -- RPC usata da statistiche
 ### Auth & Ruoli
 Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa `createClient()` per il check auth, `createServiceClient()` per operazioni privilegiate.
 
+### Helper `resolveRequestArea` — Route area-scoped
+
+**File:** `lib/utils/resolveRequestArea.ts`
+
+Punto unico di verità per determinare l'`effectiveAreaId` in tutte le route che operano su dati di una specifica area. Centralizza la logica admin/manager ed elimina la duplicazione inline che esisteva in ogni route.
+
+**Logica:**
+- **admin:** usa `area_id` dalla request (body o query param). Se mancante → restituisce `NextResponse` 400. L'admin non appartiene a nessuna area, opera su qualsiasi area esplicitamente specificata.
+- **manager:** usa sempre `profile.area_id`. Il parametro dalla request viene ignorato. Se `profile.area_id` non è configurato → restituisce `NextResponse` 403.
+
+**Pattern di utilizzo nelle route:**
+
+```typescript
+const areaResult = resolveRequestArea(profile, bodyAreaId)
+if (areaResult instanceof NextResponse) return areaResult
+const effectiveAreaId = areaResult
+```
+
+Il type narrowing sfrutta `instanceof NextResponse`: se la funzione restituisce una risposta di errore la route fa early return, altrimenti `effectiveAreaId` è garantito essere una stringa.
+
+**Route che usano questo helper:**
+
+| Route | Sorgente `area_id` per admin |
+|-------|------------------------------|
+| `POST /api/shifts` | body (`area_id`) |
+| `GET /api/export` | query param (`area_id`) |
+| `POST /api/send-email` | body (`area_id`) |
+| `POST /api/month` | body (`area_id`) |
+
+**Motivazione del refactor:** la logica era duplicata inline in ogni route con varianti sottilmente diverse (es. fallback su `profile.area_id` per admin in alcune route, assente in altre). Centralizzare in un helper garantisce comportamento uniforme, elimina la possibilità di discrepanze future, e rende il contratto admin/manager esplicito e testabile in isolamento.
+
 ### Tabella Routes
 
 | Route | Metodo | Auth | Cosa fa |
 |-------|--------|------|---------|
 | `/api/availability` | POST | dipendente | Crea/aggiorna disponibilità. Blocca con 422 se mese `locked` **o** `confirmed` |
-| `/api/shifts` | POST | admin/manager | Assegna turno. Calcola shift_type. Blocca se mese locked. In `sun_next_sat`: Dom usa `day + 6`, Sab usa `day - 6` per validazione conflitti (fix: rimossa condizione `isHolidayOnWeekend` che forzava `weekend_full`). Manager: verifica che `user_id` dal body appartenga alla propria area — 403 se cross-area |
+| `/api/shifts` | POST | admin/manager | Assegna turno. Calcola shift_type. Blocca se mese locked. In `sun_next_sat`: Dom usa `day + 6`, Sab usa `day - 6` per validazione conflitti (fix: rimossa condizione `isHolidayOnWeekend` che forzava `weekend_full`). Manager: verifica che `user_id` dal body appartenga alla propria area — 403 se cross-area. **Admin:** accetta `area_id` nel body — `effectiveAreaId` risolto tramite `resolveRequestArea()` (vedi helper sopra) |
 | `/api/shifts/[id]` | DELETE | admin/manager | Elimina turno. Blocca se mese locked. Manager: query filtrata con `.eq('area_id', profile.area_id)` — non può eliminare turni di altre aree. Admin: accesso totale |
 | `/api/users` | POST | admin/manager | Crea utente (auth + db). Rollback se DB fallisce. Accetta `area_id` opzionale nel body; se caller e admin, usa `area_id` dal body (non quello del profilo admin) |
 | `/api/users/[id]` | PATCH | admin/manager | Modifica ruolo (admin only) o attivo/disattivato_at. Tutte le write su `public.users` usano `serviceClient` (RLS manager = SELECT only). Manager: verifica cross-area prima del toggle `attivo`. Se ruolo cambia a `manager`: aggiorna automaticamente `areas.manager_id`. Se ruolo scende da `manager`: rimuove `areas.manager_id` |
@@ -163,8 +194,8 @@ Ogni route verifica: `supabase.auth.getUser()` → poi query `users.ruolo`. Usa 
 | `/api/holidays` | POST | admin | Crea manuale o import da Nager.Date API |
 | `/api/holidays/[id]` | PATCH | admin | Modifica mandatory |
 | `/api/holidays/[id]` | DELETE | admin | Elimina (blocca se shifts esistono in quella data) |
-| `/api/export` | GET | admin/manager | Genera XLSX dal template, setta `confirmed`, invia email se !email_inviata |
-| `/api/send-email` | POST | admin/manager | Genera XLSX, invia email con allegato, setta `confirmed` + email_inviata=true |
+| `/api/export` | GET | admin/manager | Genera XLSX dal template, setta `confirmed`, invia email se !email_inviata. **Admin:** legge `area_id` da query param — `effectiveAreaId` risolto tramite `resolveRequestArea()` |
+| `/api/send-email` | POST | admin/manager | Genera XLSX, invia email con allegato, setta `confirmed` + email_inviata=true. **Admin:** accetta `area_id` nel body — `effectiveAreaId` risolto tramite `resolveRequestArea()` |
 | `/api/email-settings` | POST | admin/manager | Crea indirizzo extra notifiche; include `area_id` nel profilo e nell'insert — isolamento per area |
 | `/api/email-settings/[id]` | PATCH | admin/manager | Toggle attivo; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/email-settings/[id]` | DELETE | admin/manager | Elimina; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
@@ -271,7 +302,7 @@ Props: `initialUsers, initialAvailability, initialShifts, initialHolidays, initi
 - `isAdmin=true && isConfirmed=true` → mostra bottone "Sblocca" (admin può sbloccare anche confirmed)
 - `isConfirmed=false && locked=true` → mostra "Annulla conferma" (manager può sbloccare locked)
 
-**Navigazione mese:** fetch parallelo availability + shifts + holidays + month_status, aggiorna tutti gli stati inclusi locked/confirmed. La query `month_status` filtra per `area_id` (fix: in precedenza ignorava l'area, mostrando lo stato del mese sbagliato per aree diverse).
+**Navigazione mese (`changeMonth`):** fetch parallelo availability + shifts + holidays + month_status, aggiorna tutti gli stati inclusi locked/confirmed. Tutte e quattro le query filtrano per `area_id` (`.eq('area_id', areaId)`). Fix 2026-03-31: le query `availability` e `shifts` mancavano del filtro — un admin con accesso RLS totale vedeva i dati di tutte le aree durante la navigazione. La query `month_status` già filtrava per `area_id` correttamente.
 
 **`getPairedDate` — logica `sun_next_sat` (fix 2026-03-26):**
 In modalità `sun_next_sat`, il blocco `sun_next_sat` viene valutato prima del blocco `holiday`. Questo garantisce che anche una domenica festiva (es. Pasqua) usi `d + 6` per trovare il sabato accoppiato, non `d + 7` come accadeva in precedenza. La distanza corretta è sempre 6 giorni: Dom 5 Apr → Sab 11 Apr. Il blocco holiday non sovrascrive più questo calcolo.
@@ -494,7 +525,8 @@ turnify/
 │   │   └── sendTurniEmail.ts
 │   └── utils/
 │       ├── dates.ts
-│       └── sort.ts             ← sortByNome con Intl.Collator({ numeric: true }) per ordinamento naturale aree
+│       ├── sort.ts             ← sortByNome con Intl.Collator({ numeric: true }) per ordinamento naturale aree
+│       └── resolveRequestArea.ts  ← helper area-scoped: admin usa area_id da request (400 se mancante), manager usa profile.area_id (403 se non configurata)
 ├── docs/
 │   ├── ARCHITECTURE.md  (questo file)
 │   ├── TODO.md

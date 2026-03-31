@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Turnify — Manuale Admin</title>
+<link rel="stylesheet" href="manuale_styles.css">
+</head>
+<body class="theme-admin">
+
+<!-- COPERTINA -->
+<div class="cover theme-admin">
+  <div class="cover-logo">Turn<span>ify</span></div>
+  <div class="cover-tagline">Sistema di Gestione Turni di Reperibilità</div>
+  <div class="cover-title">Manuale Utente</div>
+  <div class="cover-subtitle">Guida per l'Amministratore</div>
+  <div class="cover-role-badge">⚙️ Ruolo: Admin</div>
+  <div class="cover-footer">Documento riservato ad uso interno — 2026</div>
+</div>
+
+<!-- INDICE -->
+<div class="toc theme-admin">
+  <h2>Indice</h2>
+  <div class="toc-item"><span class="toc-num">1</span><span class="toc-title">Ruolo e responsabilità dell'Admin</span></div>
+  <div class="toc-item"><span class="toc-num">2</span><span class="toc-title">Dashboard admin</span></div>
+  <div class="toc-item"><span class="toc-num">3</span><span class="toc-title">Gestione sistema — Template Excel</span></div>
+  <div class="toc-item"><span class="toc-num">4</span><span class="toc-title">Calendario festività</span></div>
+  <div class="toc-item"><span class="toc-num">5</span><span class="toc-title">Importazione storico turni</span></div>
+  <div class="toc-item"><span class="toc-num">6</span><span class="toc-title">Gestione utenti (tutti i ruoli)</span></div>
+  <div class="toc-item"><span class="toc-num">7</span><span class="toc-title">Panoramica equità multi-area</span></div>
+  <div class="toc-item"><span class="toc-num">8</span><span class="toc-title">Sblocco mesi confermati</span></div>
+  <div class="toc-item"><span class="toc-num">9</span><span class="toc-title">Funzionalità condivise con il Manager</span></div>
+</div>
+
+<!-- SEZIONE 1: RUOLO -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 1</div>
+    <h1 class="chapter-title">Ruolo e responsabilità <span class="accent-admin">dell'Admin</span></h1>
+    <p class="chapter-desc">Cosa distingue l'Admin dal Manager e quali aree di sistema gestisce.</p>
+  </div>
+
+  <p>L'Admin ha accesso completo a <strong>tutte le aree</strong> dell'azienda e a funzionalità di sistema riservate. Le responsabilità principali sono:</p>
+
+  <table>
+    <tr><th>Responsabilità</th><th>Dove</th></tr>
+    <tr><td>Caricare e aggiornare il template Excel aziendale</td><td>Sistema</td></tr>
+    <tr><td>Gestire il calendario festività per tutti gli anni</td><td>Sistema</td></tr>
+    <tr><td>Importare storico turni da file Excel precedenti</td><td>Sistema</td></tr>
+    <tr><td>Creare e gestire tutti gli utenti (anche manager)</td><td>Utenti</td></tr>
+    <tr><td>Monitorare l'equità turni su tutte le aree</td><td>Equità</td></tr>
+    <tr><td>Sbloccare mesi in stato "confirmed" in caso di errori</td><td>Disponibilità</td></tr>
+    <tr><td>Selezionare e operare su aree diverse</td><td>Disponibilità / Utenti</td></tr>
+  </table>
+
+  <div class="card info">
+    <div class="card-title">ℹ️ Funzionalità condivise</div>
+    L'Admin ha anche accesso a tutte le funzionalità del Manager (assegnare turni, export, statistiche, impostazioni area). Per quelle funzionalità consulta il <em>Manuale Manager</em>.
+  </div>
+</div>
+
+<!-- SEZIONE 2: DASHBOARD -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 2</div>
+    <h1 class="chapter-title">Dashboard <span class="accent-admin">admin</span></h1>
+    <p class="chapter-desc">La schermata principale con il riepilogo di sistema.</p>
+  </div>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Dashboard admin</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot della pagina /admin</div>
+  </div>
+
+  <p>La dashboard admin mostra tre riquadri:</p>
+
+  <h3 class="sub-title">Riepilogo utenti</h3>
+  <p>Numero totale di utenti registrati, attivi/inattivi, mai loggati e distribuzione per ruolo (Admin, Manager, Dipendenti) e per area.</p>
+
+  <h3 class="sub-title">Template Excel</h3>
+  <p>Nome e data dell'ultimo template caricato. Se nessun template è presente, compare un avviso in rosso — i manager non possono esportare finché non caricato.</p>
+
+  <h3 class="sub-title">Accesso rapido</h3>
+  <p>Link diretti a Gestione Utenti e Pagina Sistema.</p>
+</div>
+
+<!-- SEZIONE 3: SISTEMA / TEMPLATE -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 3</div>
+    <h1 class="chapter-title">Gestione sistema — <span class="accent-admin">Template Excel</span></h1>
+    <p class="chapter-desc">Carica e gestisci il template aziendale usato per l'export dei turni.</p>
+  </div>
+
+  <p>Vai su <strong>Sistema</strong> nel menu (visibile solo all'Admin). I manager che tentano di accedere vengono reindirizzati.</p>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Pagina Sistema — sezione template</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot della pagina /admin/sistema</div>
+  </div>
+
+  <h2 class="section-title">Caricare un nuovo template</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Prepara il file .xlsx</strong><p>Il template deve avere il formato aziendale corretto (struttura colonne predefinita). Il sistema compilerà solo i dati dei turni, lasciando intatti logo, firme e intestazioni.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Carica il file</strong><p>Trascina il file .xlsx nella zona di upload o clicca per selezionarlo.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Conferma</strong><p>Il template viene salvato nello storage e diventa immediatamente disponibile per i manager.</p></div>
+    </div>
+  </div>
+
+  <div class="card danger">
+    <div class="card-title">❌ Template mancante</div>
+    Se nessun template è caricato, i manager vedono un errore quando tentano di generare l'Excel. Carica sempre un template prima di consentire l'export.
+  </div>
+
+  <p>Puoi vedere la lista dei template caricati con nome, dimensione e data. Il template più recente viene usato automaticamente per tutti gli export.</p>
+</div>
+
+<!-- SEZIONE 4: FESTIVITÀ -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 4</div>
+    <h1 class="chapter-title">Calendario <span class="accent-admin">festività</span></h1>
+    <p class="chapter-desc">Gestisci le festività che il sistema tratta come giorni speciali per la reperibilità.</p>
+  </div>
+
+  <p>Nella pagina <strong>Sistema</strong> trovi anche il calendario festività. Le festività influenzano l'assegnazione turni (peso ×3 nello score equità se obbligatorie) e la visualizzazione nel calendario dei dipendenti.</p>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Sezione festività — lista per anno</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot della sezione festività con anni collassabili</div>
+  </div>
+
+  <h2 class="section-title">4.1 Importare festività automaticamente</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Seleziona l'anno</strong><p>Usa il campo anno (es. 2026, 2027).</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Clicca "Importa festività"</strong><p>Il sistema scarica automaticamente le festività ufficiali italiane per quell'anno.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Le festività appaiono nella lista</strong><p>Le festività già presenti non vengono duplicate.</p></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">4.2 Aggiungere una festività manuale</h2>
+  <p>Per festività aziendali o locali non presenti nel calendario ufficiale:</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Inserisci data e nome</strong><p>Es. data: 15/06/2026, nome: "Sagra del paese".</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Scegli se è obbligatoria</strong><p>Spunta "Festività obbligatoria" se deve pesare ×3 nello score equità. Altrimenti viene trattata come un giorno speciale normale.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Clicca "Aggiungi"</strong><p>La festività è immediatamente attiva nel sistema.</p></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">4.3 Gestire le festività esistenti</h2>
+  <ul>
+    <li><strong>Toggle obbligatoria / non obbligatoria</strong> — modifica il peso nello score equità</li>
+    <li><strong>Elimina</strong> — clicca la X per rimuovere. Non è possibile modificare una festività: eliminala e ricreala.</li>
+  </ul>
+
+  <div class="card warning">
+    <div class="card-title">⚠️ Turni già assegnati</div>
+    Modificare o eliminare una festività non rimuove i turni già assegnati in quel giorno. Agisci prima dell'assegnazione.
+  </div>
+</div>
+
+<!-- SEZIONE 5: IMPORTAZIONE STORICO -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 5</div>
+    <h1 class="chapter-title">Importazione <span class="accent-admin">storico turni</span></h1>
+    <p class="chapter-desc">Carica turni storici da file Excel per popolare il database con i dati pregressi.</p>
+  </div>
+
+  <p>Nella pagina <strong>Sistema</strong> trovi la sezione "Importa storico reperibilità". Serve per migrare dati da sistemi precedenti o per caricare turni passati che non erano ancora nel database.</p>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Sezione importazione storico</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot della sezione importa storico</div>
+  </div>
+
+  <h2 class="section-title">Come funziona</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Prepara il file Excel</strong><p>Il file deve avere il formato identico al template aziendale (stesso usato per l'export). Il sistema legge il mese dalla cella A3 e i cognomi dalle colonne D/E, righe 10-40.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Carica il file</strong><p>Trascina il file Excel nella zona di upload.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Risolvi le ambiguità</strong><p>Se il sistema non riesce ad abbinare un cognome a un dipendente, compare un dialog per la risoluzione manuale. Puoi scegliere il dipendente corretto dalla lista.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Conferma l'importazione</strong><p>I turni vengono inseriti. I mesi passati diventano <span class="status status-confirmed">confirmed</span>, il mese corrente <span class="status status-locked">locked</span>.</p></div>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Dialog risoluzione ambiguità cognomi</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot del modal di risoluzione manuale</div>
+  </div>
+
+  <div class="card warning">
+    <div class="card-title">⚠️ Caricamenti multipli</div>
+    Puoi caricare più file nella stessa sessione (anche con gli stessi nomi) in modo sequenziale. Il sistema gestisce i duplicati automaticamente.
+  </div>
+</div>
+
+<!-- SEZIONE 6: GESTIONE UTENTI -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 6</div>
+    <h1 class="chapter-title">Gestione <span class="accent-admin">utenti</span></h1>
+    <p class="chapter-desc">Crea e gestisci tutti gli utenti del sistema: dipendenti, manager e admin.</p>
+  </div>
+
+  <p>Vai su <strong>Utenti</strong> nel menu. L'Admin vede tutti gli utenti di tutte le aree, con la possibilità di filtrare per area.</p>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Lista utenti con filtro area</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot della pagina /admin/utenti con dropdown area</div>
+  </div>
+
+  <h2 class="section-title">Azioni disponibili (solo Admin)</h2>
+
+  <h3 class="sub-title">Cambiare il ruolo di un utente</h3>
+  <p>Usa il dropdown accanto al nome per cambiare il ruolo: <strong>Dipendente → Manager</strong> o viceversa. Il cambio viene applicato immediatamente. Se promuovi un utente a manager di un'area, il campo manager di quella area viene aggiornato automaticamente.</p>
+
+  <h3 class="sub-title">Filtrare per area</h3>
+  <p>Usa il dropdown "Area" in cima alla lista per visualizzare solo gli utenti di una specifica area.</p>
+
+  <h3 class="sub-title">Attivare / Disattivare</h3>
+  <p>Come per il manager, il toggle attiva/disattiva l'accesso. Un utente disattivato non può fare login.</p>
+
+  <h3 class="sub-title">Eliminare un utente</h3>
+  <p>Clicca la X e conferma. L'eliminazione rimuove l'account e tutti i dati correlati (turni, disponibilità). Operazione irreversibile.</p>
+
+  <div class="card danger">
+    <div class="card-title">❌ Restrizioni di sicurezza</div>
+    Non puoi cambiare il tuo stesso ruolo, né disattivarti o eliminarti. Non puoi promuovere un manager ad admin tramite l'interfaccia utenti — i ruoli admin vengono gestiti direttamente nel database.
+  </div>
+</div>
+
+<!-- SEZIONE 7: EQUITÀ MULTI-AREA -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 7</div>
+    <h1 class="chapter-title">Panoramica equità <span class="accent-admin">multi-area</span></h1>
+    <p class="chapter-desc">Monitora la distribuzione dei turni su tutte le aree dell'azienda.</p>
+  </div>
+
+  <p>Vai su <strong>Equità</strong> nel menu. Questa pagina è esclusiva dell'Admin e mostra una panoramica di tutte le aree.</p>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Pagina equità multi-area</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot della pagina /admin/equita</div>
+  </div>
+
+  <h2 class="section-title">Cosa vedi</h2>
+  <p>Per ogni area è mostrato:</p>
+  <ul>
+    <li><strong>Nome area</strong> e numero dipendenti</li>
+    <li><strong>Score medio</strong> dell'area</li>
+    <li><strong>Score minimo e massimo</strong></li>
+    <li><strong>Delta</strong> (differenza tra max e min — indica quanto è equa la distribuzione)</li>
+  </ul>
+
+  <p>Un delta basso indica distribuzione equa. Un delta alto segnala che alcuni dipendenti hanno molti più turni di altri.</p>
+
+  <h2 class="section-title">Dettaglio per area</h2>
+  <p>Clicca su un'area per espandere il dettaglio con il ranking completo dei dipendenti di quell'area.</p>
+
+  <h2 class="section-title">Analisi storica</h2>
+  <p>Usa i selettori mese/anno per analizzare mesi precedenti.</p>
+</div>
+
+<!-- SEZIONE 8: SBLOCCO MESI CONFIRMED -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 8</div>
+    <h1 class="chapter-title">Sblocco mesi <span class="accent-admin">confermati</span></h1>
+    <p class="chapter-desc">Operazione riservata all'Admin per correggere errori post-invio email.</p>
+  </div>
+
+  <p>Solo l'Admin può sbloccare un mese in stato <span class="status status-confirmed">confirmed</span>. Questa operazione è necessaria quando il manager ha inviato l'email con turni errati e deve correggere e re-inviare.</p>
+
+  <div class="card danger">
+    <div class="card-title">❌ Attenzione — operazione delicata</div>
+    Sbloccare un mese confirmed azzera lo stato "Email inviata". Se l'email era già stata recapitata ai dipendenti, dopo le correzioni sarà necessario re-inviare manualmente. Informare sempre il manager prima di procedere.
+  </div>
+
+  <h2 class="section-title">Come sbloccare</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Vai su Disponibilità</strong><p>Menu laterale → Disponibilità.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Seleziona l'area</strong><p>Usa il selettore area in cima alla pagina per scegliere l'area del mese da sbloccare.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Naviga al mese corretto</strong><p>Usa le frecce ← → per arrivare al mese confermato.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Clicca "Sblocca"</strong><p>Il pulsante "Sblocca" appare solo per i mesi confirmed. Comparirà un dialog di conferma.</p></div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Informa il manager</strong><p>Il mese torna a stato <span class="status status-open">open</span>. Il manager può ora correggere i turni, ri-bloccare e re-inviare.</p></div>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Pulsante "Sblocca" su mese confirmed</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot del pulsante sblocca visibile solo per admin</div>
+  </div>
+</div>
+
+<!-- SEZIONE 9: RIMANDI AL MANUALE MANAGER -->
+<div class="page-section page-break">
+  <div class="chapter-header">
+    <div class="chapter-num">Sezione 9</div>
+    <h1 class="chapter-title">Funzionalità condivise <span class="accent-admin">con il Manager</span></h1>
+    <p class="chapter-desc">L'Admin ha accesso a tutte le funzionalità del Manager.</p>
+  </div>
+
+  <div class="card info">
+    <div class="card-title">ℹ️ Consulta il Manuale Manager</div>
+    Per le seguenti funzionalità, il comportamento è identico a quello del manager. Consulta il <em>Manuale Manager</em> per le istruzioni dettagliate.
+  </div>
+
+  <table>
+    <tr><th>Funzionalità</th><th>Dove</th><th>Differenza per Admin</th></tr>
+    <tr><td>Assegnare / rimuovere turni</td><td>Disponibilità</td><td>Può operare su qualsiasi area</td></tr>
+    <tr><td>Bloccare il mese</td><td>Disponibilità</td><td>Può bloccare qualsiasi area</td></tr>
+    <tr><td>Export Excel / Invio email</td><td>Export</td><td>Nessuna differenza</td></tr>
+    <tr><td>Statistiche equità area</td><td>Statistiche</td><td>Può vedere qualsiasi area</td></tr>
+    <tr><td>Impostazioni area</td><td>Impostazioni</td><td>Può configurare qualsiasi area</td></tr>
+    <tr><td>Gestione utenti (dipendenti)</td><td>Utenti</td><td>Vede tutti, può cambiare ruoli</td></tr>
+  </table>
+
+  <h2 class="section-title">Selettore area</h2>
+  <p>In tutte le pagine operative (Disponibilità, Utenti), l'Admin vede un <strong>dropdown "Area"</strong> che permette di passare da un'area all'altra senza fare logout. I manager non hanno questo dropdown — vedono solo la propria area.</p>
+
+  <div class="screenshot">
+    <div class="screenshot-icon">📷</div>
+    <div class="screenshot-label">Selettore area nel calendario disponibilità</div>
+    <div class="screenshot-hint">Inserire qui lo screenshot del dropdown area visibile solo per admin</div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,199 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11pt;
+  line-height: 1.6;
+  color: #1a1a2e;
+  background: #fff;
+}
+
+/* ── COPERTINA ── */
+.cover {
+  page-break-after: always;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 60px;
+  position: relative;
+}
+.cover-logo { font-size: 48pt; font-weight: 700; letter-spacing: -2px; margin-bottom: 6px; }
+.cover-logo span { color: #e94560; }
+.cover-tagline { font-size: 12pt; margin-bottom: 56px; font-weight: 400; opacity: 0.7; }
+.cover-title { font-size: 26pt; font-weight: 700; margin-bottom: 10px; line-height: 1.2; }
+.cover-subtitle { font-size: 13pt; font-weight: 400; margin-bottom: 20px; opacity: 0.8; }
+.cover-role-badge {
+  display: inline-block;
+  padding: 8px 28px;
+  border-radius: 24px;
+  font-size: 12pt;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 60px;
+}
+.cover-footer { position: absolute; bottom: 40px; font-size: 9pt; opacity: 0.4; }
+
+/* Role color themes — solo copertina e TOC */
+.cover.theme-user    { background: linear-gradient(135deg, #1a3a2e 0%, #0d2b20 50%, #143d2a 100%); color: white; }
+.cover.theme-manager { background: linear-gradient(135deg, #1a1a3e 0%, #0d1b3e 50%, #0f2860 100%); color: white; }
+.cover.theme-admin   { background: linear-gradient(135deg, #2e1a3e 0%, #1e0d3e 50%, #300f60 100%); color: white; }
+
+.cover.theme-user   .cover-logo span, .cover.theme-user   .cover-subtitle { color: #6ee7b7; }
+.cover.theme-manager .cover-logo span, .cover.theme-manager .cover-subtitle { color: #90cdf4; }
+.cover.theme-admin  .cover-logo span, .cover.theme-admin  .cover-subtitle { color: #d6bcfa; }
+
+.cover.theme-user   .cover-role-badge { background: rgba(110,231,183,0.2); border: 1px solid rgba(110,231,183,0.4); color: #6ee7b7; }
+.cover.theme-manager .cover-role-badge { background: rgba(144,205,244,0.2); border: 1px solid rgba(144,205,244,0.4); color: #90cdf4; }
+.cover.theme-admin  .cover-role-badge { background: rgba(214,188,250,0.2); border: 1px solid rgba(214,188,250,0.4); color: #d6bcfa; }
+
+/* Pagine interne — sfondo bianco, testo scuro */
+.page-section, .toc { background: #ffffff; color: #1a1a2e; }
+
+/* ── INDICE ── */
+.toc { page-break-after: always; padding: 60px 70px; }
+.toc h2 { font-size: 20pt; font-weight: 700; margin-bottom: 28px; padding-bottom: 12px; border-bottom: 3px solid; }
+.theme-user   .toc h2 { border-color: #38a169; color: #1a1a2e; }
+.theme-manager .toc h2 { border-color: #3182ce; color: #1a1a2e; }
+.theme-admin  .toc h2 { border-color: #805ad5; color: #1a1a2e; }
+
+.toc-item { display: flex; padding: 7px 0; border-bottom: 1px dotted #e2e8f0; gap: 12px; }
+.toc-num { color: #a0aec0; font-size: 10pt; min-width: 28px; }
+.toc-title { font-size: 11pt; color: #2d3748; }
+
+/* ── PAGINE INTERNE ── */
+.page-section { padding: 48px 70px; }
+.page-break { page-break-before: always; }
+
+/* ── HEADING CAPITOLO ── */
+.chapter-header { margin-bottom: 28px; }
+.chapter-num { font-size: 10pt; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; opacity: 0.5; }
+h1.chapter-title { font-size: 22pt; font-weight: 700; color: #1a1a2e; line-height: 1.2; }
+h1.chapter-title .accent-user    { color: #38a169; }
+h1.chapter-title .accent-manager { color: #3182ce; }
+h1.chapter-title .accent-admin   { color: #805ad5; }
+.chapter-desc { font-size: 11pt; color: #718096; margin-top: 8px; }
+
+/* ── SEZIONI ── */
+h2.section-title {
+  font-size: 15pt; font-weight: 700; color: #1a1a2e;
+  margin: 36px 0 14px 0; padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+}
+h3.sub-title {
+  font-size: 12pt; font-weight: 600; color: #2d3748;
+  margin: 22px 0 10px 0;
+}
+h3.sub-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px; height: 14px;
+  border-radius: 2px;
+  margin-right: 9px;
+  vertical-align: middle;
+}
+.theme-user   h3.sub-title::before { background: #38a169; }
+.theme-manager h3.sub-title::before { background: #3182ce; }
+.theme-admin  h3.sub-title::before { background: #805ad5; }
+
+p { margin-bottom: 10px; }
+ul, ol { padding-left: 22px; margin-bottom: 12px; }
+li { margin-bottom: 5px; }
+
+/* ── CARD ── */
+.card {
+  border-radius: 10px; padding: 16px 20px; margin: 14px 0;
+  border-left: 4px solid;
+}
+.card.info    { background: #ebf8ff; border-color: #3182ce; }
+.card.warning { background: #fffbeb; border-color: #d69e2e; }
+.card.success { background: #f0fff4; border-color: #38a169; }
+.card.danger  { background: #fff5f5; border-color: #e53e3e; }
+.card-title { font-size: 9.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.card.info    .card-title { color: #2b6cb0; }
+.card.warning .card-title { color: #975a16; }
+.card.success .card-title { color: #276749; }
+.card.danger  .card-title { color: #c53030; }
+
+/* ── STEPS ── */
+.steps { margin: 14px 0; }
+.step { display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start; }
+.step-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  color: white; display: flex; align-items: center; justify-content: center;
+  font-size: 10.5pt; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+}
+.theme-user   .step-num { background: #38a169; }
+.theme-manager .step-num { background: #3182ce; }
+.theme-admin  .step-num { background: #805ad5; }
+.step-body { flex: 1; }
+.step-body strong { display: block; margin-bottom: 2px; }
+.step-body p { margin: 0; color: #4a5568; font-size: 10pt; }
+
+/* ── LEGENDA COLORI ── */
+.legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 16px; }
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: 10pt; color: #4a5568; }
+.dot { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; }
+.dot-green     { background: #38a169; }
+.dot-red       { background: #e53e3e; }
+.dot-blue      { background: #3182ce; }
+.dot-gray      { background: #a0aec0; }
+.dot-darkgreen { background: #276749; }
+.dot-orange    { background: #d69e2e; }
+
+/* ── TABELLA ── */
+table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 10pt; }
+th { color: white; padding: 9px 13px; text-align: left; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.4px; }
+.theme-user   th { background: #276749; }
+.theme-manager th { background: #2b6cb0; }
+.theme-admin  th { background: #553c9a; }
+td { padding: 8px 13px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+tr:nth-child(even) td { background: #f7fafc; }
+tr:last-child td { border-bottom: none; }
+
+/* ── FLUSSO ── */
+.flow {
+  background: #1a1a2e; color: #e2e8f0; border-radius: 10px;
+  padding: 20px 24px; margin: 14px 0;
+  font-family: 'Courier New', monospace; font-size: 10pt; line-height: 2.2;
+}
+.flow-step  { color: #90cdf4; }
+.flow-arrow { color: #e94560; }
+.flow-note  { color: #718096; font-size: 9pt; }
+
+/* ── STATUS BADGE ── */
+.status { display: inline-block; padding: 2px 9px; border-radius: 9px; font-size: 9pt; font-weight: 500; }
+.status-open      { background: #fed7d7; color: #c53030; }
+.status-locked    { background: #fef3c7; color: #92400e; }
+.status-confirmed { background: #d1fae5; color: #065f46; }
+
+/* ── SCREENSHOT PLACEHOLDER ── */
+.screenshot {
+  border: 2px dashed #cbd5e0;
+  border-radius: 10px;
+  padding: 32px 20px;
+  margin: 16px 0;
+  text-align: center;
+  background: #f7fafc;
+}
+.screenshot-icon { font-size: 28pt; margin-bottom: 8px; }
+.screenshot-label { font-size: 10.5pt; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+.screenshot-hint  { font-size: 9pt; color: #a0aec0; }
+
+/* ── SCREENSHOT REALE ── */
+.screenshot:has(img) {
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  padding: 8px;
+  text-align: left;
+}
+.screenshot img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+}

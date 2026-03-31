@@ -108,6 +108,7 @@ export default async function DisponibilitaPage({
           >
             <h2 id="calendario-globale-heading" className="sr-only">Calendario disponibilità globale</h2>
             <CalendarioGlobale
+              key={areaId}
               initialUsers={users}
               initialAvailability={availability}
               initialShifts={shifts}

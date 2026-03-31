@@ -540,6 +540,7 @@ function DipendentiDrawer({ area, allAreas, allUsers, onClose, onUserMoved }: Di
                 <Select
                   value={addUserId}
                   onChange={setAddUserId}
+                  searchable
                   options={[
                     { value: '', label: 'Seleziona dipendente...' },
                     ...otherUsers.map((u) => ({

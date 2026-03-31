@@ -1,3 +1,6 @@
+'use client'
+
+import React, { useState } from 'react'
 import type { Shift, ShiftType } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
@@ -35,6 +38,54 @@ function formatDate(dateStr: string): string {
   })
 }
 
+/** Extract the four-digit year from a "YYYY-MM-DD" date string. */
+function extractYear(dateStr: string): number {
+  return Number(dateStr.slice(0, 4))
+}
+
+/**
+ * Group an array of ShiftRow by year (descending).
+ * Returns an array of [year, ShiftRow[]] tuples sorted newest-first.
+ */
+function groupByYear(turni: ShiftRow[]): [number, ShiftRow[]][] {
+  const map = new Map<number, ShiftRow[]>()
+  for (const turno of turni) {
+    const year = extractYear(turno.date)
+    const group = map.get(year) ?? []
+    group.push(turno)
+    map.set(year, group)
+  }
+  // Sort years descending
+  return Array.from(map.entries()).sort(([a], [b]) => b - a)
+}
+
+/* ------------------------------------------------------------------ */
+/* Sub-components                                                      */
+/* ------------------------------------------------------------------ */
+
+interface YearHeaderProps {
+  year: number
+  count: number
+  isExpanded: boolean
+  onToggle: () => void
+}
+
+function YearHeader({ year, count, isExpanded, onToggle }: YearHeaderProps) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between py-2 px-0 text-sm font-semibold text-gray-700 hover:text-gray-900 border-b border-gray-100"
+      aria-expanded={isExpanded}
+    >
+      <span>
+        {year}{' '}
+        <span className="font-normal text-gray-400 text-xs ml-1">({count} turni)</span>
+      </span>
+      <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
+    </button>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
@@ -44,6 +95,13 @@ interface StoricoTurniProps {
 }
 
 export default function StoricoTurni({ turni }: StoricoTurniProps) {
+  const currentYear = new Date().getFullYear()
+
+  // Expanded years set — current year open by default
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(
+    () => new Set([currentYear]),
+  )
+
   if (turni.length === 0) {
     return (
       <p className="text-sm text-gray-500 py-4 text-center">
@@ -52,33 +110,68 @@ export default function StoricoTurni({ turni }: StoricoTurniProps) {
     )
   }
 
+  function toggleYear(year: number) {
+    setExpandedYears((prev) => {
+      const next = new Set(prev)
+      if (next.has(year)) {
+        next.delete(year)
+      } else {
+        next.add(year)
+      }
+      return next
+    })
+  }
+
+  const grouped = groupByYear(turni)
+
   /* ---- Table / Cards ---- */
   return (
     <>
       {/* Mobile cards (< sm) */}
-      <div className="sm:hidden space-y-3" aria-label="Storico turni assegnati">
-        {turni.map((turno) => {
-          const statusInfo = turno.month_status_value
-            ? (MONTH_STATUS_DISPLAY[turno.month_status_value] ?? {
-                label: turno.month_status_value,
-                classes: 'bg-gray-50 text-gray-500',
-              })
-            : { label: '—', classes: 'text-gray-400' }
-
+      <div className="sm:hidden" aria-label="Storico turni assegnati">
+        {grouped.map(([year, rows]) => {
+          const isExpanded = expandedYears.has(year)
           return (
-            <div
-              key={turno.id}
-              className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{formatDate(turno.date)}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{SHIFT_TYPE_LABELS[turno.shift_type]}</p>
-              </div>
-              <span
-                className={`shrink-0 inline-block px-2 py-1 rounded-full text-xs font-medium ${statusInfo.classes}`}
-              >
-                {statusInfo.label}
-              </span>
+            <div key={year}>
+              <YearHeader
+                year={year}
+                count={rows.length}
+                isExpanded={isExpanded}
+                onToggle={() => toggleYear(year)}
+              />
+              {isExpanded && (
+                <div className="space-y-3 pb-3">
+                  {rows.map((turno) => {
+                    const statusInfo = turno.month_status_value
+                      ? (MONTH_STATUS_DISPLAY[turno.month_status_value] ?? {
+                          label: turno.month_status_value,
+                          classes: 'bg-gray-50 text-gray-500',
+                        })
+                      : { label: '—', classes: 'text-gray-400' }
+
+                    return (
+                      <div
+                        key={turno.id}
+                        className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">
+                            {formatDate(turno.date)}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {SHIFT_TYPE_LABELS[turno.shift_type]}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 inline-block px-2 py-1 rounded-full text-xs font-medium ${statusInfo.classes}`}
+                        >
+                          {statusInfo.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )
         })}
@@ -110,30 +203,51 @@ export default function StoricoTurni({ turni }: StoricoTurniProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {turni.map((turno) => {
-              const statusInfo = turno.month_status_value
-                ? (MONTH_STATUS_DISPLAY[turno.month_status_value] ?? {
-                    label: turno.month_status_value,
-                    classes: 'bg-gray-50 text-gray-500',
-                  })
-                : { label: '—', classes: 'text-gray-400' }
-
+            {grouped.map(([year, rows]) => {
+              const isExpanded = expandedYears.has(year)
               return (
-                <tr key={turno.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-2.5 px-0 text-gray-700 whitespace-nowrap">
-                    {formatDate(turno.date)}
-                  </td>
-                  <td className="py-2.5 px-2 text-gray-600">
-                    {SHIFT_TYPE_LABELS[turno.shift_type]}
-                  </td>
-                  <td className="py-2.5 px-2">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.classes}`}
-                    >
-                      {statusInfo.label}
-                    </span>
-                  </td>
-                </tr>
+                <React.Fragment key={year}>
+                  {/* Year separator row */}
+                  <tr key={`year-${year}`}>
+                    <td colSpan={3} className="pt-2 pb-0 px-0">
+                      <YearHeader
+                        year={year}
+                        count={rows.length}
+                        isExpanded={isExpanded}
+                        onToggle={() => toggleYear(year)}
+                      />
+                    </td>
+                  </tr>
+
+                  {/* Shift rows for this year */}
+                  {isExpanded &&
+                    rows.map((turno) => {
+                      const statusInfo = turno.month_status_value
+                        ? (MONTH_STATUS_DISPLAY[turno.month_status_value] ?? {
+                            label: turno.month_status_value,
+                            classes: 'bg-gray-50 text-gray-500',
+                          })
+                        : { label: '—', classes: 'text-gray-400' }
+
+                      return (
+                        <tr key={turno.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-2.5 px-0 text-gray-700 whitespace-nowrap">
+                            {formatDate(turno.date)}
+                          </td>
+                          <td className="py-2.5 px-2 text-gray-600">
+                            {SHIFT_TYPE_LABELS[turno.shift_type]}
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.classes}`}
+                            >
+                              {statusInfo.label}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </React.Fragment>
               )
             })}
           </tbody>
