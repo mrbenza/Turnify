@@ -328,8 +328,8 @@ export default function CalendarioGlobale({
       const to = toDateString(newYear, newMonth, new Date(newYear, newMonth + 1, 0).getDate())
 
       const [availRes, shiftsRes, holRes, statusRes] = await Promise.all([
-        supabase.from('availability').select('*').gte('date', from).lte('date', to),
-        supabase.from('shifts').select('*').gte('date', from).lte('date', to),
+        supabase.from('availability').select('*').eq('area_id', areaId).gte('date', from).lte('date', to),
+        supabase.from('shifts').select('*').eq('area_id', areaId).gte('date', from).lte('date', to),
         supabase.from('holidays').select('*').gte('date', from).lte('date', to),
         supabase.from('month_status').select('*').eq('month', newMonth + 1).eq('year', newYear).eq('area_id', areaId).maybeSingle(),
       ])
@@ -417,7 +417,7 @@ export default function CalendarioGlobale({
       const res = await fetch('/api/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: dateStr, user_id: userId }),
+        body: JSON.stringify({ date: dateStr, user_id: userId, area_id: areaId }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
@@ -461,7 +461,7 @@ export default function CalendarioGlobale({
       const res = await fetch('/api/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: dateStr, user_id: userId }),
+        body: JSON.stringify({ date: dateStr, user_id: userId, area_id: areaId }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))

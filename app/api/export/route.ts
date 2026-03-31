@@ -22,6 +22,14 @@ export async function GET(request: NextRequest) {
   const year    = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()))
   const noEmail = searchParams.get('noEmail') === 'true'
 
+  // Admin usa area_id dal query param (area visualizzata), manager usa la propria
+  const effectiveAreaId = profile.ruolo === 'admin'
+    ? (searchParams.get('area_id') ?? profile.area_id)
+    : profile.area_id
+
+  if (!effectiveAreaId)
+    return NextResponse.json({ error: 'Area non configurata.' }, { status: 403 })
+
   if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100)
     return NextResponse.json({ error: 'Parametri non validi' }, { status: 400 })
 
@@ -33,7 +41,7 @@ export async function GET(request: NextRequest) {
     .select('status, email_inviata')
     .eq('month', month)
     .eq('year', year)
-    .eq('area_id', profile.area_id)
+    .eq('area_id', effectiveAreaId)
     .maybeSingle()
 
   if (!monthStatus || (monthStatus.status !== 'locked' && monthStatus.status !== 'confirmed')) {
@@ -47,7 +55,7 @@ export async function GET(request: NextRequest) {
   let fileName: string
   let excelShiftsByDate: Map<string, string[]>
   try {
-    const result = await generateTurniExcel(month, year, serviceClient, searchParams.get('template'), profile.area_id)
+    const result = await generateTurniExcel(month, year, serviceClient, searchParams.get('template'), effectiveAreaId)
     buffer = result.buffer
     fileName = result.fileName
     excelShiftsByDate = result.shiftsByDate
@@ -67,7 +75,7 @@ export async function GET(request: NextRequest) {
       .from('availability')
       .update({ status: 'approved' })
       .eq('status', 'pending')
-      .eq('area_id', profile.area_id)
+      .eq('area_id', effectiveAreaId)
       .gte('date', from)
       .lte('date', to)
 
@@ -76,7 +84,7 @@ export async function GET(request: NextRequest) {
       .update({ status: 'confirmed' })
       .eq('month', month)
       .eq('year', year)
-      .eq('area_id', profile.area_id)
+      .eq('area_id', effectiveAreaId)
   } catch (err) {
     console.error('Errore aggiornamento stato post-export (non bloccante):', err)
   }
@@ -85,8 +93,8 @@ export async function GET(request: NextRequest) {
   if (!monthStatus?.email_inviata && !noEmail) {
     try {
       const [{ data: employees }, { data: extraEmails }] = await Promise.all([
-        serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', profile.area_id),
-        serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true).eq('area_id', profile.area_id),
+        serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', effectiveAreaId),
+        serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true).eq('area_id', effectiveAreaId),
       ])
 
       const recipients = [
@@ -101,7 +109,7 @@ export async function GET(request: NextRequest) {
         .update({ email_inviata: true, email_inviata_at: new Date().toISOString() })
         .eq('month', month)
         .eq('year', year)
-        .eq('area_id', profile.area_id)
+        .eq('area_id', effectiveAreaId)
     } catch (err) {
       console.error('Errore invio email turni (non bloccante):', err)
     }

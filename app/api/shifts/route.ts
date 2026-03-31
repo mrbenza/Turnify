@@ -33,17 +33,26 @@ export async function POST(request: Request) {
   }
 
   // Parse body
-  let body: { date?: string; user_id?: string }
+  let body: { date?: string; user_id?: string; area_id?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
   }
 
-  const { date, user_id } = body
+  const { date, user_id, area_id: bodyAreaId } = body
 
   if (!date || !user_id) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: date, user_id' }, { status: 400 })
+  }
+
+  // Admin usa area_id dal body (l'area visualizzata), manager usa sempre la propria
+  const effectiveAreaId = profile.ruolo === 'admin'
+    ? (bodyAreaId ?? profile.area_id)
+    : profile.area_id
+
+  if (!effectiveAreaId) {
+    return NextResponse.json({ error: 'Area non configurata.' }, { status: 403 })
   }
 
   // Validate date format
@@ -58,7 +67,7 @@ export async function POST(request: Request) {
   const { data: areaConfig } = await supabase
     .from('areas')
     .select('scheduling_mode, workers_per_day')
-    .eq('id', profile.area_id)
+    .eq('id', effectiveAreaId)
     .single()
   const schedulingMode = areaConfig?.scheduling_mode ?? 'weekend_full'
   const workersPerDay = areaConfig?.workers_per_day ?? 2
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
     .from('shifts')
     .select('id')
     .eq('date', date)
-    .eq('area_id', profile.area_id)
+    .eq('area_id', effectiveAreaId)
 
   const existingCount = existingForDay?.length ?? 0
   if (existingCount >= workersPerDay) {
@@ -130,7 +139,7 @@ export async function POST(request: Request) {
       .from('shifts')
       .select('date')
       .eq('user_id', user_id)
-      .eq('area_id', profile.area_id)
+      .eq('area_id', effectiveAreaId)
       .in('shift_type', ['weekend', 'festivo'])
       .gte('date', monthStart)
       .lte('date', monthEnd)
@@ -152,7 +161,7 @@ export async function POST(request: Request) {
     .select('status')
     .eq('month', month)
     .eq('year', year)
-    .eq('area_id', profile.area_id)
+    .eq('area_id', effectiveAreaId)
     .maybeSingle()
 
   if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
@@ -169,7 +178,7 @@ export async function POST(request: Request) {
     .eq('id', user_id)
     .single()
 
-  if (profile.ruolo !== 'admin' && targetUser?.area_id !== profile.area_id) {
+  if (profile.ruolo !== 'admin' && targetUser?.area_id !== effectiveAreaId) {
     return NextResponse.json({ error: 'Utente non appartenente alla tua area.' }, { status: 403 })
   }
 
@@ -183,7 +192,7 @@ export async function POST(request: Request) {
       shift_type: shiftType,
       reperibile_order,
       created_by: user.id,
-      area_id: profile.area_id,
+      area_id: effectiveAreaId,
     })
     .select()
     .single()

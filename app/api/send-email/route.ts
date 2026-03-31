@@ -16,17 +16,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
-  let body: { month?: number; year?: number }
+  let body: { month?: number; year?: number; area_id?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
   }
 
-  const { month, year } = body
+  const { month, year, area_id: bodyAreaId } = body
   if (!month || !year) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: month, year' }, { status: 400 })
   }
+
+  // Admin usa area_id dal body (area visualizzata), manager usa la propria
+  const effectiveAreaId = profile.ruolo === 'admin'
+    ? (bodyAreaId ?? profile.area_id)
+    : profile.area_id
+
+  if (!effectiveAreaId)
+    return NextResponse.json({ error: 'Area non configurata.' }, { status: 403 })
 
   // service_role: generateTurniExcel legge shifts cross-area + UPDATE month_status
   const serviceClient = createServiceClient()
@@ -36,7 +44,7 @@ export async function POST(request: Request) {
     .select('status')
     .eq('month', month)
     .eq('year', year)
-    .eq('area_id', profile.area_id)
+    .eq('area_id', effectiveAreaId)
     .single()
 
   if (!monthStatus || (monthStatus.status !== 'locked' && monthStatus.status !== 'confirmed')) {
@@ -49,9 +57,9 @@ export async function POST(request: Request) {
     { data: extraEmails },
     excelResult,
   ] = await Promise.all([
-    serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', profile.area_id),
-    serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true).eq('area_id', profile.area_id),
-    generateTurniExcel(month, year, serviceClient, undefined, profile.area_id),
+    serviceClient.from('users').select('email, nome').eq('ruolo', 'dipendente').eq('attivo', true).eq('area_id', effectiveAreaId),
+    serviceClient.from('email_settings').select('email, descrizione').eq('attivo', true).eq('area_id', effectiveAreaId),
+    generateTurniExcel(month, year, serviceClient, undefined, effectiveAreaId),
   ])
 
   const recipients = [
@@ -82,7 +90,7 @@ export async function POST(request: Request) {
     })
     .eq('month', month)
     .eq('year', year)
-    .eq('area_id', profile.area_id)
+    .eq('area_id', effectiveAreaId)
 
   return NextResponse.json({ success: true, recipients: recipients.length })
 }
