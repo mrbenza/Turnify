@@ -62,6 +62,7 @@ export default function Select({
   const close = useCallback(() => {
     setOpen(false)
     setActiveIdx(-1)
+    setSearchQuery('')
   }, [])
 
   function openDropdown() {
@@ -71,12 +72,6 @@ export default function Select({
     setOpen(true)
     setActiveIdx(Math.max(0, options.findIndex((o) => o.value === value)))
   }
-
-  // Reset ricerca alla chiusura del dropdown
-  useEffect(() => {
-    // eslint-disable-next-line react-compiler/react-compiler
-    if (!open) setSearchQuery('')
-  }, [open])
 
   // Auto-focus sull'input di ricerca all'apertura
   useEffect(() => {
