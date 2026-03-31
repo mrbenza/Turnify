@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { resolveRequestArea } from '@/lib/utils/resolveRequestArea'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -35,18 +36,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: month, year, action' }, { status: 400 })
   }
 
-  // Admin non ha area propria: deve fornire area_id nel body
-  // Manager usa sempre la propria area dal profilo
-  const effectiveAreaId = profile.ruolo === 'admin'
-    ? (typeof body.area_id === 'string' ? body.area_id : null)
-    : profile.area_id
-
-  if (!effectiveAreaId) {
-    return NextResponse.json(
-      { error: profile.ruolo === 'admin' ? 'Campo obbligatorio: area_id' : 'Profilo manager non configurato: area mancante.' },
-      { status: 400 }
-    )
-  }
+  const areaResult = resolveRequestArea(profile, body.area_id)
+  if (areaResult instanceof NextResponse) return areaResult
+  const effectiveAreaId = areaResult
 
   if (action !== 'lock' && action !== 'unlock') {
     return NextResponse.json({ error: 'Valore action non valido. Atteso: lock | unlock' }, { status: 400 })

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { ShiftType } from '@/lib/supabase/types'
+import { resolveRequestArea } from '@/lib/utils/resolveRequestArea'
 
 function isWeekendDay(year: number, month: number, day: number): boolean {
   const dow = new Date(year, month, day).getDay()
@@ -27,11 +28,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
-  // Manager deve avere un'area assegnata
-  if (profile.ruolo === 'manager' && !profile.area_id) {
-    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
-  }
-
   // Parse body
   let body: { date?: string; user_id?: string; area_id?: string }
   try {
@@ -46,14 +42,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: date, user_id' }, { status: 400 })
   }
 
-  // Admin usa area_id dal body (l'area visualizzata), manager usa sempre la propria
-  const effectiveAreaId = profile.ruolo === 'admin'
-    ? (bodyAreaId ?? profile.area_id)
-    : profile.area_id
-
-  if (!effectiveAreaId) {
-    return NextResponse.json({ error: 'Area non configurata.' }, { status: 403 })
-  }
+  const areaResult = resolveRequestArea(profile, bodyAreaId)
+  if (areaResult instanceof NextResponse) return areaResult
+  const effectiveAreaId = areaResult
 
   // Validate date format
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {

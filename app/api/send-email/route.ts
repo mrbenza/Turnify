@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateTurniExcel } from '@/lib/excel/generateTurniExcel'
 import { sendTurniEmail } from '@/lib/email/sendTurniEmail'
+import { resolveRequestArea } from '@/lib/utils/resolveRequestArea'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -28,13 +29,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: month, year' }, { status: 400 })
   }
 
-  // Admin usa area_id dal body (area visualizzata), manager usa la propria
-  const effectiveAreaId = profile.ruolo === 'admin'
-    ? (bodyAreaId ?? profile.area_id)
-    : profile.area_id
-
-  if (!effectiveAreaId)
-    return NextResponse.json({ error: 'Area non configurata.' }, { status: 403 })
+  const areaResult = resolveRequestArea(profile, bodyAreaId)
+  if (areaResult instanceof NextResponse) return areaResult
+  const effectiveAreaId = areaResult
 
   // service_role: generateTurniExcel legge shifts cross-area + UPDATE month_status
   const serviceClient = createServiceClient()

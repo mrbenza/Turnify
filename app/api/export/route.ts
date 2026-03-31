@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateTurniExcel } from '@/lib/excel/generateTurniExcel'
 import { sendTurniEmail } from '@/lib/email/sendTurniEmail'
+import { resolveRequestArea } from '@/lib/utils/resolveRequestArea'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -14,21 +15,14 @@ export async function GET(request: NextRequest) {
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager')
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
 
-  if (profile.ruolo === 'manager' && !profile.area_id)
-    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
-
   const { searchParams } = new URL(request.url)
   const month   = parseInt(searchParams.get('month') ?? String(new Date().getMonth() + 1))
   const year    = parseInt(searchParams.get('year')  ?? String(new Date().getFullYear()))
   const noEmail = searchParams.get('noEmail') === 'true'
 
-  // Admin usa area_id dal query param (area visualizzata), manager usa la propria
-  const effectiveAreaId = profile.ruolo === 'admin'
-    ? (searchParams.get('area_id') ?? profile.area_id)
-    : profile.area_id
-
-  if (!effectiveAreaId)
-    return NextResponse.json({ error: 'Area non configurata.' }, { status: 403 })
+  const areaResult = resolveRequestArea(profile, searchParams.get('area_id'))
+  if (areaResult instanceof NextResponse) return areaResult
+  const effectiveAreaId = areaResult
 
   if (isNaN(month) || isNaN(year) || month < 1 || month > 12 || year < 2020 || year > 2100)
     return NextResponse.json({ error: 'Parametri non validi' }, { status: 400 })
