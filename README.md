@@ -66,7 +66,7 @@ turnify/
 │   │   │   ├── page.tsx             ← template, festivita, import storico (admin only)
 │   │   │   └── loading.tsx          ← skeleton 4 card a griglia
 │   │   └── impostazioni/
-│   │       ├── page.tsx             ← email notifiche (manager)
+│   │       ├── page.tsx             ← email notifiche + importa storico (manager); monta anche ImportaStorico quando profile.ruolo === 'manager'
 │   │       └── loading.tsx          ← skeleton 3 card
 │   └── api/
 │       ├── shifts/route.ts          ← GET lista turni, POST assegna
@@ -119,7 +119,7 @@ turnify/
 │       └── sistema/
 │           ├── GestioneTemplate.tsx
 │           ├── AggiornamentoCalendario.tsx  ← anni collassabili, toggle Attiva/Non attiva
-│           └── ImportaStorico.tsx           ← upload multi-file sequenziale
+│           └── ImportaStorico.tsx           ← upload multi-file sequenziale; usato in /admin/sistema (admin) e /admin/impostazioni (manager)
 ├── lib/
 │   ├── supabase/
 │   │   ├── client.ts
@@ -131,7 +131,8 @@ turnify/
 │   │   └── sendTurniEmail.ts    ← invia email Brevo con allegato Excel, BCC destinatari
 │   └── utils/
 │       ├── dates.ts
-│       └── sort.ts              ← sortByNome con Intl.Collator numeric (ordinamento naturale aree)
+│       ├── sort.ts              ← sortByNome con Intl.Collator numeric (ordinamento naturale aree)
+│       └── resolveRequestArea.ts ← helper area-scoped: admin usa area_id da request (400 se mancante), manager usa profile.area_id (403 se non configurata)
 ├── components/ui/
 │   └── Select.tsx               ← custom select Portal-based (dropdown a document.body, immune a position:fixed e zoom Chrome)
 └── supabase/
@@ -146,7 +147,12 @@ turnify/
         ├── 008_equity_scores_fix_role.sql
         ├── 009_fix_users_role_constraint.sql
         ├── 010_simplify_equity_scores.sql
-        └── 011_areas.sql
+        ├── 011_areas.sql
+        ├── 012_reperibile_order.sql
+        ├── 013_multi_area.sql
+        ├── 014_email_settings_area_id.sql
+        ├── 015_areas_template_manager.sql
+        └── 016_rls_area_aware.sql
 ```
 
 ---
@@ -156,7 +162,7 @@ turnify/
 | Ruolo | Accesso | Permessi principali |
 |-------|---------|---------------------|
 | `admin` | `/admin` | Gestisce utenti (manager + dipendenti), carica template Excel, gestisce calendario festivita, importa storico reperibilita. Non gestisce turni operativi. |
-| `manager` | `/admin` | Assegna turni, visualizza disponibilita, verifica equita, esporta Excel mensile, gestisce email notifiche, aggiunge/disattiva dipendenti. |
+| `manager` | `/admin` | Assegna turni, visualizza disponibilita, verifica equita, esporta Excel mensile, gestisce email notifiche, aggiunge/disattiva dipendenti, importa storico reperibilita dalla pagina Impostazioni. |
 | `dipendente` | `/user` | Inserisce disponibilita per il mese corrente e il prossimo, visualizza i propri turni assegnati. |
 
 ---
@@ -182,7 +188,7 @@ Navbar admin (sidebar desktop): Dashboard — Utenti — Sistema
 | `/admin/statistiche` | Score equita per dipendente, filtro per mese o tutti i tempi. |
 | `/admin/export` (UI: "Invio turni") | Anteprima turni con grafico distribuzione, genera Excel da template aziendale. Imposta il mese a `confirmed` dopo il download. |
 | `/admin/utenti` | Solo dipendenti: puo aggiungere nuovi (ruolo fisso = dipendente), attivare/disattivare, eliminare. Non puo cambiare ruolo. |
-| `/admin/impostazioni` | Indirizzi email extra per notifiche. |
+| `/admin/impostazioni` | Configurazione turni, indirizzi email notifiche, importa storico reperibilita (solo file della propria area). |
 
 Navbar manager (sidebar desktop + bottom bar mobile):
 - Principale: Dashboard, Disponibilita, Statistiche
@@ -417,6 +423,28 @@ Vedi `docs/TODO.md` per il backlog completo.
 ---
 
 ## Changelog
+
+### [2026-03-31] — CODE AGENT + UI AGENT + DOCS AGENT — Import storico per manager, counter disponibilita CalendarioGlobale, fix reset.sql
+
+**File modificati:**
+- `app/api/import-shifts/route.ts`
+- `app/api/import-shifts/resolve/route.ts`
+- `app/admin/impostazioni/page.tsx`
+- `components/admin/disponibilita/CalendarioGlobale.tsx`
+- `supabase/reset.sql`
+
+**Sommario:** Manager puo ora importare lo storico reperibilita dalla pagina Impostazioni (solo file della propria area); CalendarioGlobale mostra counter disponibilita sotto il titolo mese; reset.sql aggiornato con DROP delle funzioni RLS area-aware.
+
+**Dettagli:**
+1. `import-shifts/route.ts` — Accessibile ad admin e manager. Manager: validazione aggiuntiva che `targetAreaId === profile.area_id` — risponde 403 con messaggio chiaro se il file appartiene a un'area diversa dalla propria.
+2. `import-shifts/resolve/route.ts` — Accessibile ad admin e manager. Manager: usa sempre `profile.area_id` indipendentemente da quanto specificato nel body della request.
+3. `app/admin/impostazioni/page.tsx` — Monta il componente `ImportaStorico` solo quando `profile.ruolo === 'manager'`. Gli utenti creati dal modal "Crea dipendente" vengono automaticamente assegnati all'area del manager (comportamento gia esistente in `/api/users`).
+4. `CalendarioGlobale.tsx` — Aggiunto counter disponibilita sotto il titolo mese: "X/Y hanno inserito la disponibilita — mancano Cognome1, Cognome2". Verde se completo, ambra se mancanti. Visibile su mesi open e locked, nascosto su confirmed. Calcolato con `useMemo` da `availability` e `users` gia in stato — nessun fetch aggiuntivo.
+5. `reset.sql` — Aggiunto DROP per le funzioni `is_manager()` e `current_user_area_id()` introdotte dalla migration 016.
+
+**Status:** Completato
+
+---
 
 ### [2026-03-26] — v2.0.0: Multi-area, security hardening, custom Select
 
