@@ -80,18 +80,22 @@ function toCognome(nome: string): string {
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
 
-  // Auth: solo admin
+  // Auth: admin o manager
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
 
   const { data: profile } = await supabase
     .from('users')
-    .select('ruolo')
+    .select('ruolo, area_id')
     .eq('id', user.id)
     .single()
 
-  if (profile?.ruolo !== 'admin') {
-    return NextResponse.json({ error: 'Non autorizzato — solo admin' }, { status: 403 })
+  if (!['admin', 'manager'].includes(profile?.ruolo ?? '')) {
+    return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  }
+
+  if (profile?.ruolo === 'manager' && !profile.area_id) {
+    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
   }
 
   // Leggi FormData
@@ -249,6 +253,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       error: `Area non riconosciuta. Nome area nel file: "${areaNomeFile || '—'}", Manager: "${managerCognomeFile || '—'}". Verifica che il file sia stato generato da Turnify.`,
     }, { status: 400 })
+  }
+
+  // Manager può importare solo file della propria area
+  if (profile?.ruolo === 'manager' && profile.area_id !== targetAreaId) {
+    return NextResponse.json({
+      error: `Il file appartiene a un'area diversa dalla tua (area rilevata: "${areaNomeFile || '—'}"). Puoi importare solo file della tua area.`,
+    }, { status: 403 })
   }
 
   // ----------------------------------------------------------------

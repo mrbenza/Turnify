@@ -20,10 +20,10 @@ export async function POST(request: Request) {
 
   const { data: profile } = await supabase
     .from('users').select('ruolo, area_id').eq('id', user.id).single()
-  if (profile?.ruolo !== 'admin')
-    return NextResponse.json({ error: 'Solo l\'amministratore può eseguire questa operazione.' }, { status: 403 })
-  if (!profile?.area_id)
-    return NextResponse.json({ error: 'Profilo admin non trovato.' }, { status: 403 })
+  if (!['admin', 'manager'].includes(profile?.ruolo ?? ''))
+    return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  if (profile?.ruolo === 'manager' && !profile.area_id)
+    return NextResponse.json({ error: 'Profilo manager non configurato: area mancante.' }, { status: 403 })
 
   let body: { user_id?: string; user_nome?: string; area_id?: string; shifts?: { date: string; shift_type: ShiftType; reperibile_order?: 1 | 2 }[] }
   try { body = await request.json() } catch {
@@ -34,8 +34,10 @@ export async function POST(request: Request) {
   if (!user_id || !user_nome || !shifts?.length)
     return NextResponse.json({ error: 'Campi obbligatori mancanti: user_id, user_nome, shifts' }, { status: 400 })
 
-  // Usa l'area_id passata dal frontend (dall'import), fallback sull'area dell'admin
-  const areaId = (typeof body.area_id === 'string' && body.area_id) ? body.area_id : profile.area_id
+  // Manager usa sempre la propria area; admin usa l'area_id passata dal frontend
+  const areaId = profile?.ruolo === 'manager'
+    ? profile.area_id!
+    : (typeof body.area_id === 'string' && body.area_id) ? body.area_id : profile?.area_id
 
   // service_role: UPDATE shifts cross-area per risoluzione conflitti (admin)
   const serviceClient = createServiceClient()
