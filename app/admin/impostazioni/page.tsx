@@ -4,6 +4,7 @@ import type { SchedulingMode } from '@/lib/supabase/types'
 import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import GestioneEmail from '@/components/admin/impostazioni/GestioneEmail'
 import GestioneArea from '@/components/admin/impostazioni/GestioneArea'
+import ImportaStorico from '@/components/admin/sistema/ImportaStorico'
 
 interface EmailSetting {
   id: string
@@ -80,6 +81,19 @@ export default async function ImpostazioniPage() {
             </h2>
             <GestioneEmail initialSettings={emailSettings} />
           </section>
+
+          {/* Importa storico — solo manager */}
+          {profile?.ruolo === 'manager' && (
+            <section
+              aria-labelledby="importa-storico-heading"
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
+            >
+              <h2 id="importa-storico-heading" className="text-sm font-semibold text-gray-700 mb-4">
+                Storico reperibilità
+              </h2>
+              <ImportaStorico />
+            </section>
+          )}
 
         </main>
       </div>
