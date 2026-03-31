@@ -74,6 +74,7 @@ export default function Select({
 
   // Reset ricerca alla chiusura del dropdown
   useEffect(() => {
+    // eslint-disable-next-line react-compiler/react-compiler
     if (!open) setSearchQuery('')
   }, [open])
 

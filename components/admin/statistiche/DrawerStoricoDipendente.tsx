@@ -55,7 +55,7 @@ export default function DrawerStoricoDipendente({ userId, onClose }: Props) {
   function toggleYear(year: number) {
     setExpandedYears(prev => {
       const next = new Set(prev)
-      next.has(year) ? next.delete(year) : next.add(year)
+      if (next.has(year)) { next.delete(year) } else { next.add(year) }
       return next
     })
   }
