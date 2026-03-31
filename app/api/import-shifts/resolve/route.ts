@@ -35,9 +35,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: user_id, user_nome, shifts' }, { status: 400 })
 
   // Manager usa sempre la propria area; admin usa l'area_id passata dal frontend
-  const areaId = profile?.ruolo === 'manager'
+  const areaId: string | undefined = profile?.ruolo === 'manager'
     ? profile.area_id!
-    : (typeof body.area_id === 'string' && body.area_id) ? body.area_id : profile?.area_id
+    : (typeof body.area_id === 'string' && body.area_id) ? body.area_id : (profile?.area_id ?? undefined)
+
+  if (!areaId)
+    return NextResponse.json({ error: 'area_id obbligatorio' }, { status: 400 })
 
   // service_role: UPDATE shifts cross-area per risoluzione conflitti (admin)
   const serviceClient = createServiceClient()
