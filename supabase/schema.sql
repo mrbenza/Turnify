@@ -115,9 +115,10 @@ create table if not exists public.areas (
                                check (scheduling_mode in ('weekend_full', 'single_day', 'sun_next_sat')),
   workers_per_day  integer     not null default 2
                                check (workers_per_day in (1, 2)),
-  template_path    text,
-  manager_id       uuid        references public.users(id),
-  created_at       timestamptz not null default now()
+  template_path       text,
+  manager_id          uuid        references public.users(id),
+  storico_abilitato   boolean     not null default true,
+  created_at          timestamptz not null default now()
 );
 
 -- Riga default

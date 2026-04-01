@@ -76,6 +76,7 @@ export type Area = {
   workers_per_day: 1 | 2
   template_path: string | null
   manager_id: string | null
+  storico_abilitato: boolean
   created_at: string
 }
 

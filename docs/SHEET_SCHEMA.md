@@ -133,6 +133,7 @@ Aree aziendali con logica di turnazione propria (migration 011). Multi-area non 
 | workers_per_day | integer | `1` o `2` — numero di reperibili per giorno; default 2 |
 | template_path | text | nullable — nome file template Excel nello storage |
 | manager_id | uuid | FK → users.id — manager responsabile dell'area |
+| storico_abilitato | boolean | NOT NULL, DEFAULT true — se false blocca l'importazione storico per quest'area |
 | created_at | timestamptz | default now() |
 
 **scheduling_mode:**
@@ -233,3 +234,4 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-03-24 | `shifts.reperibile_order`: 1=colonna D (1° rep.), 2=colonna E (2° rep.) | 012_reperibile_order.sql |
 | 2026-03-24 | Multi-area: `area_id` su users/shifts/availability/month_status; unique (month,year,area_id) | 013_multi_area.sql |
 | 2026-03-25 | `area_id` su email_settings: POST include area_id, PATCH/DELETE filtrano per area_id (ownership check per area) | (API change, no migration) |
+| 2026-04-01 | `storico_abilitato` (boolean, NOT NULL, DEFAULT true) su `areas`: se false blocca import storico via API 403 e mostra overlay blur in UI | 017_storico_abilitato.sql |
