@@ -34,7 +34,7 @@ export default async function ImpostazioniPage() {
   /* ---- Parallel fetches ---- */
   const [emailSettingsRes, areaConfigRes] = await Promise.all([
     supabase.from('email_settings').select('*').eq('area_id', areaId).order('created_at', { ascending: true }),
-    supabase.from('areas').select('scheduling_mode, workers_per_day, nome').eq('id', areaId).single(),
+    supabase.from('areas').select('scheduling_mode, workers_per_day, nome, storico_abilitato').eq('id', areaId).single(),
   ])
 
   const emailSettings = (emailSettingsRes.data ?? []) as EmailSetting[]
@@ -42,6 +42,7 @@ export default async function ImpostazioniPage() {
 
   const schedulingMode: SchedulingMode = (areaConfig?.scheduling_mode as SchedulingMode) ?? 'weekend_full'
   const workersPerDay: 1 | 2 = (areaConfig?.workers_per_day as 1 | 2) ?? 2
+  const storicoAbilitato = areaConfig?.storico_abilitato ?? false
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -91,7 +92,7 @@ export default async function ImpostazioniPage() {
               <h2 id="importa-storico-heading" className="text-sm font-semibold text-gray-700 mb-4">
                 Storico reperibilità
               </h2>
-              <ImportaStorico />
+              <ImportaStorico areeAbilitate={storicoAbilitato} />
             </section>
           )}
 
@@ -100,3 +101,6 @@ export default async function ImpostazioniPage() {
     </div>
   )
 }
+
+
+

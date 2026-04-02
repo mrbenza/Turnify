@@ -83,6 +83,7 @@ export async function POST(request: Request) {
       workers_per_day: workers_per_day as 1 | 2,
       template_path: null,
       manager_id: null,
+      storico_abilitato: false,
     })
     .select()
     .single()
@@ -97,3 +98,5 @@ export async function POST(request: Request) {
 
   return NextResponse.json(data, { status: 201 })
 }
+
+
