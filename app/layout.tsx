@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import AuthGuard from "@/components/AuthGuard";
+import { Analytics } from '@vercel/analytics/react'; // Nota: usa /react o /next è indifferente nelle versioni recenti
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,13 +20,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="it">
       <body
         className={`${geistSans.variable} antialiased`}
       >
-        {children}
         <AuthGuard />
+        {children}
+        <Analytics />
       </body>
     </html>
   );
 }
+
+
+
