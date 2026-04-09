@@ -45,7 +45,11 @@ function formatBytes(bytes?: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 
-export default function ImportaStorico() {
+interface Props {
+  areeAbilitate: boolean
+}
+
+export default function ImportaStorico({ areeAbilitate }: Props) {
   const [selectedFiles, setSelectedFiles] = useState<FileEntry[]>([])
   const [importing, setImporting] = useState(false)
   const [currentId, setCurrentId] = useState<number | null>(null)
@@ -54,8 +58,11 @@ export default function ImportaStorico() {
   const [dragging, setDragging] = useState(false)
   const [createModal, setCreateModal] = useState<CreateModalState | null>(null)
   const [resolved, setResolved] = useState<Set<string>>(new Set())
+  const [bloccato, setBloccato] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const nextId = useRef(0)
+
+  const nonDisponibile = !areeAbilitate || !!bloccato
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return
@@ -123,6 +130,13 @@ export default function ImportaStorico() {
         const json = await res.json().catch(() => ({}))
 
         if (!res.ok) {
+          if (res.status === 403 && typeof json.error === 'string' && json.error.includes('disabilitata')) {
+            setBloccato(json.error)
+            setSelectedFiles([])
+            setCurrentId(null)
+            setImporting(false)
+            return
+          }
           fileResults.push({ id: entry.id, fileName: entry.file.name, error: json.error ?? 'Errore durante l\'importazione.' })
         } else {
           fileResults.push({ id: entry.id, fileName: entry.file.name, result: json as ImportResult })
@@ -151,7 +165,8 @@ export default function ImportaStorico() {
   }
 
   return (
-    <div>
+    <div className="relative">
+      <div className={nonDisponibile ? 'pointer-events-none select-none' : undefined}>
       <h2 className="text-base font-semibold text-gray-900 mb-1">Importa storico reperibilità</h2>
       <p className="text-sm text-gray-500 mb-5">
         Carica uno o più file Excel con il formato del template per importare turni passati
@@ -410,6 +425,26 @@ export default function ImportaStorico() {
           onClose={() => setCreateModal(null)}
           onCreated={handleCreated}
         />
+      )}
+
+      </div>
+
+      {/* Overlay blur quando la funzione non è disponibile */}
+      {nonDisponibile && (
+        <div className="absolute inset-0 rounded-xl backdrop-blur-sm bg-white/60 flex flex-col items-center justify-center gap-2 text-center">
+          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          <p className="text-sm font-medium text-gray-500">Funzione non disponibile</p>
+          {bloccato && (
+            <button
+              onClick={() => setBloccato(null)}
+              className="text-xs text-gray-400 hover:text-gray-600 underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+            >
+              Riprova con un altro file
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

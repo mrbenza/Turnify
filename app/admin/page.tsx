@@ -63,19 +63,20 @@ export default async function AdminDashboardPage() {
     const serviceClient = createServiceClient()
 
     const [usersRes, authListRes, templateRes, areasRes] = await Promise.all([
-      supabase.from('users').select('ruolo, attivo'),
+      supabase.from('users').select('id, ruolo, attivo'),
       serviceClient.auth.admin.listUsers({ perPage: 1000 }),
       serviceClient.storage.from('templates').list(),
       serviceClient.from('areas').select('id', { count: 'exact', head: true }).neq('nome', 'Default'),
     ])
 
-    const users = (usersRes.data ?? []) as { ruolo: string; attivo: boolean }[]
+    const users = (usersRes.data ?? []) as { id: string; ruolo: string; attivo: boolean }[]
     const viewableUsers = users.filter((u) => u.ruolo !== 'admin')
     const totaleUtenti = viewableUsers.length
     const utentiAttivi = viewableUsers.filter((u) => u.attivo).length
 
     const authUsers = authListRes.data?.users ?? []
-    const maiLoggati = authUsers.filter((u: { last_sign_in_at?: string }) => !u.last_sign_in_at).length
+    const lastLoginMap = new Map(authUsers.map((u) => [u.id, u.last_sign_in_at ?? null]))
+    const maiLoggati = viewableUsers.filter((u) => !(lastLoginMap.get(u.id) ?? null)).length
 
     const areasCount = areasRes.count ?? 0
 
@@ -393,3 +394,5 @@ export default async function AdminDashboardPage() {
     </div>
   )
 }
+
+

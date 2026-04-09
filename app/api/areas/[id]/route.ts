@@ -30,7 +30,7 @@ export async function PATCH(
 
   const { id } = await params
 
-  let body: { nome?: unknown; scheduling_mode?: unknown; workers_per_day?: unknown; manager_id?: unknown }
+  let body: { nome?: unknown; scheduling_mode?: unknown; workers_per_day?: unknown; manager_id?: unknown; storico_abilitato?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -65,6 +65,13 @@ export async function PATCH(
 
   if (newManagerId !== undefined) {
     patch.manager_id = newManagerId
+  }
+
+  if (body.storico_abilitato !== undefined) {
+    if (typeof body.storico_abilitato !== 'boolean') {
+      return NextResponse.json({ error: 'storico_abilitato deve essere un booleano' }, { status: 400 })
+    }
+    patch.storico_abilitato = body.storico_abilitato
   }
 
   if (Object.keys(patch).length === 0) {

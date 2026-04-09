@@ -69,6 +69,11 @@ export type EquityScore = {
   score: number
 }
 
+export type AuthLastSignIn = {
+  user_id: string
+  last_sign_in_at: string | null
+}
+
 export type Area = {
   id: string
   nome: string
@@ -76,6 +81,7 @@ export type Area = {
   workers_per_day: 1 | 2
   template_path: string | null
   manager_id: string | null
+  storico_abilitato: boolean
   created_at: string
 }
 
@@ -197,6 +203,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_auth_last_sign_ins: {
+        Args: { p_user_ids: string[] }
+        Returns: AuthLastSignIn[]
+      }
       get_equity_scores: {
         Args: { p_month: number; p_year: number; p_area_id?: string }
         Returns: EquityScore[]

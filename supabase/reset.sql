@@ -22,5 +22,7 @@ DROP TABLE IF EXISTS public.users          CASCADE;
 -- Funzioni
 DROP FUNCTION IF EXISTS public.is_admin();
 DROP FUNCTION IF EXISTS public.is_admin_or_manager();
+DROP FUNCTION IF EXISTS public.is_manager();
+DROP FUNCTION IF EXISTS public.current_user_area_id();
 DROP FUNCTION IF EXISTS public.get_equity_scores(integer, integer);
 DROP FUNCTION IF EXISTS public.update_updated_at();

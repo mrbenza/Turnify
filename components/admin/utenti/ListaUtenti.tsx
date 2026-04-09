@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { User, UserRole, Area } from '@/lib/supabase/types'
 import Select from '@/components/ui/Select'
 
@@ -53,6 +53,9 @@ interface ListaUtentiProps {
   areas?: Area[]
 }
 
+type SortKey = 'nome' | 'email' | 'ruolo' | 'area' | 'last_login' | 'attivo'
+type SortDirection = 'asc' | 'desc'
+
 export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, isManager = false, areas = [] }: ListaUtentiProps) {
   const [dipendentes, setUsers] = useState<User[]>(initialUsers)
   const [toggling, setToggling] = useState<string | null>(null)
@@ -62,20 +65,92 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
   const [showAddModal, setShowAddModal] = useState(false)
   const [filterAreaId, setFilterAreaId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('nome')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
-  const areaMap = new Map<string, string>(areas.map((a) => [a.id, a.nome]))
+  const areaMap = useMemo(
+    () => new Map<string, string>(areas.map((a) => [a.id, a.nome])),
+    [areas]
+  )
   const isAdmin = areas.length > 0
 
-  const filtered = dipendentes.filter((u) => {
+  /* Build a fast lookup map for last logins */
+  const lastLoginMap = useMemo(
+    () => new Map<string, string | null>(
+      lastLogins.map(({ id, last_sign_in_at }) => [id, last_sign_in_at])
+    ),
+    [lastLogins]
+  )
+
+  const filtered = useMemo(() => dipendentes.filter((u) => {
     if (filterAreaId && u.area_id !== filterAreaId) return false
     if (searchQuery && !u.nome.toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
-  })
+  }), [dipendentes, filterAreaId, searchQuery])
 
-  /* Build a fast lookup map for last logins */
-  const lastLoginMap = new Map<string, string | null>(
-    lastLogins.map(({ id, last_sign_in_at }) => [id, last_sign_in_at])
-  )
+  const sorted = useMemo(() => {
+    const roleOrder: Record<UserRole, number> = {
+      admin: 0,
+      manager: 1,
+      dipendente: 2,
+    }
+
+    const direction = sortDirection === 'asc' ? 1 : -1
+    const collator = new Intl.Collator('it', { sensitivity: 'base', numeric: true })
+
+    return [...filtered].sort((a, b) => {
+      let comparison = 0
+
+      switch (sortKey) {
+        case 'nome':
+          comparison = collator.compare(a.nome, b.nome)
+          break
+        case 'email':
+          comparison = collator.compare(a.email, b.email)
+          break
+        case 'ruolo':
+          comparison = roleOrder[a.ruolo] - roleOrder[b.ruolo]
+          if (comparison === 0) comparison = collator.compare(a.nome, b.nome)
+          break
+        case 'area': {
+          const areaA = areaMap.get(a.area_id) ?? ''
+          const areaB = areaMap.get(b.area_id) ?? ''
+          comparison = collator.compare(areaA, areaB)
+          if (comparison === 0) comparison = collator.compare(a.nome, b.nome)
+          break
+        }
+        case 'last_login': {
+          const loginA = lastLoginMap.get(a.id)
+          const loginB = lastLoginMap.get(b.id)
+          const timeA = loginA ? new Date(loginA).getTime() : -1
+          const timeB = loginB ? new Date(loginB).getTime() : -1
+          comparison = timeA - timeB
+          if (comparison === 0) comparison = collator.compare(a.nome, b.nome)
+          break
+        }
+        case 'attivo':
+          comparison = Number(a.attivo) - Number(b.attivo)
+          if (comparison === 0) comparison = collator.compare(a.nome, b.nome)
+          break
+      }
+
+      return comparison * direction
+    })
+  }, [areaMap, filtered, lastLoginMap, sortDirection, sortKey])
+
+  function handleSort(nextKey: SortKey) {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(nextKey)
+    setSortDirection('asc')
+  }
+
+  function sortIndicator(key: SortKey) {
+    if (sortKey !== key) return '↕'
+    return sortDirection === 'asc' ? '↑' : '↓'
+  }
 
   /* ---- Toggle active/inactive ---- */
   async function handleToggleActive(dipendente: User) {
@@ -204,25 +279,49 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
       )}
 
       {/* Table */}
-      {filtered.length === 0 ? (
+      {sorted.length === 0 ? (
         <p className="text-sm text-gray-500 py-8 text-center">Nessun utente trovato.</p>
       ) : (
         <div className="overflow-x-auto -mx-4 sm:mx-0">
           <table className="w-full text-sm" aria-label="Lista utenti">
             <thead>
               <tr className="border-b border-gray-100">
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-0 font-semibold text-gray-500 text-xs uppercase tracking-wide">Nome</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Email</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Ruolo</th>
+                <th scope="col" className="text-left py-2.5 px-4 sm:px-0 font-semibold text-gray-500 text-xs uppercase tracking-wide">
+                  <button type="button" onClick={() => handleSort('nome')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                    Nome <span aria-hidden="true">{sortIndicator('nome')}</span>
+                  </button>
+                </th>
+                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">
+                  <button type="button" onClick={() => handleSort('email')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                    Email <span aria-hidden="true">{sortIndicator('email')}</span>
+                  </button>
+                </th>
+                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">
+                  <button type="button" onClick={() => handleSort('ruolo')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                    Ruolo <span aria-hidden="true">{sortIndicator('ruolo')}</span>
+                  </button>
+                </th>
                 {isAdmin && (
-                  <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Area</th>
+                  <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">
+                    <button type="button" onClick={() => handleSort('area')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                      Area <span aria-hidden="true">{sortIndicator('area')}</span>
+                    </button>
+                  </th>
                 )}
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Ultimo login</th>
-                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">Attivo</th>
+                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">
+                  <button type="button" onClick={() => handleSort('last_login')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                    Ultimo login <span aria-hidden="true">{sortIndicator('last_login')}</span>
+                  </button>
+                </th>
+                <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">
+                  <button type="button" onClick={() => handleSort('attivo')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                    Attivo <span aria-hidden="true">{sortIndicator('attivo')}</span>
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map((dipendente) => (
+              {sorted.map((dipendente) => (
                 <tr key={dipendente.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-3 px-4 sm:px-0">
                     <div className="font-medium text-gray-800">{dipendente.nome}</div>

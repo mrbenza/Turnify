@@ -262,6 +262,22 @@ export async function POST(request: NextRequest) {
     }, { status: 403 })
   }
 
+  // Guard: verifica che l'importazione storico sia abilitata per questa area
+  if (targetAreaId) {
+    const { data: areaCheck } = await serviceClient
+      .from('areas')
+      .select('storico_abilitato')
+      .eq('id', targetAreaId)
+      .single()
+
+    if (areaCheck && !areaCheck.storico_abilitato) {
+      return NextResponse.json(
+        { error: 'Importazione storico disabilitata per questa area dall\'amministratore.' },
+        { status: 403 }
+      )
+    }
+  }
+
   // ----------------------------------------------------------------
   // Estrai mese/anno da A3
   // ----------------------------------------------------------------

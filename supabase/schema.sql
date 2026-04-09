@@ -115,9 +115,10 @@ create table if not exists public.areas (
                                check (scheduling_mode in ('weekend_full', 'single_day', 'sun_next_sat')),
   workers_per_day  integer     not null default 2
                                check (workers_per_day in (1, 2)),
-  template_path    text,
-  manager_id       uuid        references public.users(id),
-  created_at       timestamptz not null default now()
+  template_path       text,
+  manager_id          uuid        references public.users(id),
+  storico_abilitato   boolean     not null default true,
+  created_at          timestamptz not null default now()
 );
 
 -- Riga default
@@ -362,3 +363,36 @@ as $$
   group by u.id, u.nome
   order by score asc;
 $$;
+
+-- ============================================================
+-- FUNZIONE: get_auth_last_sign_ins
+-- Legge in modo controllato gli ultimi login da auth.users
+-- ============================================================
+create or replace function public.get_auth_last_sign_ins(p_user_ids uuid[])
+returns table (
+  user_id uuid,
+  last_sign_in_at timestamptz
+)
+language plpgsql security definer
+set search_path = ''
+as $$
+begin
+  if auth.role() <> 'authenticated' then
+    raise exception 'not authenticated';
+  end if;
+
+  if not public.is_admin_or_manager() then
+    raise exception 'not authorized';
+  end if;
+
+  return query
+  select
+    au.id as user_id,
+    au.last_sign_in_at
+  from auth.users au
+  where au.id = any(coalesce(p_user_ids, array[]::uuid[]));
+end;
+$$;
+
+revoke all on function public.get_auth_last_sign_ins(uuid[]) from public;
+grant execute on function public.get_auth_last_sign_ins(uuid[]) to authenticated;

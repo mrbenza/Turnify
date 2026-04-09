@@ -43,6 +43,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | data_creazione | timestamptz | default now() |
 | disattivato_at | timestamptz\|null | |
 
+**Nota ultimo login:** `public.users` non contiene ancora `last_login_at`. La pagina `/admin/utenti` legge oggi `auth.users.last_sign_in_at` tramite RPC `public.get_auth_last_sign_ins(uuid[])`.
+
 ### `holidays`
 | Colonna | Tipo | Note |
 |---------|------|------|
@@ -124,6 +126,9 @@ get_equity_scores(p_month int, p_year int)    -- RPC usata da statistiche
   → { user_id, nome, turni_totali, festivi, score }
   -- score = turni_totali + festivi*2
   -- p_month=0 → all-time (ignora filtro mese/anno)
+get_auth_last_sign_ins(p_user_ids uuid[])     -- RPC usata da /admin/utenti
+  → { user_id, last_sign_in_at }
+  -- legge auth.users.last_sign_in_at senza passare da auth.admin.*
 ```
 
 ### RLS (sintesi) — area-aware (migration 016)
@@ -200,8 +205,8 @@ Il type narrowing sfrutta `instanceof NextResponse`: se la funzione restituisce 
 | `/api/email-settings/[id]` | PATCH | admin/manager | Toggle attivo; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/email-settings/[id]` | DELETE | admin/manager | Elimina; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/templates` | POST | admin | Upload .xlsx a Storage bucket `templates` |
-| `/api/import-shifts` | POST | admin | Importa storico da Excel area-aware. Legge nome area da A1 e cognome manager da B51. Match area a 3 livelli: (1) esatto, (2) prefisso ilike, (3) normalizzato (rimozione spazi + lowercase) — es. "AREA 6" matcha "Area6 - Veneto". Cross-check cognome manager; fallback per cognome manager se il nome area non viene riconosciuto. Filtra dipendenti per `area_id`. Inserisce turni con `area_id`. Aggiorna `month_status` per `(month, year, area_id)` |
-| `/api/import-shifts/resolve` | POST | admin | Risolve turni pending (utente non trovato al momento dell'import). Legge `area_id` dal body della request per assegnare il dipendente all'area corretta (fix: non usa piu `profile.area_id` che puntava all'area Default dell'admin) |
+| `/api/import-shifts` | POST | admin/manager | Importa storico da Excel area-aware. Legge nome area da A1 e cognome manager da B51. Match area a 3 livelli: (1) esatto, (2) prefisso ilike, (3) normalizzato (rimozione spazi + lowercase) — es. "AREA 6" matcha "Area6 - Veneto". Cross-check cognome manager; fallback per cognome manager se il nome area non viene riconosciuto. Filtra dipendenti per `area_id`. Inserisce turni con `area_id`. Aggiorna `month_status` per `(month, year, area_id)`. Manager puo importare solo file della propria area — 403 se mismatch tra area nel file e `profile.area_id` |
+| `/api/import-shifts/resolve` | POST | admin/manager | Risolve turni pending (utente non trovato al momento dell'import). Legge `area_id` dal body della request per assegnare il dipendente all'area corretta (fix: non usa piu `profile.area_id` che puntava all'area Default dell'admin). Manager usa sempre `profile.area_id` (non sovrascrivibile dal body) |
 | `/api/config` | GET | admin/manager | Legge `scheduling_mode` e `workers_per_day` dalla tabella `areas` (riga Default) |
 | `/api/config` | PATCH | admin/manager | Aggiorna `scheduling_mode` e/o `workers_per_day` |
 | `/api/areas/[id]` | PATCH | admin | Modifica area (nome, scheduling_mode, manager). Aggiornamento area eseguito prima degli effetti collaterali: se il nome è duplicato (409) la cascata non viene eseguita. Trasferimento manager in cascata: azzera `manager_id` dell'area precedente del nuovo manager; aggiorna `users.area_id` del nuovo manager |
@@ -222,6 +227,11 @@ createServiceClient() // service role, mai esposto al browser
 - `storage.from('templates').*` — bucket storage senza policy write per utenti normali
 - Write su tabella `areas` — nessuna policy INSERT/UPDATE/DELETE nel DB
 - Write su tabella `users` (PATCH/DELETE) — RLS manager è solo SELECT; admin ha write via RLS ma usiamo serviceClient per coerenza con i casi manager
+
+**Nota `/admin/utenti`:**
+- non usa piu` `auth.admin.listUsers()` per l'ultimo login
+- usa `supabase.rpc('get_auth_last_sign_ins', { p_user_ids })`
+- il vecchio approccio con `auth.admin.listUsers({ perPage: 1000 })` e` lasciato commentato in `app/admin/utenti/page.tsx` per tracciabilita`
 
 Ogni `createServiceClient()` nel codebase è documentato con commento `// service_role: <motivo>`.
 
@@ -280,9 +290,9 @@ Database  // tipo completo Supabase con Tables + Functions
 | `/admin/disponibilita` | admin/manager | users attivi, availability, shifts, holidays, month_status mese corrente; accetta `searchParams.area` per filtrare per area | `CalendarioGlobale`, `AreaSelector` |
 | `/admin/turni` | admin/manager | users, shifts, month_status mese corrente | `ListaTurni` |
 | `/admin/export` | admin/manager | users, storage templates | `ExportForm` |
-| `/admin/utenti` | admin/manager | users (tutti), auth.listUsers (last login) | `ListaUtenti` |
+| `/admin/utenti` | admin/manager | users (tutti), RPC `get_auth_last_sign_ins` (last login) | `ListaUtenti` |
 | `/admin/statistiche` | admin/manager | RPC get_equity_scores mese corrente | `GraficoEquita` |
-| `/admin/impostazioni` | admin/manager | email_settings | `GestioneEmail` |
+| `/admin/impostazioni` | admin/manager | email_settings | `GestioneEmail`, `GestioneArea`, `ImportaStorico` (solo manager) |
 | `/admin/sistema` | admin | storage templates, holidays | `GestioneTemplate`, `AggiornamentoCalendario`, `ImportaStorico` |
 | `/admin/equita` | admin | `/api/equity-overview` → `get_equity_scores` per tutte le aree | `PanoramicaEquita` (inline) |
 
@@ -309,6 +319,9 @@ In modalità `sun_next_sat`, il blocco `sun_next_sat` viene valutato prima del b
 
 **`handleRemove` — rimozione singola:**
 La funzione rimuove esclusivamente il turno del giorno cliccato. Non esiste logica di pairing inverso: rimuovere Sab 11 non tocca Dom 5 e viceversa. Questo è il comportamento voluto e definitivo.
+
+**Counter disponibilita:**
+Sotto il titolo mese viene mostrato "X/Y hanno inserito la disponibilita" con elenco dei cognomi mancanti. Badge verde se tutti i dipendenti hanno inserito la disponibilita, ambra se mancanti. Nascosto sui mesi in stato `confirmed`. Calcolato con `useMemo` a partire da `availability` e `users` gia presenti nello stato del componente — nessun fetch aggiuntivo.
 
 #### `DrawerStoricoDipendente` (`components/admin/statistiche/DrawerStoricoDipendente.tsx`)
 Drawer laterale destro con overlay. Si apre cliccando su un dipendente in `GraficoEquita`. Mostra: contatori (totale/weekend/festivi), grafico barre per mese (blu=weekend, arancione=festivi), lista festività con contatore, lista turni raggruppata per mese. Chiude con Escape o click overlay. Chiama `GET /api/users/[id]/shifts`.
@@ -389,6 +402,7 @@ CalendarioGlobale click cella
 ```
 
 ### 6. Import storico (area-aware)
+Accessibile ad admin e manager. Manager: validazione aggiuntiva che `targetAreaId === profile.area_id` — 403 se mismatch.
 ```
 Upload .xlsx (ImportaStorico)
   → POST /api/import-shifts (FormData)

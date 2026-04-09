@@ -133,6 +133,7 @@ Aree aziendali con logica di turnazione propria (migration 011). Multi-area non 
 | workers_per_day | integer | `1` o `2` — numero di reperibili per giorno; default 2 |
 | template_path | text | nullable — nome file template Excel nello storage |
 | manager_id | uuid | FK → users.id — manager responsabile dell'area |
+| storico_abilitato | boolean | NOT NULL, DEFAULT true — se false blocca l'importazione storico per quest'area |
 | created_at | timestamptz | default now() |
 
 **scheduling_mode:**
@@ -187,6 +188,34 @@ score = turni_totali + (festivi_attivi x 2)
 
 ---
 
+## Funzione RPC: `get_auth_last_sign_ins`
+Legge l'ultimo login reale da `auth.users` per una lista di utenti applicativi.
+
+**Firma:** `get_auth_last_sign_ins(p_user_ids uuid[])`
+
+**Campi restituiti:**
+- `user_id`
+- `last_sign_in_at`
+
+**Uso attuale:**
+- `/admin/utenti` carica prima la lista da `public.users`
+- poi passa tutti gli `id` alla RPC
+- infine costruisce la mappa `id -> last_sign_in_at`
+
+**Motivazione tecnica:**
+- le Admin API Supabase Auth (`auth.admin.listUsers`, `auth.admin.getUserById`) si sono rivelate instabili sul dataset reale
+- la lettura SQL via RPC da `auth.users` e` risultata stabile
+
+**Controlli di accesso:**
+- richiede `auth.role() = 'authenticated'`
+- richiede `public.is_admin_or_manager() = true`
+
+**Nota evolutiva:**
+- questa RPC e` la soluzione corrente
+- il possibile step successivo e` denormalizzare il dato in `public.users.last_login_at`
+
+---
+
 ## Query di riferimento (CODE AGENT)
 
 ```sql
@@ -233,3 +262,4 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-03-24 | `shifts.reperibile_order`: 1=colonna D (1° rep.), 2=colonna E (2° rep.) | 012_reperibile_order.sql |
 | 2026-03-24 | Multi-area: `area_id` su users/shifts/availability/month_status; unique (month,year,area_id) | 013_multi_area.sql |
 | 2026-03-25 | `area_id` su email_settings: POST include area_id, PATCH/DELETE filtrano per area_id (ownership check per area) | (API change, no migration) |
+| 2026-04-01 | `storico_abilitato` (boolean, NOT NULL, DEFAULT true) su `areas`: se false blocca import storico via API 403 e mostra overlay blur in UI | 017_storico_abilitato.sql |

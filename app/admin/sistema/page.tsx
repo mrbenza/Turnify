@@ -4,6 +4,7 @@ import NavbarAdmin from '@/components/admin/NavbarAdmin'
 import GestioneTemplate from '@/components/admin/sistema/GestioneTemplate'
 import AggiornamentoCalendario from '@/components/admin/sistema/AggiornamentoCalendario'
 import ImportaStorico from '@/components/admin/sistema/ImportaStorico'
+import ControlloStorico from '@/components/admin/sistema/ControlloStorico'
 import type { Holiday } from '@/lib/supabase/types'
 
 export interface TemplateFile {
@@ -44,6 +45,28 @@ export default async function SistemaPage() {
 
   const holidays = (holidaysData ?? []) as Holiday[]
 
+  /* ---- Aree con info manager per ControlloStorico ---- */
+  const { data: areasData } = await serviceClient
+    .from('areas')
+    .select('id, nome, storico_abilitato, manager_id')
+    .order('nome', { ascending: true })
+
+  const { data: managersData } = await serviceClient
+    .from('users')
+    .select('id, nome')
+    .eq('ruolo', 'manager')
+
+  const managersMap = new Map((managersData ?? []).map(m => [m.id, m.nome]))
+
+  const storAreas = (areasData ?? []).map(a => ({
+    id: a.id,
+    nome: a.nome,
+    storico_abilitato: a.storico_abilitato,
+    manager_nome: a.manager_id ? (managersMap.get(a.manager_id) ?? null) : null,
+  }))
+
+  const anyStorAbilitata = storAreas.some(a => a.storico_abilitato)
+
   return (
     <div className="min-h-screen bg-gray-50">
       <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
@@ -75,7 +98,7 @@ export default async function SistemaPage() {
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
               >
                 <h2 id="storico-heading" className="sr-only">Importa storico reperibilità</h2>
-                <ImportaStorico />
+                <ImportaStorico areeAbilitate={anyStorAbilitata} />
               </section>
             </div>
 
@@ -89,6 +112,14 @@ export default async function SistemaPage() {
             </section>
 
           </div>
+
+          <section
+            aria-labelledby="controllo-storico-heading"
+            className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6"
+          >
+            <h2 id="controllo-storico-heading" className="sr-only">Controllo importazione storico</h2>
+            <ControlloStorico initialAreas={storAreas} />
+          </section>
 
         </main>
       </div>

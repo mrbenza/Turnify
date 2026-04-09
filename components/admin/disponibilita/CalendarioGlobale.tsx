@@ -266,6 +266,12 @@ export default function CalendarioGlobale({
     return m
   }, [shifts])
 
+  // Dipendenti con almeno un giorno di disponibilità nel mese visualizzato
+  const disponibilitaCount = useMemo(() => {
+    const ids = new Set(availability.map((a) => a.user_id))
+    return ids.size
+  }, [availability])
+
   const holidayMap = useMemo(() => {
     const m = new Map<string, Holiday>()
     holidays.filter((h) => h.mandatory).forEach((h) => m.set(h.date, h))
@@ -916,6 +922,28 @@ export default function CalendarioGlobale({
             </svg>
           </button>
         </div>
+
+        {/* Counter disponibilità — sotto il titolo mese, non su mesi confirmed */}
+        {!loadingMonth && !isConfirmed && users.length > 0 && (
+          <p className="text-center text-sm text-gray-400">
+            <span className={`font-semibold ${disponibilitaCount === users.length ? 'text-green-600' : 'text-amber-600'}`}>
+              {disponibilitaCount}/{users.length}
+            </span>
+            {' '}hanno inserito la disponibilità
+            {disponibilitaCount < users.length && (
+              <span className="text-gray-400">
+                {' '}— mancano{' '}
+                {users
+                  .filter((u) => !availability.some((a) => a.user_id === u.id))
+                  .map((u) => {
+                    const idx = u.nome.indexOf(' ')
+                    return idx === -1 ? u.nome : u.nome.slice(idx + 1)
+                  })
+                  .join(', ')}
+              </span>
+            )}
+          </p>
+        )}
 
         {/* Lock / unlock controls — full-width on mobile, auto on sm+ */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
