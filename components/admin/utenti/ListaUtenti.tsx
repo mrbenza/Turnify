@@ -68,12 +68,18 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
   const [sortKey, setSortKey] = useState<SortKey>('nome')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
-  const areaMap = new Map<string, string>(areas.map((a) => [a.id, a.nome]))
+  const areaMap = useMemo(
+    () => new Map<string, string>(areas.map((a) => [a.id, a.nome])),
+    [areas]
+  )
   const isAdmin = areas.length > 0
 
   /* Build a fast lookup map for last logins */
-  const lastLoginMap = new Map<string, string | null>(
-    lastLogins.map(({ id, last_sign_in_at }) => [id, last_sign_in_at])
+  const lastLoginMap = useMemo(
+    () => new Map<string, string | null>(
+      lastLogins.map(({ id, last_sign_in_at }) => [id, last_sign_in_at])
+    ),
+    [lastLogins]
   )
 
   const filtered = useMemo(() => dipendentes.filter((u) => {
