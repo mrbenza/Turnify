@@ -49,11 +49,11 @@ next-env.d.ts
 # file eliminati / backup locali
 /_trash/
 
-# documentazione utente (work in progress, non pubblicare)
-/docs/*.html
-/docs/*.pdf
-/docs/*.png
-/docs/*.css
+# Supabase CLI (generato automaticamente)
+/supabase/.temp/
 
-# istruzioni agente AI (solo uso locale)
-CLAUDE.md
+# Claude Code (skill e config locali)
+/.agents/
+/.claude/
+/skills-lock.json
+/.mcp.json
