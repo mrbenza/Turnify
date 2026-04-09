@@ -22,6 +22,34 @@ e calendario festivita.
 
 ---
 
+## Ultimo Login Admin
+
+La pagina [`/admin/utenti`](/home/jack/turnify/app/admin/utenti/page.tsx) ora funziona cosi`:
+
+1. lista utenti da `public.users`
+2. aree e filtri da `public.areas` / `public.users`
+3. ultimo login da `auth.users.last_sign_in_at` tramite RPC `public.get_auth_last_sign_ins(uuid[])`
+
+Motivo:
+- `supabase.auth.admin.listUsers()` e `supabase.auth.admin.getUserById()` si sono rivelate instabili sul dataset reale
+- la lettura via SQL server-side su `auth.users` e` risultata stabile anche su tutti gli utenti
+
+Canali coinvolti:
+- `supabase.auth.*` = login/sessione utente corrente
+- `supabase.auth.admin.*` = Admin API Supabase Auth, non usata piu` in `/admin/utenti` per l'ultimo login
+- `supabase.rpc('get_auth_last_sign_ins', ...)` = canale attuale per leggere `last_sign_in_at`
+
+Supporto diagnostico:
+- pagina: `/admin/test`
+- route: `/api/debug/auth`
+- usate per confrontare Admin API e RPC SQL
+
+Nota futura:
+- il progetto non ha ancora `public.users.last_login_at`
+- la denormalizzazione in `public.users` resta un TODO esplicito
+
+---
+
 ## Struttura cartelle
 
 ```
@@ -174,7 +202,7 @@ turnify/
 | Pagina | Descrizione |
 |--------|-------------|
 | `/admin` | Dashboard: contatori utenti (manager + dipendenti, esclusi admin), stato template Excel, accesso rapido a Utenti e Sistema. |
-| `/admin/utenti` | Gestione utenti: vede tutti tranne altri admin (manager + dipendenti). Puo aggiungere, cambiare ruolo, attivare/disattivare, eliminare. |
+| `/admin/utenti` | Gestione utenti: vede tutti tranne altri admin (manager + dipendenti). Puo aggiungere, cambiare ruolo, attivare/disattivare, eliminare. L'ultimo login arriva da `auth.users` tramite RPC server-side. |
 | `/admin/sistema` | Layout a 2 colonne: upload template Excel, importazione storico reperibilita da XLSX, calendario festivita (import da Nager.Date, toggle Attiva/Non attiva, aggiunta manuale, elimina). |
 
 Navbar admin (sidebar desktop): Dashboard — Utenti — Sistema
@@ -187,7 +215,7 @@ Navbar admin (sidebar desktop): Dashboard — Utenti — Sistema
 | `/admin/disponibilita` | Calendario globale: righe = dipendenti, colonne = giorni, click su un giorno per assegnare turno con suggerimento per equita. |
 | `/admin/statistiche` | Score equita per dipendente, filtro per mese o tutti i tempi. |
 | `/admin/export` (UI: "Invio turni") | Anteprima turni con grafico distribuzione, genera Excel da template aziendale. Imposta il mese a `confirmed` dopo il download. |
-| `/admin/utenti` | Solo dipendenti: puo aggiungere nuovi (ruolo fisso = dipendente), attivare/disattivare, eliminare. Non puo cambiare ruolo. |
+| `/admin/utenti` | Solo dipendenti: puo aggiungere nuovi (ruolo fisso = dipendente), attivare/disattivare, eliminare. Non puo cambiare ruolo. L'ultimo login arriva da `auth.users` tramite RPC server-side. |
 | `/admin/impostazioni` | Configurazione turni, indirizzi email notifiche, importa storico reperibilita (solo file della propria area). |
 
 Navbar manager (sidebar desktop + bottom bar mobile):
@@ -248,6 +276,8 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 | area_id | uuid | FK → areas.id |
 | disattivato_at | timestamptz | nullable; impostato quando `attivo` viene messo a false |
 | data_creazione | timestamptz | default now() |
+
+Nota: oggi `public.users` non contiene ancora `last_login_at`. In `/admin/utenti` il dato mostrato come ultimo login arriva da `auth.users.last_sign_in_at` tramite RPC `get_auth_last_sign_ins(uuid[])`.
 
 ### `areas`
 | Colonna | Tipo | Note |
@@ -423,6 +453,30 @@ Vedi `docs/TODO.md` per il backlog completo.
 ---
 
 ## Changelog
+
+### [2026-04-09] - CODE AGENT - Ultimo login utenti via RPC SQL + ordinamento tabella utenti
+
+**File modificati:**
+- `supabase/migrations/018_auth_last_sign_ins_rpc.sql`
+- `supabase/schema.sql`
+- `app/admin/utenti/page.tsx`
+- `components/admin/utenti/ListaUtenti.tsx`
+- `app/api/debug/auth/route.ts`
+- `components/admin/AuthDebugPanel.tsx`
+- `app/admin/test/page.tsx`
+
+**Sommario:** `/admin/utenti` non usa piu` `auth.admin.listUsers()` per leggere l'ultimo login. Il dato arriva da una RPC SQL che legge `auth.users.last_sign_in_at`. La tabella utenti supporta anche l'ordinamento per colonna.
+
+**Dettagli:**
+1. Nuova RPC `public.get_auth_last_sign_ins(uuid[])` con `SECURITY DEFINER`, accessibile solo ad admin/manager autenticati.
+2. `app/admin/utenti/page.tsx` continua a leggere utenti da `public.users` e aree da `public.areas`; l'ultimo login viene arricchito via `supabase.rpc(...)`.
+3. La vecchia chiamata `serviceClient.auth.admin.listUsers({ perPage: 1000 })` e` lasciata commentata nel file per tracciabilita`.
+4. `ListaUtenti.tsx` ora ordina per `Nome`, `Email`, `Ruolo`, `Area`, `Ultimo login`, `Attivo`.
+5. `/admin/test` e `/api/debug/auth` restano disponibili come strumenti di diagnosi.
+
+**Status:** Completato
+
+---
 
 ### [2026-03-31] — CODE AGENT + UI AGENT + DOCS AGENT — Import storico per manager, counter disponibilita CalendarioGlobale, fix reset.sql
 

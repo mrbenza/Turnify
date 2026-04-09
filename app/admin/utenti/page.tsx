@@ -43,11 +43,24 @@ export default async function UtentiPage() {
     ? sortByNome(((await serviceClient.from('areas').select('*')).data ?? []) as Area[])
     : []
 
-  /* ---- Last login via service client ---- */
-  const { data: authList } = await serviceClient.auth.admin.listUsers({ perPage: 1000 })
+  /* ---- Last login ----
+     Traccia del tentativo precedente:
+     const { data: authList } = await serviceClient.auth.admin.listUsers({ perPage: 1000 })
+     const lastLoginMap = new Map<string, string | null>()
+     for (const authUser of authList?.users ?? []) {
+       lastLoginMap.set(authUser.id, authUser.last_sign_in_at ?? null)
+     }
+
+     Nel progetto questa Admin API si e` rivelata instabile su dataset piu` ampi.
+     Usiamo invece una RPC server-side che legge auth.users.last_sign_in_at.
+  */
+  const { data: rpcLastLogins } = await supabase.rpc('get_auth_last_sign_ins', {
+    p_user_ids: users.map((u) => u.id),
+  })
+
   const lastLoginMap = new Map<string, string | null>()
-  for (const authUser of authList?.users ?? []) {
-    lastLoginMap.set(authUser.id, authUser.last_sign_in_at ?? null)
+  for (const row of (rpcLastLogins ?? []) as Array<{ user_id: string; last_sign_in_at: string | null }>) {
+    lastLoginMap.set(row.user_id, row.last_sign_in_at ?? null)
   }
 
   const lastLogins = users.map((u) => ({

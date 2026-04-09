@@ -43,6 +43,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | data_creazione | timestamptz | default now() |
 | disattivato_at | timestamptz\|null | |
 
+**Nota ultimo login:** `public.users` non contiene ancora `last_login_at`. La pagina `/admin/utenti` legge oggi `auth.users.last_sign_in_at` tramite RPC `public.get_auth_last_sign_ins(uuid[])`.
+
 ### `holidays`
 | Colonna | Tipo | Note |
 |---------|------|------|
@@ -124,6 +126,9 @@ get_equity_scores(p_month int, p_year int)    -- RPC usata da statistiche
   → { user_id, nome, turni_totali, festivi, score }
   -- score = turni_totali + festivi*2
   -- p_month=0 → all-time (ignora filtro mese/anno)
+get_auth_last_sign_ins(p_user_ids uuid[])     -- RPC usata da /admin/utenti
+  → { user_id, last_sign_in_at }
+  -- legge auth.users.last_sign_in_at senza passare da auth.admin.*
 ```
 
 ### RLS (sintesi) — area-aware (migration 016)
@@ -223,6 +228,11 @@ createServiceClient() // service role, mai esposto al browser
 - Write su tabella `areas` — nessuna policy INSERT/UPDATE/DELETE nel DB
 - Write su tabella `users` (PATCH/DELETE) — RLS manager è solo SELECT; admin ha write via RLS ma usiamo serviceClient per coerenza con i casi manager
 
+**Nota `/admin/utenti`:**
+- non usa piu` `auth.admin.listUsers()` per l'ultimo login
+- usa `supabase.rpc('get_auth_last_sign_ins', { p_user_ids })`
+- il vecchio approccio con `auth.admin.listUsers({ perPage: 1000 })` e` lasciato commentato in `app/admin/utenti/page.tsx` per tracciabilita`
+
 Ogni `createServiceClient()` nel codebase è documentato con commento `// service_role: <motivo>`.
 
 ### `lib/supabase/client.ts`
@@ -280,7 +290,7 @@ Database  // tipo completo Supabase con Tables + Functions
 | `/admin/disponibilita` | admin/manager | users attivi, availability, shifts, holidays, month_status mese corrente; accetta `searchParams.area` per filtrare per area | `CalendarioGlobale`, `AreaSelector` |
 | `/admin/turni` | admin/manager | users, shifts, month_status mese corrente | `ListaTurni` |
 | `/admin/export` | admin/manager | users, storage templates | `ExportForm` |
-| `/admin/utenti` | admin/manager | users (tutti), auth.listUsers (last login) | `ListaUtenti` |
+| `/admin/utenti` | admin/manager | users (tutti), RPC `get_auth_last_sign_ins` (last login) | `ListaUtenti` |
 | `/admin/statistiche` | admin/manager | RPC get_equity_scores mese corrente | `GraficoEquita` |
 | `/admin/impostazioni` | admin/manager | email_settings | `GestioneEmail`, `GestioneArea`, `ImportaStorico` (solo manager) |
 | `/admin/sistema` | admin | storage templates, holidays | `GestioneTemplate`, `AggiornamentoCalendario`, `ImportaStorico` |

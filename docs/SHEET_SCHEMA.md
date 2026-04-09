@@ -188,6 +188,34 @@ score = turni_totali + (festivi_attivi x 2)
 
 ---
 
+## Funzione RPC: `get_auth_last_sign_ins`
+Legge l'ultimo login reale da `auth.users` per una lista di utenti applicativi.
+
+**Firma:** `get_auth_last_sign_ins(p_user_ids uuid[])`
+
+**Campi restituiti:**
+- `user_id`
+- `last_sign_in_at`
+
+**Uso attuale:**
+- `/admin/utenti` carica prima la lista da `public.users`
+- poi passa tutti gli `id` alla RPC
+- infine costruisce la mappa `id -> last_sign_in_at`
+
+**Motivazione tecnica:**
+- le Admin API Supabase Auth (`auth.admin.listUsers`, `auth.admin.getUserById`) si sono rivelate instabili sul dataset reale
+- la lettura SQL via RPC da `auth.users` e` risultata stabile
+
+**Controlli di accesso:**
+- richiede `auth.role() = 'authenticated'`
+- richiede `public.is_admin_or_manager() = true`
+
+**Nota evolutiva:**
+- questa RPC e` la soluzione corrente
+- il possibile step successivo e` denormalizzare il dato in `public.users.last_login_at`
+
+---
+
 ## Query di riferimento (CODE AGENT)
 
 ```sql
