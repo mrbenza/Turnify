@@ -15,11 +15,11 @@ export default async function AdminTestPage() {
     .eq('id', authUser.id)
     .single<{ ruolo: string; nome: string }>()
 
-  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') redirect('/user')
+  if (profile?.ruolo !== 'admin') redirect('/user')
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavbarAdmin nomeAdmin={profile?.nome} ruolo={profile?.ruolo as 'admin' | 'manager'} />
+      <NavbarAdmin nomeAdmin={profile?.nome} ruolo="admin" />
 
       <div className="lg:pl-56 pb-16 lg:pb-0">
         <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">

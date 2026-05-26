@@ -44,7 +44,7 @@ export default function AuthGuard() {
 
     // Timer logout
     timerRef.current = setTimeout(() => {
-      logout()
+      void logout()
     }, inactivityMs)
   }, [logout])
 

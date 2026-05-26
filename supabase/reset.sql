@@ -25,4 +25,6 @@ DROP FUNCTION IF EXISTS public.is_admin_or_manager();
 DROP FUNCTION IF EXISTS public.is_manager();
 DROP FUNCTION IF EXISTS public.current_user_area_id();
 DROP FUNCTION IF EXISTS public.get_equity_scores(integer, integer);
+DROP FUNCTION IF EXISTS public.get_equity_scores(integer, integer, uuid);
+DROP FUNCTION IF EXISTS public.get_auth_last_sign_ins(uuid[]);
 DROP FUNCTION IF EXISTS public.update_updated_at();

@@ -1,11 +1,13 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import pkg from '@/package.json'
 const version: string = pkg.version
+
+const DEBUG_COOKIE_NAME = 'turnify_debug_enabled'
 
 /* ------------------------------------------------------------------ */
 /* Navigation item definitions                                         */
@@ -142,6 +144,29 @@ const MANAGER_MORE_ITEMS = [
   },
 ]
 
+const DEBUG_NAV_ITEMS = [
+  {
+    href: '/admin/test',
+    label: 'Test Auth',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104c1.19-1.35 3.31-1.35 4.5 0l.614.697a2.25 2.25 0 002.198.714l.923-.21c1.787-.406 3.61.65 4.016 2.437l.21.923a2.25 2.25 0 001.243 1.53l.84.42c1.625.813 2.282 2.79 1.47 4.415l-.42.84a2.25 2.25 0 000 2.012l.42.84c.813 1.625.155 3.602-1.47 4.415l-.84.42a2.25 2.25 0 00-1.243 1.53l-.21.923c-.406 1.787-2.229 2.843-4.016 2.437l-.923-.21a2.25 2.25 0 00-2.198.714l-.614.697c-1.19 1.35-3.31 1.35-4.5 0l-.614-.697a2.25 2.25 0 00-2.198-.714l-.923.21c-1.787.406-3.61-.65-4.016-2.437l-.21-.923a2.25 2.25 0 00-1.243-1.53l-.84-.42c-1.625-.813-2.282-2.79-1.47-4.415l.42-.84a2.25 2.25 0 000-2.012l-.42-.84c-.813-1.625-.155-3.602 1.47-4.415l.84-.42a2.25 2.25 0 001.243-1.53l.21-.923c.406-1.787 2.229-2.843 4.016-2.437l.923.21a2.25 2.25 0 002.198-.714l.614-.697z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M12 9v6" />
+      </svg>
+    ),
+  },
+]
+
+function readDebugCookie(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.cookie.split('; ').some((entry) => entry === `${DEBUG_COOKIE_NAME}=1`)
+}
+
+function writeDebugCookie(enabled: boolean) {
+  if (typeof document === 'undefined') return
+  document.cookie = `${DEBUG_COOKIE_NAME}=${enabled ? '1' : '0'}; Path=/; Max-Age=31536000; SameSite=Lax`
+}
+
 /* ------------------------------------------------------------------ */
 /* Sidebar inner content — used only on desktop (lg+)                  */
 /* ------------------------------------------------------------------ */
@@ -151,11 +176,26 @@ interface SidebarContentProps {
   nomeAdmin?: string
   areaNome?: string
   allNavItems: { href: string; label: string; icon: React.ReactNode }[]
+  debugNavItems: { href: string; label: string; icon: React.ReactNode }[]
+  showDebugToggle: boolean
+  debugEnabled: boolean
   onLinkClick: () => void
+  onToggleDebug: () => void
   onLogout: () => void
 }
 
-function SidebarContent({ pathname, nomeAdmin, areaNome, allNavItems, onLinkClick, onLogout }: SidebarContentProps) {
+function SidebarContent({
+  pathname,
+  nomeAdmin,
+  areaNome,
+  allNavItems,
+  debugNavItems,
+  showDebugToggle,
+  debugEnabled,
+  onLinkClick,
+  onToggleDebug,
+  onLogout,
+}: SidebarContentProps) {
   function isActive(href: string): boolean {
     if (href === '/admin') return pathname === '/admin'
     return pathname.startsWith(href)
@@ -206,10 +246,64 @@ function SidebarContent({ pathname, nomeAdmin, areaNome, allNavItems, onLinkClic
             </a>
           )
         })}
+
+        {debugNavItems.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Debug
+            </p>
+            <div className="space-y-0.5">
+              {debugNavItems.map((item) => {
+                const active = isActive(item.href)
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={onLinkClick}
+                    className={`
+                      flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                      focus:outline-none focus:ring-2 focus:ring-blue-400
+                      ${active
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }
+                    `}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <span className={active ? 'text-amber-600' : 'text-gray-400'}>
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </a>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Bottom: nome admin + logout */}
       <div className="px-3 py-4 border-t border-gray-100 space-y-2">
+        {showDebugToggle && (
+          <div className="px-3 pb-2">
+            <button
+              type="button"
+              onClick={onToggleDebug}
+              className="w-full flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+              aria-pressed={debugEnabled}
+            >
+              <span className="font-medium">Abilita debug</span>
+              <span
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors ${debugEnabled ? 'bg-amber-500' : 'bg-gray-200'}`}
+                aria-hidden="true"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${debugEnabled ? 'translate-x-4' : 'translate-x-0.5'}`}
+                />
+              </span>
+            </button>
+          </div>
+        )}
         {nomeAdmin && (
           <p className="px-3 text-xs text-gray-400 truncate" aria-label="Utente loggato">
             {nomeAdmin}
@@ -246,6 +340,15 @@ export default function NavbarAdmin({ nomeAdmin, ruolo, areaNome }: NavbarAdminP
   const router = useRouter()
   /* moreOpen controls the "Altro" overflow sheet on mobile */
   const [moreOpen, setMoreOpen] = useState(false)
+  const [debugVersion, setDebugVersion] = useState(0)
+  const debugEnabled = useSyncExternalStore(
+    () => () => {},
+    () => {
+      void debugVersion
+      return readDebugCookie()
+    },
+    () => false
+  )
 
   async function handleLogout() {
     const supabase = createClient()
@@ -258,10 +361,20 @@ export default function NavbarAdmin({ nomeAdmin, ruolo, areaNome }: NavbarAdminP
     return pathname.startsWith(href)
   }
 
+  function handleToggleDebug() {
+    const next = !debugEnabled
+    writeDebugCookie(next)
+    setDebugVersion((value) => value + 1)
+    setMoreOpen(false)
+    router.refresh()
+  }
+
   /* Compute nav items based on role */
   const effectiveRuolo = ruolo ?? 'manager'
+  const isAdmin = effectiveRuolo === 'admin'
+  const debugNavItems = isAdmin && debugEnabled ? DEBUG_NAV_ITEMS : []
   const navItems = effectiveRuolo === 'admin' ? ADMIN_NAV_ITEMS : MANAGER_NAV_ITEMS
-  const moreItems = effectiveRuolo === 'admin' ? [] : MANAGER_MORE_ITEMS
+  const moreItems = effectiveRuolo === 'admin' ? debugNavItems : MANAGER_MORE_ITEMS
   const allNavItems = effectiveRuolo === 'admin' ? ADMIN_NAV_ITEMS : [...MANAGER_NAV_ITEMS, ...MANAGER_MORE_ITEMS]
 
   /* Is any secondary item currently active? Used to highlight "Altro" */
@@ -281,7 +394,11 @@ export default function NavbarAdmin({ nomeAdmin, ruolo, areaNome }: NavbarAdminP
           nomeAdmin={nomeAdmin}
           areaNome={areaNome}
           allNavItems={allNavItems}
+          debugNavItems={debugNavItems}
+          showDebugToggle={isAdmin}
+          debugEnabled={debugEnabled}
           onLinkClick={() => {}}
+          onToggleDebug={handleToggleDebug}
           onLogout={handleLogout}
         />
       </aside>
@@ -376,6 +493,24 @@ export default function NavbarAdmin({ nomeAdmin, ruolo, areaNome }: NavbarAdminP
               )}
               {areaNome && (
                 <p className="text-xs font-medium text-blue-600 mt-0.5">{areaNome}</p>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleToggleDebug}
+                  className="mt-2 w-full flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  aria-pressed={debugEnabled}
+                >
+                  <span className="font-medium">Abilita debug</span>
+                  <span
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors ${debugEnabled ? 'bg-amber-500' : 'bg-gray-200'}`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${debugEnabled ? 'translate-x-4' : 'translate-x-0.5'}`}
+                    />
+                  </span>
+                </button>
               )}
             </div>
 

@@ -42,6 +42,14 @@ function LoginForm() {
     // Reset failed attempts on successful login
     setFailedAttempts(0)
 
+    const trackLoginResponse = await fetch('/api/auth/track-login', {
+      method: 'POST',
+      credentials: 'same-origin',
+    })
+    if (!trackLoginResponse.ok) {
+      console.error('Impossibile sincronizzare l’ultimo login.')
+    }
+
     // Legge il ruolo per decidere il redirect
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profile } = await supabase

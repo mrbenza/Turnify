@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-type DebugAction = 'summary' | 'listUsers' | 'getUserById' | 'batchGetUserById' | 'batchGetUserByIdSequential' | 'batchGetUserByIdLimited' | 'rpcLastSignIns'
+type DebugAction = 'summary' | 'listUsers' | 'getUserById' | 'batchGetUserById' | 'batchGetUserByIdSequential' | 'batchGetUserByIdLimited'
 
 type AppUserRow = {
   id: string
@@ -77,57 +77,6 @@ async function fetchUsersLimited(serviceClient: ReturnType<typeof createServiceC
   return results
 }
 
-async function fetchLastSignInsViaRpc(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  ruolo: string,
-  areaId: string | null,
-  limit: number,
-  offset: number
-) {
-  const { data: appUsers, count, error: appUsersError } = await loadScopedUsers(
-    supabase,
-    ruolo,
-    areaId,
-    limit,
-    offset
-  )
-
-  if (appUsersError) {
-    return {
-      ok: false,
-      error: { message: appUsersError.message },
-      count: null,
-      rows: [] as Array<Record<string, unknown>>,
-    }
-  }
-
-  const users = (appUsers ?? []) as AppUserRow[]
-  const ids = users.map((row) => row.id)
-  const { data: authRows, error: rpcError } = await supabase.rpc('get_auth_last_sign_ins', {
-    p_user_ids: ids,
-  })
-
-  const lastSignIns = new Map(
-    ((authRows ?? []) as Array<{ user_id: string; last_sign_in_at: string | null }>).map((row) => [
-      row.user_id,
-      row.last_sign_in_at,
-    ])
-  )
-
-  return {
-    ok: !rpcError,
-    error: rpcError ? { message: rpcError.message } : null,
-    count: count ?? null,
-    rows: users.map((appUser) => ({
-      id: appUser.id,
-      email: appUser.email,
-      ruolo: appUser.ruolo,
-      area_id: appUser.area_id,
-      last_sign_in_at: lastSignIns.get(appUser.id) ?? null,
-    })),
-  }
-}
-
 export async function GET(request: Request) {
   const supabase = await createClient()
 
@@ -142,7 +91,7 @@ export async function GET(request: Request) {
     .eq('id', user.id)
     .single<{ ruolo: string; area_id: string | null }>()
 
-  if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
+  if (profile?.ruolo !== 'admin') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
 
@@ -274,40 +223,10 @@ export async function GET(request: Request) {
     })
   }
 
-  if (action === 'rpcLastSignIns') {
-    const startedAt = Date.now()
-    const rpcResult = await fetchLastSignInsViaRpc(
-      supabase,
-      profile.ruolo,
-      profile.area_id,
-      limit,
-      offset
-    )
-
-    return NextResponse.json({
-      viewer: {
-        id: user.id,
-        ruolo: profile.ruolo,
-        area_id: profile.area_id,
-      },
-      request: { action, limit, offset },
-      service_role_configured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-      result: {
-        ok: rpcResult.ok,
-        error: rpcResult.error,
-        total_users_matching_scope: rpcResult.count,
-        fetched_from_public_users: rpcResult.rows.length,
-        elapsed_ms: Date.now() - startedAt,
-        rows: rpcResult.rows,
-      },
-    })
-  }
-
   const { data: page25Data, error: page25Error } = await serviceClient.auth.admin.listUsers({ page: 1, perPage: 25 })
   const { data: page50Data, error: page50Error } = await serviceClient.auth.admin.listUsers({ page: 1, perPage: 50 })
   const { data: page75Data, error: page75Error } = await serviceClient.auth.admin.listUsers({ page: 1, perPage: 75 })
   const { data: viewerAuthData, error: viewerAuthError } = await serviceClient.auth.admin.getUserById(user.id)
-  const rpcData = await fetchLastSignInsViaRpc(supabase, profile.ruolo, profile.area_id, 25, 74)
 
   return NextResponse.json({
     viewer: {
@@ -350,12 +269,6 @@ export async function GET(request: Request) {
         total: page75Data?.total ?? null,
         next_page: page75Data?.nextPage ?? null,
       },
-    },
-    rpc_last_sign_ins: {
-      ok: rpcData.ok,
-      error: rpcData.error,
-      fetched_from_public_users: rpcData.rows.length,
-      sample: rpcData.rows.slice(0, 5),
     },
   })
 }

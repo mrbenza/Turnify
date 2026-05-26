@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { EquityScore } from '@/lib/supabase/types'
 import DrawerStoricoDipendente from './DrawerStoricoDipendente'
@@ -36,7 +36,7 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
-  async function fetchScores(month: number, year: number, mode: 'month' | 'all') {
+  const fetchScores = useCallback(async (month: number, year: number, mode: 'month' | 'all') => {
     setLoading(true)
     setErrorMsg(null)
     try {
@@ -54,12 +54,11 @@ export default function GraficoEquita({ initialScores, initialMonth, initialYear
     } finally {
       setLoading(false)
     }
-  }
+  }, [areaId])
 
   useEffect(() => {
-    fetchScores(filterMonth, filterYear, viewMode)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterMonth, filterYear, viewMode])
+    void fetchScores(filterMonth, filterYear, viewMode)
+  }, [fetchScores, filterMonth, filterYear, viewMode])
 
   /* Sort by score ascending (lower score = priority) */
   const sorted = [...scores].sort((a, b) => a.score - b.score)

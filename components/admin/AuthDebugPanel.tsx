@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-type DebugAction = 'summary' | 'listUsers' | 'getUserById' | 'batchGetUserById' | 'batchGetUserByIdSequential' | 'batchGetUserByIdLimited' | 'rpcLastSignIns'
+type DebugAction = 'summary' | 'listUsers' | 'getUserById' | 'batchGetUserById' | 'batchGetUserByIdSequential' | 'batchGetUserByIdLimited'
 type ErrorSummary = { status: string | null; name: string | null; message: string | null }
 
 function buildUrl(
@@ -26,7 +26,7 @@ function buildUrl(
     params.set('userId', userId.trim())
   }
 
-  if (action === 'batchGetUserById' || action === 'batchGetUserByIdSequential' || action === 'batchGetUserByIdLimited' || action === 'rpcLastSignIns') {
+  if (action === 'batchGetUserById' || action === 'batchGetUserByIdSequential' || action === 'batchGetUserByIdLimited') {
     params.set('limit', limit || '25')
     params.set('offset', offset || '0')
   }
@@ -120,7 +120,7 @@ export default function AuthDebugPanel() {
     setCopyState('idle')
   }
 
-  const isBatchAction = action === 'batchGetUserById' || action === 'batchGetUserByIdSequential' || action === 'batchGetUserByIdLimited' || action === 'rpcLastSignIns'
+  const isBatchAction = action === 'batchGetUserById' || action === 'batchGetUserByIdSequential' || action === 'batchGetUserByIdLimited'
 
   return (
     <div className="space-y-4">
@@ -138,7 +138,6 @@ export default function AuthDebugPanel() {
             <option value="batchGetUserById">batchGetUserById</option>
             <option value="batchGetUserByIdSequential">batchGetUserByIdSequential</option>
             <option value="batchGetUserByIdLimited">batchGetUserByIdLimited</option>
-            <option value="rpcLastSignIns">rpcLastSignIns</option>
           </select>
         </label>
 
@@ -219,9 +218,6 @@ export default function AuthDebugPanel() {
           <div className="font-medium">Modalita batch</div>
           <p className="mt-1 text-blue-800">
             Usa `public.users` come base e poi chiama `getUserById` su ogni riga caricata. Ora puoi confrontare parallelo, sequenziale e concorrenza limitata.
-          </p>
-          <p className="mt-2 text-blue-800">
-            `rpcLastSignIns` usa invece una RPC Postgres che legge `auth.users.last_sign_in_at` senza passare da `auth.admin.*`.
           </p>
         </div>
       </div>

@@ -48,7 +48,6 @@ function inactivityLabel(disattivatoAt: string | null): { label: string; isOld: 
 interface ListaUtentiProps {
   initialUsers: User[]
   currentUserId: string
-  lastLogins: { id: string; last_sign_in_at: string | null }[]
   isManager?: boolean
   areas?: Area[]
 }
@@ -56,7 +55,7 @@ interface ListaUtentiProps {
 type SortKey = 'nome' | 'email' | 'ruolo' | 'area' | 'last_login' | 'attivo'
 type SortDirection = 'asc' | 'desc'
 
-export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, isManager = false, areas = [] }: ListaUtentiProps) {
+export default function ListaUtenti({ initialUsers, currentUserId, isManager = false, areas = [] }: ListaUtentiProps) {
   const [dipendentes, setUsers] = useState<User[]>(initialUsers)
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -73,14 +72,6 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
     [areas]
   )
   const isAdmin = areas.length > 0
-
-  /* Build a fast lookup map for last logins */
-  const lastLoginMap = useMemo(
-    () => new Map<string, string | null>(
-      lastLogins.map(({ id, last_sign_in_at }) => [id, last_sign_in_at])
-    ),
-    [lastLogins]
-  )
 
   const filtered = useMemo(() => dipendentes.filter((u) => {
     if (filterAreaId && u.area_id !== filterAreaId) return false
@@ -120,8 +111,8 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
           break
         }
         case 'last_login': {
-          const loginA = lastLoginMap.get(a.id)
-          const loginB = lastLoginMap.get(b.id)
+          const loginA = a.last_login_at
+          const loginB = b.last_login_at
           const timeA = loginA ? new Date(loginA).getTime() : -1
           const timeB = loginB ? new Date(loginB).getTime() : -1
           comparison = timeA - timeB
@@ -136,7 +127,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
 
       return comparison * direction
     })
-  }, [areaMap, filtered, lastLoginMap, sortDirection, sortKey])
+  }, [areaMap, filtered, sortDirection, sortKey])
 
   function handleSort(nextKey: SortKey) {
     if (sortKey === nextKey) {
@@ -363,7 +354,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
                     </td>
                   )}
                   <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell text-xs">
-                    {formatDate(lastLoginMap.get(dipendente.id) ?? null)}
+                    {formatDate(dipendente.last_login_at)}
                   </td>
                   <td className="py-3 px-4 sm:px-2">
                     <div className="flex items-center gap-2">
@@ -434,7 +425,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, lastLogins, i
           areas={areas}
           onClose={() => setShowAddModal(false)}
           onAdded={(newUser) => {
-            setUsers((prev) => [...prev, newUser])
+            setUsers((prev) => [...prev, { ...newUser, last_login_at: newUser.last_login_at ?? null }])
             setShowAddModal(false)
           }}
         />
