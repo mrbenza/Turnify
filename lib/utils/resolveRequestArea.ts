@@ -12,7 +12,7 @@ type Profile = { ruolo: string; area_id: string | null }
  *
  * Uso nelle route:
  *   const result = resolveRequestArea(profile, bodyAreaId)
- *   if (result instanceof NextResponse) return result
+ *   if (typeof result !== 'string') return result
  *   const effectiveAreaId = result
  */
 export function resolveRequestArea(

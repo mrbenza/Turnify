@@ -68,9 +68,13 @@ export async function PATCH(
       )
     }
 
+    const roleUpdate = body.ruolo === 'admin'
+      ? { ruolo: body.ruolo as UserRole, area_id: null }
+      : { ruolo: body.ruolo as UserRole }
+
     const { data, error } = await serviceClient
       .from('users')
-      .update({ ruolo: body.ruolo as UserRole })
+      .update(roleUpdate)
       .eq('id', id)
       .select()
       .single()

@@ -32,7 +32,6 @@ import { createClient } from '@/lib/supabase/server'
 
 const MANAGER_ID = 'manager-1'
 const AREA_A = 'area-a'
-const AREA_B = 'area-b'
 const SHIFT_ID = 'shift-1'
 
 const mockParams = { params: Promise.resolve({ id: SHIFT_ID }) }

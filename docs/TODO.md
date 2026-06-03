@@ -8,15 +8,26 @@ Funzionalita da implementare in ordine di priorita.
 
 *(Nessun item — tutto completato)*
 
+### Denormalizzare ultimo login in `public.users`
+- **Obiettivo**: aggiungere `public.users.last_login_at` per rendere la UI amministrativa indipendente da `auth.users`
+- **Motivazione**: il dato di ultimo accesso serviva operativamente a manager e admin, ma prima viveva fuori dalla tabella applicativa principale
+- **Vantaggi attesi**:
+  1. query utenti completamente lineari da `public.users`
+  2. nessuna dipendenza runtime da RPC/Auth per la colonna "Ultimo login"
+  3. semplificazione futura di filtri, export e reportistica amministrativa
+- **Passi previsti**:
+  1. ✅ migration schema: `alter table public.users add column last_login_at timestamptz null` (`019_users_last_login_at.sql`)
+  2. ✅ backfill iniziale da `auth.users.last_sign_in_at` (`019_users_last_login_at.sql`)
+  3. ✅ sync in scrittura al login riuscito tramite `POST /api/auth/track-login`
+  4. ✅ migrazione di `/admin/utenti` da RPC a `public.users.last_login_at`
+
 ---
 
 ## Bug noti (non bloccanti)
 
-### Utenti admin con area_id valorizzato
-- **Sintomo**: alcuni account admin (es. `admin3@turnify.test`) hanno `area_id` non null nel DB, mentre per design gli admin non devono avere area assegnata (scope globale).
-- **Impatto**: nessuno — il codice ignora `profile.area_id` per gli admin. Non causa errori né comportamenti scorretti.
-- **Fix**: azzerare manualmente `area_id = NULL` per tutti gli admin con area assegnata.
-- **SQL**: `UPDATE public.users SET area_id = NULL WHERE ruolo = 'admin' AND area_id IS NOT NULL;`
+### ✅ Utenti admin con area_id valorizzato — RISOLTO (2026-06-03)
+- **Fix**: migration `021_admin_area_null.sql` rimuove il `NOT NULL` da `users.area_id`, azzera `area_id` sugli admin esistenti e aggiunge il vincolo `users_admin_area_null`.
+- **Guardia applicativa**: `POST /api/users` e `PATCH /api/users/[id]` forzano `area_id = NULL` quando il ruolo è `admin`.
 
 ---
 
@@ -88,13 +99,14 @@ Funzionalita da implementare in ordine di priorita.
 
 5. **Aggiornare README e docs post-security-hardening** — Allineare la documentazione al comportamento reale dopo le correzioni di immutabilità (locked/confirmed), validazione copertura al lock, e hardening RLS area-aware.
 
+6. **Valutare sessione inattività “rigida”** — Opzione futura: dopo 10 minuti di inattività, al primo refresh/interazione successiva la sessione deve essere considerata scaduta e l’utente deve tornare a `/login`. Da trattare come scelta di prodotto/UX, non come fix urgente.
+
 ---
 
-### `GraficoEquita.tsx` — `fetchScores` non in dep array di useEffect
+### ✅ `GraficoEquita.tsx` — `fetchScores` allineata al dep array di `useEffect` (2026-05-26)
 - **File**: `components/admin/statistiche/GraficoEquita.tsx`
-- **Problema**: `fetchScores` è definita dentro il componente e usata nell'`useEffect`, ma non inserita nel dep array per evitare loop infiniti. La regola `react-hooks/exhaustive-deps` è soppressa con `eslint-disable`.
-- **Fix corretto**: wrappare `fetchScores` in `useCallback` con i suoi parametri come dipendenze, poi inserirla nel dep array dell'effect.
-- **Impatto attuale**: nessuno funzionale — il comportamento è corretto. Solo debito tecnico.
+- **Correzione applicata**: `fetchScores` è stata wrappata in `useCallback([areaId])` e l'`useEffect` usa ora un dep array completo senza soppressione `eslint-disable`.
+- **Esito**: warning `react-hooks/exhaustive-deps` rimosso, comportamento invariato.
 
 ---
 

@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   }
 
   const areaResult = resolveRequestArea(profile, body.area_id)
-  if (areaResult instanceof NextResponse) return areaResult
+  if (typeof areaResult !== 'string') return areaResult
   const effectiveAreaId = areaResult
 
   if (action !== 'lock' && action !== 'unlock') {

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   }
 
   const areaResult = resolveRequestArea(profile, bodyAreaId)
-  if (areaResult instanceof NextResponse) return areaResult
+  if (typeof areaResult !== 'string') return areaResult
   const effectiveAreaId = areaResult
 
   // Validate date format

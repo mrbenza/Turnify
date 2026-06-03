@@ -75,10 +75,12 @@ export async function POST(request: Request) {
   // service_role: auth.admin.createUser() + INSERT users — non esposto dal client anon
   const serviceClient = createServiceClient()
 
-  // Admin può specificare un'area diversa nel body (es. import storico); manager usa sempre la sua area
-  const areaId = (callerProfile.ruolo === 'admin' && typeof body.area_id === 'string' && body.area_id)
-    ? body.area_id
-    : callerProfile.area_id
+  // Admin applicativo globale: nessuna area propria. Dipendenti/manager restano area-scoped.
+  const areaId = ruolo === 'admin'
+    ? null
+    : (callerProfile.ruolo === 'admin' && typeof body.area_id === 'string' && body.area_id)
+      ? body.area_id
+      : callerProfile.area_id
 
   const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
     email,
