@@ -1,5 +1,5 @@
 -- ============================================================
--- schema.sql — Schema completo Turnify (migrations 001-016)
+-- schema.sql — Schema completo Turnify (migrations 001-021)
 -- Idempotente: DROP POLICY IF EXISTS prima di ogni CREATE.
 --
 -- Per un DB completamente vuoto: eseguire questo file.
@@ -24,7 +24,8 @@ create table if not exists public.users (
   attivo          boolean     not null default true,
   data_creazione  timestamptz not null default now(),
   disattivato_at  timestamptz,
-  area_id         uuid        -- FK aggiunta dopo creazione areas (migration 013)
+  last_login_at   timestamptz,
+  area_id         uuid        -- FK aggiunta dopo creazione areas (migration 013); nullable per admin globali (migration 021)
 );
 
 -- ============================================================
@@ -142,6 +143,8 @@ create table if not exists public.email_settings (
 -- ============================================================
 alter table public.users        add constraint users_area_id_fkey
   foreign key (area_id) references public.areas(id) on delete restrict;
+alter table public.users        add constraint users_admin_area_null
+  check (ruolo <> 'admin' or area_id is null);
 alter table public.shifts       add constraint shifts_area_id_fkey
   foreign key (area_id) references public.areas(id) on delete restrict;
 alter table public.availability add constraint availability_area_id_fkey

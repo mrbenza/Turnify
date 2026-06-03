@@ -11,7 +11,7 @@
 -- ============================================================
 
 -- ============================================================
--- 0. Festività 2024 (2025 e 2026 già nel schema_completo.sql)
+-- 0. Festività 2024 (2025 e 2026 già nello schema base)
 -- ============================================================
 INSERT INTO public.holidays (date, name, mandatory) VALUES
   ('2024-01-01', 'Capodanno',               true),

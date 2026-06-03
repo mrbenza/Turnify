@@ -28,25 +28,21 @@ La pagina [`/admin/utenti`](/home/jack/turnify/app/admin/utenti/page.tsx) ora fu
 
 1. lista utenti da `public.users`
 2. aree e filtri da `public.areas` / `public.users`
-3. ultimo login da `auth.users.last_sign_in_at` tramite RPC `public.get_auth_last_sign_ins(uuid[])`
+3. ultimo login da `public.users.last_login_at`
 
 Motivo:
 - `supabase.auth.admin.listUsers()` e `supabase.auth.admin.getUserById()` si sono rivelate instabili sul dataset reale
-- la lettura via SQL server-side su `auth.users` e` risultata stabile anche su tutti gli utenti
+- il dato e` stato denormalizzato in `public.users.last_login_at` per rendere la UI indipendente da Auth Admin/RPC a runtime
 
 Canali coinvolti:
 - `supabase.auth.*` = login/sessione utente corrente
-- `supabase.auth.admin.*` = Admin API Supabase Auth, non usata piu` in `/admin/utenti` per l'ultimo login
-- `supabase.rpc('get_auth_last_sign_ins', ...)` = canale attuale per leggere `last_sign_in_at`
+- `POST /api/auth/track-login` = sincronizza `public.users.last_login_at` dopo login riuscito
+- `supabase.auth.admin.*` = Admin API Supabase Auth, usata solo per create/delete utenti e strumenti diagnostici
 
 Supporto diagnostico:
 - pagina: `/admin/test`
 - route: `/api/debug/auth`
-- usate per confrontare Admin API e RPC SQL
-
-Nota futura:
-- il progetto non ha ancora `public.users.last_login_at`
-- la denormalizzazione in `public.users` resta un TODO esplicito
+- usate per confrontare chiamate Auth Admin in casi di diagnosi manuale
 
 ---
 
@@ -178,9 +174,14 @@ turnify/
         ├── 011_areas.sql
         ├── 012_reperibile_order.sql
         ├── 013_multi_area.sql
-        ├── 014_email_settings_area_id.sql
-        ├── 015_areas_template_manager.sql
-        └── 016_rls_area_aware.sql
+        ├── 014_equity_scores_area.sql
+        ├── 015_email_settings_area.sql
+        ├── 016_rls_area_aware.sql
+        ├── 017_storico_abilitato.sql
+        ├── 018_auth_last_sign_ins_rpc.sql
+        ├── 019_users_last_login_at.sql
+        ├── 020_drop_auth_last_sign_ins_rpc.sql
+        └── 021_admin_area_null.sql
 ```
 
 ---
@@ -273,11 +274,12 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 | email | text | unique |
 | ruolo | text | `admin` \| `manager` \| `dipendente` |
 | attivo | boolean | default true |
-| area_id | uuid | FK → areas.id |
+| area_id | uuid | FK → areas.id; nullable solo per admin globali |
 | disattivato_at | timestamptz | nullable; impostato quando `attivo` viene messo a false |
 | data_creazione | timestamptz | default now() |
+| last_login_at | timestamptz | nullable; aggiornato da `POST /api/auth/track-login` |
 
-Nota: oggi `public.users` non contiene ancora `last_login_at`. In `/admin/utenti` il dato mostrato come ultimo login arriva da `auth.users.last_sign_in_at` tramite RPC `get_auth_last_sign_ins(uuid[])`.
+Nota: gli admin sono globali e devono avere `area_id = NULL`; il vincolo `users_admin_area_null` impedisce nuovi admin con area assegnata.
 
 ### `areas`
 | Colonna | Tipo | Note |
@@ -422,9 +424,14 @@ BREVO_SENDER_NAME=       # nome mittente (default: "Turnify")
 | `011_areas.sql` | Tabella `areas` con scheduling_mode e workers_per_day; riga "Default" inserita automaticamente |
 | `012_reperibile_order.sql` | Colonna `reperibile_order` su shifts (1 = col D, 2 = col E) |
 | `013_multi_area.sql` | `area_id` su users/shifts/availability/month_status; unique (month, year, area_id) |
-| `014_email_settings_area_id.sql` | `area_id NOT NULL` su email_settings; unique(email, area_id) |
-| `015_areas_template_manager.sql` | `template_path` e `manager_id` su areas |
-| `016_rls_area_aware.sql` | RLS area-aware su tutte le tabelle; manager solo SELECT su users (privilege escalation prevention) |
+| `014_equity_scores_area.sql` | `get_equity_scores` accetta `p_area_id` |
+| `015_email_settings_area.sql` | `area_id NOT NULL` su email_settings; unique(email, area_id) |
+| `016_rls_area_aware.sql` | RLS area-aware su tutte le tabelle |
+| `017_storico_abilitato.sql` | Flag `storico_abilitato` su aree |
+| `018_auth_last_sign_ins_rpc.sql` | RPC legacy per diagnosi ultimo login |
+| `019_users_last_login_at.sql` | Denormalizzazione `last_login_at` su `public.users` |
+| `020_drop_auth_last_sign_ins_rpc.sql` | Rimozione RPC legacy dopo migrazione UI |
+| `021_admin_area_null.sql` | Admin globali con `area_id = NULL` e vincolo `users_admin_area_null` |
 
 3. Configurare le variabili d'ambiente (`.env.local` in sviluppo, pannello Vercel in produzione)
 4. Creare il primo admin: Authentication → Users → Add user, poi inserire riga in `users` con `ruolo = 'admin'`
@@ -447,12 +454,37 @@ Vedi `docs/TODO.md` per il backlog completo.
 
 ### Debito tecnico (non urgente)
 - Centralizzare helper auth server-side (`requireUser`, `requireAdminOrManager`, `requireArea`)
-- Introdurre test automatici per i casi business critici (lock, immutabilita, isolamento area)
+- Mantenere test automatici per i casi business critici (lock, immutabilita, isolamento area)
 - Strato unico di validazione input nelle route critiche
 
 ---
 
 ## Changelog
+
+### [2026-06-03] - CODE AGENT - Bonifica admin globali, cleanup orfani e docs
+
+**File modificati:**
+- `supabase/migrations/021_admin_area_null.sql`
+- `app/api/users/route.ts`
+- `app/api/users/[id]/route.ts`
+- `app/api/month/route.ts`
+- `app/api/shifts/route.ts`
+- `lib/utils/resolveRequestArea.ts`
+- `eslint.config.mjs`
+- `.gitignore`
+- `README.md`
+- `docs/TODO.md`
+- `docs/ARCHITECTURE.md`
+- `docs/SHEET_SCHEMA.md`
+- `supabase/schema.sql`
+
+**Sommario:** gli admin sono trattati come utenti globali senza area. La migration 021 rimuove il `NOT NULL` da `public.users.area_id`, azzera l'area sugli admin e aggiunge il vincolo `users_admin_area_null`. Rimosso dal repository l'output generato `frontend/.next`.
+
+**Verifica Supabase remoto:** progetto `turnify` (`aqzzmzvomjjrxpndtlya`) allineato: `auth.users = 173`, `public.users = 173`, zero profili/Auth orfani, zero admin con area. Eliminato l'utente Auth orfano `testcompare@turnify.test`.
+
+**Status:** Completato
+
+---
 
 ### [2026-04-09] - CODE AGENT - Ultimo login utenti via RPC SQL + ordinamento tabella utenti
 
@@ -465,7 +497,7 @@ Vedi `docs/TODO.md` per il backlog completo.
 - `components/admin/AuthDebugPanel.tsx`
 - `app/admin/test/page.tsx`
 
-**Sommario:** `/admin/utenti` non usa piu` `auth.admin.listUsers()` per leggere l'ultimo login. Il dato arriva da una RPC SQL che legge `auth.users.last_sign_in_at`. La tabella utenti supporta anche l'ordinamento per colonna.
+**Sommario storico:** `/admin/utenti` non usa piu` `auth.admin.listUsers()` per leggere l'ultimo login. In questa fase il dato arrivava da una RPC SQL che leggeva `auth.users.last_sign_in_at`; dalla migration 019 la UI legge invece `public.users.last_login_at`.
 
 **Dettagli:**
 1. Nuova RPC `public.get_auth_last_sign_ins(uuid[])` con `SECURITY DEFINER`, accessibile solo ad admin/manager autenticati.

@@ -28,6 +28,7 @@ Funzionalita da implementare in ordine di priorita.
 ### ✅ Utenti admin con area_id valorizzato — RISOLTO (2026-06-03)
 - **Fix**: migration `021_admin_area_null.sql` rimuove il `NOT NULL` da `users.area_id`, azzera `area_id` sugli admin esistenti e aggiunge il vincolo `users_admin_area_null`.
 - **Guardia applicativa**: `POST /api/users` e `PATCH /api/users/[id]` forzano `area_id = NULL` quando il ruolo è `admin`.
+- **Verifica remota (2026-06-03)**: Supabase `turnify` allineato (`auth.users = 173`, `public.users = 173`), zero profili/Auth orfani, zero admin con area. Eliminato l'utente Auth orfano `testcompare@turnify.test`.
 
 ---
 
@@ -97,7 +98,7 @@ Funzionalita da implementare in ordine di priorita.
 
 4. **Strato unico di validazione input** — Unificare la validazione dei parametri delle route critiche (date, mese/anno, tipi enumerati) in utility condivise per ridurre duplicazioni e rischio di discrepanze.
 
-5. **Aggiornare README e docs post-security-hardening** — Allineare la documentazione al comportamento reale dopo le correzioni di immutabilità (locked/confirmed), validazione copertura al lock, e hardening RLS area-aware.
+5. ✅ **Aggiornare README e docs post-security-hardening** — Documentazione riallineata a schema remoto, `last_login_at`, admin globali e cleanup file generati/orfani. (2026-06-03)
 
 6. **Valutare sessione inattività “rigida”** — Opzione futura: dopo 10 minuti di inattività, al primo refresh/interazione successiva la sessione deve essere considerata scaduta e l’utente deve tornare a `/login`. Da trattare come scelta di prodotto/UX, non come fix urgente.
 
@@ -127,7 +128,7 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 
 ## Completato
 
-- **[2026-03-26] Security hardening — API cross-area + RLS area-aware (migration 016)** — `DELETE /api/shifts/[id]`: query filtrata per `area_id` per i manager (admin: accesso totale). `POST /api/shifts`: verifica che `user_id` appartenga all'area del manager — 403 se cross-area. `GET /api/users/[id]/shifts`: storico visibile al manager solo per utenti della propria area — 403 se cross-area. `supabase/migrations/016_rls_area_aware.sql`: nuove funzioni `current_user_area_id()` e `is_manager()`; policy RLS riscritte per shifts, availability, month_status, users, email_settings con separazione admin/manager per area. `supabase/schema_completo.sql`: aggiornato a migrations 001–016.
+- **[2026-03-26] Security hardening — API cross-area + RLS area-aware (migration 016)** — `DELETE /api/shifts/[id]`: query filtrata per `area_id` per i manager (admin: accesso totale). `POST /api/shifts`: verifica che `user_id` appartenga all'area del manager — 403 se cross-area. `GET /api/users/[id]/shifts`: storico visibile al manager solo per utenti della propria area — 403 se cross-area. `supabase/migrations/016_rls_area_aware.sql`: nuove funzioni `current_user_area_id()` e `is_manager()`; policy RLS riscritte per shifts, availability, month_status, users, email_settings con separazione admin/manager per area. `supabase/schema.sql`: aggiornato progressivamente con le migration applicative.
 - **[2026-03-26] Fix sun_next_sat: distanza Dom→Sab corretta (±6)** — `CalendarioGlobale.tsx` `getPairedDate`: blocco `sun_next_sat` precede `holiday`, distanza corretta `d+6`. `app/api/shifts/route.ts`: rimossa `isHolidayOnWeekend` che forzava `weekend_full` in `sun_next_sat`. Rimozione turno: `handleRemove` agisce solo sul giorno cliccato (no pairing inverso). DB: disponibilità Area4 aprile 2026 allineate alle coppie corrette.
 - **[2026-03-26] Multi-area completamento** — `import-shifts/route.ts`: area matching a 3 livelli (esatto → ilike → normalizzato). `import-shifts/resolve/route.ts`: `area_id` dal body (fix area Default). `users/route.ts`: `area_id` opzionale nel body. `users/[id]/route.ts`: cambio ruolo sincronizza `areas.manager_id`. `generateTurniExcel.ts`: nome file `Area4_Marzo_2026.xlsx`, A1 uppercase parte corta, team leader C51. `CalendarioGlobale.tsx`: navigazione mesi filtrata per area. `lib/utils/sort.ts`: `sortByNome` con Intl.Collator numeric. `ListaUtenti.tsx`: ricerca per nome. `app/user/page.tsx`: nome area nel saluto. `NavbarAdmin.tsx`: fix import pkg.version. Template rinominato `template_turni.xlsx` con A1/C51 universali.
 - **[2026-03-25] Import storico area-aware** — `app/api/import-shifts/route.ts`: lettura nome area da cella A1 e cognome manager da B51. Match area per nome (ilike) con cross-check manager; fallback automatico per cognome manager se il nome area non viene riconosciuto. Filtro dipendenti per `area_id` durante la costruzione del `cognomeMap`. `area_id` incluso in ogni record inserito in `shifts`. `month_status` aggiornato per `(month, year, area_id)`. Fix bug cascata in `PATCH /api/areas/[id]`: aggiornamento area ora precede gli effetti collaterali sul manager, eliminando lo stato inconsistente in caso di errore sul nome duplicato.

@@ -39,11 +39,14 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | email | text UNIQUE | |
 | ruolo | enum | `admin` \| `manager` \| `dipendente` |
 | attivo | boolean | default true |
-| area_id | uuid FK areas | area di appartenenza |
+| area_id | uuid FK areas \| null | area di appartenenza; null solo per admin globali |
 | data_creazione | timestamptz | default now() |
 | disattivato_at | timestamptz\|null | |
+| last_login_at | timestamptz\|null | denormalizzato da `auth.users.last_sign_in_at` |
 
-**Nota ultimo login:** `public.users` non contiene ancora `last_login_at`. La pagina `/admin/utenti` legge oggi `auth.users.last_sign_in_at` tramite RPC `public.get_auth_last_sign_ins(uuid[])`.
+**Nota ultimo login:** la migration 019 aggiunge `public.users.last_login_at` con backfill iniziale da `auth.users.last_sign_in_at`. La pagina `/admin/utenti` legge ora direttamente questa colonna applicativa.
+
+**Nota admin globali:** la migration 021 rende `users.area_id` nullable, azzera l'area sugli admin e aggiunge `users_admin_area_null` per impedire admin con area assegnata.
 
 ### `holidays`
 | Colonna | Tipo | Note |
@@ -126,9 +129,6 @@ get_equity_scores(p_month int, p_year int)    -- RPC usata da statistiche
   → { user_id, nome, turni_totali, festivi, score }
   -- score = turni_totali + festivi*2
   -- p_month=0 → all-time (ignora filtro mese/anno)
-get_auth_last_sign_ins(p_user_ids uuid[])     -- RPC usata da /admin/utenti
-  → { user_id, last_sign_in_at }
-  -- legge auth.users.last_sign_in_at senza passare da auth.admin.*
 ```
 
 ### RLS (sintesi) — area-aware (migration 016)
@@ -230,8 +230,7 @@ createServiceClient() // service role, mai esposto al browser
 
 **Nota `/admin/utenti`:**
 - non usa piu` `auth.admin.listUsers()` per l'ultimo login
-- usa `supabase.rpc('get_auth_last_sign_ins', { p_user_ids })`
-- il vecchio approccio con `auth.admin.listUsers({ perPage: 1000 })` e` lasciato commentato in `app/admin/utenti/page.tsx` per tracciabilita`
+- legge `public.users.last_login_at`
 
 Ogni `createServiceClient()` nel codebase è documentato con commento `// service_role: <motivo>`.
 
@@ -286,11 +285,11 @@ Database  // tipo completo Supabase con Tables + Functions
 
 | Pagina | Ruolo | Query principali | Componenti montati |
 |--------|-------|-----------------|-------------------|
-| `/admin` | admin/manager | users, auth.listUsers, storage templates (admin) oppure month_status, shifts, availability (manager) | Dashboard diversa per ruolo |
+| `/admin` | admin/manager | users, storage templates (admin) oppure month_status, shifts, availability (manager) | Dashboard diversa per ruolo |
 | `/admin/disponibilita` | admin/manager | users attivi, availability, shifts, holidays, month_status mese corrente; accetta `searchParams.area` per filtrare per area | `CalendarioGlobale`, `AreaSelector` |
 | `/admin/turni` | admin/manager | users, shifts, month_status mese corrente | `ListaTurni` |
 | `/admin/export` | admin/manager | users, storage templates | `ExportForm` |
-| `/admin/utenti` | admin/manager | users (tutti), RPC `get_auth_last_sign_ins` (last login) | `ListaUtenti` |
+| `/admin/utenti` | admin/manager | users (tutti, inclusa colonna `last_login_at`) | `ListaUtenti` |
 | `/admin/statistiche` | admin/manager | RPC get_equity_scores mese corrente | `GraficoEquita` |
 | `/admin/impostazioni` | admin/manager | email_settings | `GestioneEmail`, `GestioneArea`, `ImportaStorico` (solo manager) |
 | `/admin/sistema` | admin | storage templates, holidays | `GestioneTemplate`, `AggiornamentoCalendario`, `ImportaStorico` |
@@ -546,7 +545,7 @@ turnify/
 │   ├── TODO.md
 │   └── AGENTS.md
 └── supabase/
-    ├── schema_completo.sql
+    ├── schema.sql
     ├── seed_demo.sql
     ├── reset.sql
     └── migrations/
@@ -554,7 +553,12 @@ turnify/
         ├── 011_areas.sql   (tabella areas: scheduling_mode, workers_per_day, template_path, manager_id; riga Default)
         ├── 012_reperibile_order.sql  (colonna reperibile_order su shifts: 1=col D, 2=col E)
         ├── 013_multi_area.sql  (area_id su users/shifts/availability/month_status; unique month+year+area_id)
-        ├── 014_email_settings_area_id.sql  (area_id NOT NULL su email_settings; unique(email, area_id))
-        ├── 015_areas_template_manager.sql  (template_path e manager_id su areas)
-        └── 016_rls_area_aware.sql  (current_user_area_id() e is_manager(); RLS area-aware su tutte le tabelle; manager solo SELECT su users — privilege escalation prevention; API route usano serviceClient per tutte le write su public.users)
+        ├── 014_equity_scores_area.sql  (get_equity_scores con p_area_id)
+        ├── 015_email_settings_area.sql  (area_id NOT NULL su email_settings; unique(email, area_id))
+        ├── 016_rls_area_aware.sql  (current_user_area_id() e is_manager(); RLS area-aware su tutte le tabelle)
+        ├── 017_storico_abilitato.sql  (flag import storico per area)
+        ├── 018_auth_last_sign_ins_rpc.sql  (RPC legacy diagnostica ultimo login)
+        ├── 019_users_last_login_at.sql  (denormalizzazione ultimo login su public.users)
+        ├── 020_drop_auth_last_sign_ins_rpc.sql  (rimozione RPC legacy)
+        └── 021_admin_area_null.sql  (admin globali con area_id NULL e vincolo users_admin_area_null)
 ```

@@ -16,7 +16,8 @@ Anagrafica utenti della piattaforma.
 | ruolo | text | `admin` \| `manager` \| `dipendente` (constraint aggiornato in migration 009) |
 | attivo | boolean | default true — disattivare invece di cancellare |
 | data_creazione | timestamptz | default now() |
-| area_id | uuid | FK → areas.id ON DELETE RESTRICT (migration 013) |
+| last_login_at | timestamptz | nullable — denormalizzato da `auth.users.last_sign_in_at` (migration 019) |
+| area_id | uuid | nullable solo per admin globali; FK → areas.id ON DELETE RESTRICT (migrations 013, 021) |
 
 **Indici:** `email` (unique), `area_id`
 **RLS:**
@@ -188,34 +189,6 @@ score = turni_totali + (festivi_attivi x 2)
 
 ---
 
-## Funzione RPC: `get_auth_last_sign_ins`
-Legge l'ultimo login reale da `auth.users` per una lista di utenti applicativi.
-
-**Firma:** `get_auth_last_sign_ins(p_user_ids uuid[])`
-
-**Campi restituiti:**
-- `user_id`
-- `last_sign_in_at`
-
-**Uso attuale:**
-- `/admin/utenti` carica prima la lista da `public.users`
-- poi passa tutti gli `id` alla RPC
-- infine costruisce la mappa `id -> last_sign_in_at`
-
-**Motivazione tecnica:**
-- le Admin API Supabase Auth (`auth.admin.listUsers`, `auth.admin.getUserById`) si sono rivelate instabili sul dataset reale
-- la lettura SQL via RPC da `auth.users` e` risultata stabile
-
-**Controlli di accesso:**
-- richiede `auth.role() = 'authenticated'`
-- richiede `public.is_admin_or_manager() = true`
-
-**Nota evolutiva:**
-- questa RPC e` la soluzione corrente
-- il possibile step successivo e` denormalizzare il dato in `public.users.last_login_at`
-
----
-
 ## Query di riferimento (CODE AGENT)
 
 ```sql
@@ -263,3 +236,6 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-03-24 | Multi-area: `area_id` su users/shifts/availability/month_status; unique (month,year,area_id) | 013_multi_area.sql |
 | 2026-03-25 | `area_id` su email_settings: POST include area_id, PATCH/DELETE filtrano per area_id (ownership check per area) | (API change, no migration) |
 | 2026-04-01 | `storico_abilitato` (boolean, NOT NULL, DEFAULT true) su `areas`: se false blocca import storico via API 403 e mostra overlay blur in UI | 017_storico_abilitato.sql |
+| 2026-05-26 | `users.last_login_at` denormalizzato con backfill iniziale da `auth.users.last_sign_in_at` | 019_users_last_login_at.sql |
+| 2026-05-26 | Rimossa RPC legacy `get_auth_last_sign_ins` dopo migrazione completa della UI su `users.last_login_at` | 020_drop_auth_last_sign_ins_rpc.sql |
+| 2026-06-03 | `users.area_id` nullable per admin globali, bonifica admin esistenti e vincolo `users_admin_area_null` | 021_admin_area_null.sql |
