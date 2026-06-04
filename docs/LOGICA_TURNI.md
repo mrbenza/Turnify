@@ -165,23 +165,22 @@ Mese B: fetchAuxData → get_equity_scores conta gia i turni di Mese A
 
 ```mermaid
 flowchart TD
-    A([Manager clicca\nConferma mese]) --> B{Tutti i giorni\nweekend e festivi attivi\nhanno almeno 1 turno?}
+    A([Manager clicca\nSalva mese]) --> B{Tutti i giorni\nweekend e festivi attivi\nhanno almeno 1 turno?}
 
     B -- No --> C[Errore:\nlista giorni scoperti]
     B -- Si --> D[POST /api/month\naction: lock]
 
     D --> E[month_status → 'locked']
     E --> F[Mese immutabile:\nnessuna aggiunta/rimozione\npossibile]
-    F --> G[Manager va su Invio turni]
-
-    G --> H[GET /api/export\nGenera Excel da template]
-    H --> I[Download file XLSX]
-    I --> J[month_status → 'confirmed'\nimpostato automaticamente]
+    F --> G[Manager va su Invio turni\ne controlla l'anteprima]
+    G --> H[POST /api/month\naction: confirm]
+    H --> I[month_status → 'confirmed']
+    I --> J[Excel ed email\ndisponibili come opzioni]
 ```
 
-**Un mese locked non puo essere modificato.** Puo essere sbloccato dal manager tramite il pulsante "Annulla conferma", che riporta lo stato a `open`.
+**Un mese locked non puo essere modificato.** Puo essere riaperto dal manager tramite il pulsante "Modifica mese", che riporta lo stato a `open`.
 
-**Stato `confirmed`**: impostato automaticamente dall'API `/api/export` quando il manager scarica il file Excel. Indica che il mese e stato esportato. Le colonne `email_inviata` e `email_inviata_at` su `month_status` sono presenti ma non ancora usate (in attesa dell'integrazione Resend).
+**Stato `confirmed`**: impostato esplicitamente dalla pagina Invio turni dopo il controllo dell'anteprima. Solo un amministratore puo riaprire il mese. Download Excel e invio email sono operazioni opzionali e non modificano lo stato.
 
 ---
 

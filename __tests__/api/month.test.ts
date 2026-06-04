@@ -4,6 +4,8 @@
  * Casi coperti:
  * - lock con copertura incompleta → 422
  * - lock con copertura completa → 200
+ * - confirm mese open → 409
+ * - confirm mese locked → 200
  * - unlock mese confirmed come manager → 403
  * - unlock mese confirmed come admin → 200
  */
@@ -51,7 +53,7 @@ function mockRequest(body: object) {
 // Test
 // ──────────────────────────────────────────────
 
-describe('POST /api/month — lock / unlock', () => {
+describe('POST /api/month — lock / confirm / unlock', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('lock: copertura incompleta → 422 con messaggio esplicito', async () => {
@@ -135,6 +137,56 @@ describe('POST /api/month — lock / unlock', () => {
     expect(res.status).toBe(403)
     const body = await res.json()
     expect(body.error).toMatch(/amministratore/i)
+  })
+
+  it('confirm: mese open → 409', async () => {
+    const client = makeSupabaseMock({
+      user: { id: MANAGER_ID },
+      tables: {
+        users: [ok({ ruolo: 'manager', area_id: AREA_ID })],
+      },
+    })
+    const serviceClient = makeSupabaseMock({
+      user: null,
+      tables: {
+        month_status: [ok({ id: 'ms-1', status: 'open' })],
+      },
+    })
+
+    vi.mocked(createClient).mockResolvedValue(client as never)
+    vi.mocked(createServiceClient).mockReturnValue(serviceClient as never)
+
+    const res = await POST(mockRequest({ month: 3, year: 2026, action: 'confirm', area_id: AREA_ID }))
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error).toMatch(/salvato/i)
+  })
+
+  it('confirm: mese locked → 200', async () => {
+    const client = makeSupabaseMock({
+      user: { id: MANAGER_ID },
+      tables: {
+        users: [ok({ ruolo: 'manager', area_id: AREA_ID })],
+      },
+    })
+    const serviceClient = makeSupabaseMock({
+      user: null,
+      tables: {
+        month_status: [
+          ok({ id: 'ms-1', status: 'locked' }),
+          { data: null, error: null },
+        ],
+        availability: [{ data: null, error: null }],
+      },
+    })
+
+    vi.mocked(createClient).mockResolvedValue(client as never)
+    vi.mocked(createServiceClient).mockReturnValue(serviceClient as never)
+
+    const res = await POST(mockRequest({ month: 3, year: 2026, action: 'confirm', area_id: AREA_ID }))
+
+    expect(res.status).toBe(200)
   })
 
   it('unlock: admin può sbloccare mese confirmed → 200', async () => {

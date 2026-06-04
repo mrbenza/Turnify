@@ -354,7 +354,7 @@ export default function CalendarioGlobale({
     }
   }
 
-  /* ---- Lock month ---- */
+  /* ---- Save month ---- */
   async function handleLockMonth() {
     setErrorMsg(null)
     const uncovered = getUncoveredDays()
@@ -376,8 +376,8 @@ export default function CalendarioGlobale({
       }
       setLocked(true)
     } catch (err) {
-      console.error('Errore conferma mese:', err)
-      setErrorMsg('Errore durante la conferma del mese.')
+      console.error('Errore salvataggio mese:', err)
+      setErrorMsg('Errore durante il salvataggio del mese.')
     } finally {
       setLockingMonth(false)
     }
@@ -953,7 +953,7 @@ export default function CalendarioGlobale({
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-                {isConfirmed ? 'Mese chiuso' : 'Mese confermato'}
+                {isConfirmed ? 'Mese confermato' : 'Mese salvato'}
               </span>
               {(!isConfirmed || isAdmin) && (
                 <button
@@ -963,7 +963,7 @@ export default function CalendarioGlobale({
                   aria-label="Sblocca il mese"
                 >
                   {unlockingMonth ? <Spinner small /> : null}
-                  {isConfirmed ? 'Sblocca' : 'Annulla conferma'}
+                  {isConfirmed ? 'Sblocca' : 'Modifica mese'}
                 </button>
               )}
             </>
@@ -972,14 +972,14 @@ export default function CalendarioGlobale({
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Da confermare
+              Da salvare
             </span>
           ) : (
             <button
               onClick={handleLockMonth}
               disabled={lockingMonth || loadingMonth}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
-              aria-label="Conferma e blocca il mese corrente"
+              aria-label="Salva e blocca il mese corrente"
             >
               {lockingMonth ? (
                 <Spinner small />
@@ -988,7 +988,7 @@ export default function CalendarioGlobale({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}
-              Conferma mese
+              Salva mese
             </button>
           )}
         </div>
@@ -1475,20 +1475,20 @@ export default function CalendarioGlobale({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12A9 9 0 113 12a9 9 0 0118 0z" />
               </svg>
               <h4 className="text-sm font-semibold text-gray-900">
-                {isConfirmed ? 'Sblocca mese confermato?' : 'Annulla conferma mese?'}
+                {isConfirmed ? 'Sblocca mese confermato?' : 'Modifica mese salvato?'}
               </h4>
             </div>
             <p className="text-sm text-gray-600 mb-4">
               {isConfirmed
                 ? 'Attenzione: il mese è già stato confermato. Sbloccandolo tornerà modificabile e l\'email dovrà essere reinviata.'
-                : 'Sei sicuro? Il mese tornerà modificabile e potranno essere apportate nuove modifiche.'}
+                : 'Il mese salvato tornerà modificabile e potranno essere apportate nuove modifiche.'}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={handleUnlockMonth}
                 className="flex-1 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
               >
-                Sì, annulla conferma
+                {isConfirmed ? 'Sì, sblocca' : 'Sì, modifica'}
               </button>
               <button
                 onClick={() => setShowUnlockDialog(false)}
@@ -1516,4 +1516,3 @@ function LegendChip({ color, label }: { color: string; label: string }) {
     </span>
   )
 }
-

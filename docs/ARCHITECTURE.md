@@ -73,8 +73,8 @@ Aggiornare dopo ogni modifica strutturale significativa.
 
 **Semantica status:**
 - `open` → modificabile, nessun lock
-- `locked` → bloccato dal manager; **immutabile** — availability/shifts/import bloccati con 422. Sbloccabile da manager o admin.
-- `confirmed` → definitivo dopo export Excel o invio email; **immutabile** come `locked`. Sbloccabile solo da admin.
+- `locked` → mese salvato dal manager; **immutabile** — availability/shifts/import bloccati. Sbloccabile da manager o admin.
+- `confirmed` → confermato e pubblicato esplicitamente da Invio turni; **immutabile** come `locked`. Sbloccabile solo da admin.
 
 ### `availability`
 | Colonna | Tipo | Note |
