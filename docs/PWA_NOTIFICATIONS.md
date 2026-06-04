@@ -27,6 +27,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
 | PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Da fare | Testare almeno Edge desktop e Android |
 | PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Da fare | Evitare l'attivazione globale senza osservabilita |
+| PWA-12 | Pagina diagnostica admin | Vista Debug per utenti, subscription, consegne e azioni diagnostiche | Da fare | Identificazione dispositivi esclusivamente tramite `user_agent`; dati sensibili mascherati |
 
 ## Decisioni aperte
 
@@ -258,8 +259,10 @@ accessibili direttamente dal client Supabase:
 - nessuna policy diretta per `anon` o `authenticated`;
 - letture e scritture effettuate esclusivamente da API Next.js autenticate;
 - le API usano il service client dopo avere verificato utente, ruolo e area;
-- manager e admin possono ricevere solo conteggi aggregati, mai endpoint,
-  chiavi `p256dh` o segreti `auth`.
+- i manager possono ricevere solo conteggi aggregati;
+- gli admin possono consultare i dati diagnostici tramite una pagina dedicata,
+  ma non possono visualizzare endpoint completi, chiavi `p256dh` o segreti
+  `auth`.
 
 Le chiavi VAPID non vengono salvate nel database:
 
@@ -280,3 +283,58 @@ Le chiavi VAPID non vengono salvate nel database:
 3. aggiornare i tipi in `lib/supabase/types.ts`;
 4. aggiungere test di vincoli, ownership e idempotenza;
 5. applicare e verificare la migration sul database solo dopo revisione.
+
+### Pagina diagnostica admin
+
+Viene aggiunta una pagina dedicata alle notifiche sotto la sezione `Debug`
+della navigazione admin.
+
+- percorso proposto: `/admin/test/notifiche`;
+- la voce e visibile solo quando il toggle Debug e attivo;
+- la pagina e le relative API verificano sempre `ruolo = admin`;
+- il toggle Debug controlla esclusivamente la visibilita della voce e non
+  rappresenta un'autorizzazione.
+
+Vista principale per utente:
+
+| Campo | Note |
+|---|---|
+| Utente | Nome ed email |
+| Area | Area corrente |
+| Dispositivi registrati | Totale subscription |
+| Dispositivi attivi | Subscription non revocate |
+| Ultima attivita | Massimo `last_seen_at` |
+| Ultima notifica | Evento piu recente |
+| Stato ultima notifica | `sent`, `partial`, `failed` |
+
+Dettaglio dispositivi:
+
+| Campo | Note |
+|---|---|
+| Browser e sistema operativo | Ricavati esclusivamente da `user_agent` |
+| Endpoint | Mostrato solo come dominio e suffisso mascherato |
+| Registrato il | `created_at` |
+| Ultima attivita | `last_seen_at` |
+| Ultimo invio riuscito | `last_success_at` |
+| Errori consecutivi | `failure_count` |
+| Revocato il | `revoked_at` |
+| Ultimo errore | Messaggio diagnostico sanificato |
+
+Non viene introdotto alcun nome dispositivo personalizzato. L'identificazione
+del dispositivo usa solamente il valore `user_agent`, che puo essere
+approssimativo.
+
+Azioni diagnostiche admin previste:
+
+- filtrare utenti o consegne con errori;
+- consultare lo storico notifiche di un utente;
+- revocare una subscription;
+- ritentare una consegna fallita;
+- inviare una notifica di test a una singola subscription.
+
+La pagina non mostra mai:
+
+- endpoint Web Push completo;
+- chiave `p256dh`;
+- segreto `auth`;
+- chiave privata VAPID.
