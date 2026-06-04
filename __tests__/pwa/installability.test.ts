@@ -30,5 +30,7 @@ describe('PWA installability', () => {
     expect(installPrompt).toContain('event.preventDefault()')
     expect(installPrompt).toContain('await installPrompt.prompt()')
     expect(installPrompt).toContain("'appinstalled'")
+    expect(installPrompt).toContain("pathname.startsWith('/admin')")
+    expect(installPrompt).toContain("pathname.startsWith('/user')")
   })
 })

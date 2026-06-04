@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 type InstallPromptEvent = Event & {
@@ -11,6 +12,7 @@ type InstallPromptEvent = Event & {
 const DISMISSED_KEY = 'turnify-install-prompt-dismissed'
 
 export default function PwaInstallPrompt() {
+  const pathname = usePathname()
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
 
   useEffect(() => {
@@ -46,7 +48,9 @@ export default function PwaInstallPrompt() {
     setInstallPrompt(null)
   }
 
-  if (!installPrompt) return null
+  const isAuthenticatedPage = pathname.startsWith('/admin') || pathname.startsWith('/user')
+
+  if (!installPrompt || !isAuthenticatedPage) return null
 
   return (
     <aside
