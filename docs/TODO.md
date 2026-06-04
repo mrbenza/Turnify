@@ -7,9 +7,10 @@ Funzionalita da implementare in ordine di priorita.
 ## Alta priorita
 
 ### PWA notifiche Web Push
-- **Stato**: PWA-02 completata sul ramo `feat/pwa`.
+- **Stato**: PWA-03 in corso sul ramo `feat/pwa`.
 - **Implementato e verificato**: tabelle `push_subscriptions`, `notification_events`, `notification_deliveries`; RLS senza accesso client; RPC atomica `confirm_month_and_create_notification_event`; indici delle chiavi esterne.
-- **Prossimo step**: PWA-03, rendere Turnify installabile con manifest, icone e service worker.
+- **Requisito futuro notifiche**: la subscription resta attiva anche dopo logout o oltre 20 giorni senza accessi; non dipende dalla sessione Supabase.
+- **Da verificare**: installazione PWA-03 su Edge desktop ed emulatore Android tramite ambiente HTTPS.
 
 ### Denormalizzare ultimo login in `public.users`
 - **Obiettivo**: aggiungere `public.users.last_login_at` per rendere la UI amministrativa indipendente da `auth.users`

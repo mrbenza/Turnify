@@ -18,7 +18,7 @@ dipendenti quando i turni di un mese vengono confermati.
 |---|---|---|---|---|
 | PWA-01 | Definire evento e destinatari | Regola univoca che stabilisce quando inviare la notifica e a chi | Completato | Evento generato dalla conferma definitiva del manager; destinatari: dipendenti attivi dell'area |
 | PWA-02 | Progettare persistenza notifiche | Schema DB, RLS e strategia per subscription multiple per utente | Completato | Migration applicate e verificate sul database; accesso riservato al service role |
-| PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati e service worker registrato | Da fare | Verificare installazione su Edge desktop e Android |
+| PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati e service worker registrato | In corso | Verificare installazione su Edge desktop e Android tramite ambiente HTTPS |
 | PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | Da fare | Il permesso deve essere richiesto dopo un'azione esplicita dell'utente |
 | PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Da fare | Uno stesso utente puo avere piu dispositivi/browser |
 | PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | Da fare | Conservare la chiave privata solo lato server |
@@ -37,6 +37,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | D-02 | Chi riceve la notifica? | Tutti i dipendenti attivi appartenenti all'area confermata | Completato |
 | D-03 | L'email resta attiva? | Resta disponibile come invio manuale opzionale, senza modificare lo stato del mese | Completato |
 | D-04 | Quali eventi conservare? | Conservare `month_published` e ogni `month_republished`; lo sblocco non genera notifiche | Completato |
+| D-05 | Quanto deve durare una subscription senza accessi recenti? | Deve restare attiva anche dopo logout o oltre 20 giorni senza accessi; viene revocata solo esplicitamente o dopo risposta `404`/`410` dal push service | Completato |
 
 ## Bug e rischi da controllare
 
@@ -191,8 +192,10 @@ Regole:
 - una nuova registrazione dello stesso endpoint aggiorna la riga esistente;
 - una subscription revocata non viene usata per nuovi invii;
 - risposte push `404` o `410` impostano `revoked_at`;
-- il logout revoca la subscription del browser corrente, senza modificare gli
-  altri dispositivi dell'utente.
+- il logout non revoca la subscription: le notifiche devono poter arrivare
+  anche dopo lunghi periodi senza accessi;
+- la subscription viene revocata solo su richiesta esplicita dell'utente o
+  quando il push service restituisce `404` o `410`.
 
 ### Tabella `notification_events`
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import AuthGuard from "@/components/AuthGuard";
+import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { Analytics } from '@vercel/analytics/react'; // Nota: usa /react o /next è indifferente nelle versioni recenti
 
 const geistSans = Geist({
@@ -12,6 +13,17 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "Turnify",
   description: "Gestione turni di reperibilità",
+  manifest: "/manifest.webmanifest",
+  applicationName: "Turnify",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Turnify",
+  },
+};
+
+export const viewport = {
+  themeColor: "#1d4ed8",
 };
 
 export default function RootLayout({
@@ -25,12 +37,12 @@ export default function RootLayout({
         className={`${geistSans.variable} antialiased`}
       >
         <AuthGuard />
+        <ServiceWorkerRegistrar />
         {children}
         <Analytics />
       </body>
     </html>
   );
 }
-
 
 
