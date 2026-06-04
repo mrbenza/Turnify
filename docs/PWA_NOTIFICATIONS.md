@@ -17,7 +17,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | ID | Step | Risultato atteso | Stato | Note |
 |---|---|---|---|---|
 | PWA-01 | Definire evento e destinatari | Regola univoca che stabilisce quando inviare la notifica e a chi | Completato | Evento generato dalla conferma definitiva del manager; destinatari: dipendenti attivi dell'area |
-| PWA-02 | Progettare persistenza notifiche | Schema DB, RLS e strategia per subscription multiple per utente | Da fare | Tabelle candidate: `push_subscriptions` e `notification_events` |
+| PWA-02 | Progettare persistenza notifiche | Schema DB, RLS e strategia per subscription multiple per utente | Completato | Tre tabelle: `push_subscriptions`, `notification_events`, `notification_deliveries` |
 | PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati e service worker registrato | Da fare | Verificare installazione su Edge desktop e Android |
 | PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | Da fare | Il permesso deve essere richiesto dopo un'azione esplicita dell'utente |
 | PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Da fare | Uno stesso utente puo avere piu dispositivi/browser |
@@ -154,3 +154,129 @@ Lo step 4:
 - non modifica lo stato del mese;
 - non genera notifiche push;
 - non e necessario per completare il flusso operativo.
+
+## Specifica PWA-02: persistenza notifiche
+
+La persistenza e divisa in tre responsabilita:
+
+1. registrare i browser e dispositivi abilitati;
+2. registrare una singola pubblicazione logica del mese;
+3. registrare l'esito dell'invio a ogni subscription.
+
+### Tabella `push_subscriptions`
+
+Una riga rappresenta una subscription Web Push di uno specifico browser o
+dispositivo. Uno stesso utente puo avere piu righe.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | uuid PK | Identificativo interno |
+| `user_id` | uuid FK users | `ON DELETE CASCADE` |
+| `endpoint` | text UNIQUE | Endpoint Web Push completo |
+| `p256dh` | text | Chiave pubblica della subscription |
+| `auth` | text | Segreto auth della subscription |
+| `expiration_time` | timestamptz nullable | Se fornito dal browser |
+| `user_agent` | text nullable | Informazione diagnostica |
+| `created_at` | timestamptz | Data prima registrazione |
+| `updated_at` | timestamptz | Data ultimo aggiornamento |
+| `last_seen_at` | timestamptz | Ultima conferma dal browser |
+| `last_success_at` | timestamptz nullable | Ultimo invio riuscito |
+| `failure_count` | integer | Errori consecutivi |
+| `revoked_at` | timestamptz nullable | Subscription disattivata |
+
+Regole:
+
+- `endpoint` e univoco globalmente;
+- una nuova registrazione dello stesso endpoint aggiorna la riga esistente;
+- una subscription revocata non viene usata per nuovi invii;
+- risposte push `404` o `410` impostano `revoked_at`;
+- il logout revoca la subscription del browser corrente, senza modificare gli
+  altri dispositivi dell'utente.
+
+### Tabella `notification_events`
+
+Una riga rappresenta una pubblicazione logica di un mese, non un singolo invio.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | uuid PK | Identificativo evento |
+| `event_type` | text | `month_published` oppure `month_republished` |
+| `area_id` | uuid FK areas | Area destinataria |
+| `month` | integer | 1-12 |
+| `year` | integer | Anno del mese |
+| `publication_number` | integer | 1 per prima pubblicazione, crescente per ripubblicazioni |
+| `created_by` | uuid FK users | Manager o admin che conferma |
+| `created_at` | timestamptz | Data creazione evento |
+| `status` | text | `pending`, `sending`, `sent`, `partial`, `failed` |
+| `completed_at` | timestamptz nullable | Fine elaborazione |
+
+Vincolo di idempotenza:
+
+`UNIQUE (area_id, month, year, publication_number)`
+
+La prima conferma crea `publication_number = 1` e `month_published`. Una nuova
+conferma dopo lo sblocco amministrativo crea il numero successivo e
+`month_republished`. Import storico, export ed email non creano eventi.
+
+La transizione `locked -> confirmed` e la creazione dell'evento devono avvenire
+nella stessa transazione database, tramite una funzione server-side dedicata.
+Questo impedisce che richieste concorrenti creino pubblicazioni duplicate o un
+mese confermato senza il relativo evento.
+
+### Tabella `notification_deliveries`
+
+Una riga rappresenta il tentativo di consegna di un evento a una subscription.
+Serve per errori parziali, retry e controllo dei duplicati.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | uuid PK | Identificativo consegna |
+| `event_id` | uuid FK notification_events | `ON DELETE CASCADE` |
+| `subscription_id` | uuid FK push_subscriptions nullable | `ON DELETE SET NULL` |
+| `user_id` | uuid FK users nullable | Snapshot destinatario |
+| `status` | text | `pending`, `sent`, `failed`, `revoked` |
+| `attempts` | integer | Numero tentativi |
+| `last_attempt_at` | timestamptz nullable | Ultimo tentativo |
+| `sent_at` | timestamptz nullable | Consegna riuscita |
+| `http_status` | integer nullable | Risposta del push service |
+| `error` | text nullable | Messaggio diagnostico sanificato |
+
+Vincolo anti-duplicazione:
+
+`UNIQUE (event_id, subscription_id)`
+
+Le righe vengono create usando le subscription attive dei dipendenti attivi
+dell'area al momento della pubblicazione. In questo modo i destinatari
+dell'evento restano determinati anche se successivamente cambiano area o stato.
+
+### RLS e accesso
+
+Le tre tabelle contengono endpoint e dati operativi sensibili. Non saranno
+accessibili direttamente dal client Supabase:
+
+- RLS abilitata su tutte le tabelle;
+- nessuna policy diretta per `anon` o `authenticated`;
+- letture e scritture effettuate esclusivamente da API Next.js autenticate;
+- le API usano il service client dopo avere verificato utente, ruolo e area;
+- manager e admin possono ricevere solo conteggi aggregati, mai endpoint,
+  chiavi `p256dh` o segreti `auth`.
+
+Le chiavi VAPID non vengono salvate nel database:
+
+- chiave pubblica disponibile al browser tramite configurazione pubblica;
+- chiave privata conservata esclusivamente nelle variabili ambiente server.
+
+### Indici previsti
+
+- `push_subscriptions (user_id)` con filtro sulle righe non revocate;
+- `notification_events (area_id, year, month)`;
+- `notification_deliveries (event_id, status)`;
+- `notification_deliveries (subscription_id)`.
+
+### Ordine di implementazione
+
+1. creare una migration con tabelle, vincoli, indici e RLS;
+2. aggiornare `supabase/schema.sql`;
+3. aggiornare i tipi in `lib/supabase/types.ts`;
+4. aggiungere test di vincoli, ownership e idempotenza;
+5. applicare e verificare la migration sul database solo dopo revisione.
