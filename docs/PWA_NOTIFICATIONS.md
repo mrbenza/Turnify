@@ -17,7 +17,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | ID | Step | Risultato atteso | Stato | Note |
 |---|---|---|---|---|
 | PWA-01 | Definire evento e destinatari | Regola univoca che stabilisce quando inviare la notifica e a chi | Completato | Evento generato dalla conferma definitiva del manager; destinatari: dipendenti attivi dell'area |
-| PWA-02 | Progettare persistenza notifiche | Schema DB, RLS e strategia per subscription multiple per utente | Completato | Tre tabelle: `push_subscriptions`, `notification_events`, `notification_deliveries` |
+| PWA-02 | Progettare persistenza notifiche | Schema DB, RLS e strategia per subscription multiple per utente | Completato | Migration applicate e verificate sul database; accesso riservato al service role |
 | PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati e service worker registrato | Da fare | Verificare installazione su Edge desktop e Android |
 | PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | Da fare | Il permesso deve essere richiesto dopo un'azione esplicita dell'utente |
 | PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Da fare | Uno stesso utente puo avere piu dispositivi/browser |

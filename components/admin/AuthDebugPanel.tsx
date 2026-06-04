@@ -355,17 +355,6 @@ export default function AuthDebugPanel() {
             offset {value}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => {
-            setAction('rpcLastSignIns')
-            setLimit('25')
-            setOffset('74')
-          }}
-          className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-white"
-        >
-          rpc 25 @ 74
-        </button>
       </div>
 
       {errorSummary && (

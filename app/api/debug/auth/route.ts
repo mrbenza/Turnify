@@ -24,26 +24,26 @@ function formatAuthError(error: { name: string; message: string; status?: number
   }
 }
 
+function getPaginationValue(
+  data: object | null | undefined,
+  key: 'total' | 'nextPage' | 'lastPage'
+) {
+  if (!data || !(key in data)) return null
+  const value = (data as Record<string, unknown>)[key]
+  return typeof value === 'number' ? value : null
+}
+
 async function loadScopedUsers(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  ruolo: string,
-  areaId: string | null,
   limit: number,
   offset: number
 ) {
-  let usersQuery = supabase
+  return supabase
     .from('users')
     .select('id, email, ruolo, area_id', { count: 'exact' })
+    .neq('ruolo', 'admin')
     .order('nome', { ascending: true })
     .range(offset, offset + limit - 1)
-
-  if (ruolo === 'admin') {
-    usersQuery = usersQuery.neq('ruolo', 'admin')
-  } else {
-    usersQuery = usersQuery.eq('ruolo', 'dipendente').eq('area_id', areaId)
-  }
-
-  return usersQuery
 }
 
 async function fetchOneUser(serviceClient: ReturnType<typeof createServiceClient>, appUser: AppUserRow) {
@@ -147,9 +147,9 @@ export async function GET(request: Request) {
         ok: !error,
         error: formatAuthError(error),
         auth_user_count: data?.users.length ?? 0,
-        total: data?.total ?? null,
-        next_page: data?.nextPage ?? null,
-        last_page: data?.lastPage ?? null,
+        total: getPaginationValue(data, 'total'),
+        next_page: getPaginationValue(data, 'nextPage'),
+        last_page: getPaginationValue(data, 'lastPage'),
         sample: (data?.users ?? []).slice(0, 20).map((authUser) => ({
           id: authUser.id,
           email: authUser.email,
@@ -163,8 +163,6 @@ export async function GET(request: Request) {
     const startedAt = Date.now()
     const { data: appUsers, count, error: appUsersError } = await loadScopedUsers(
       supabase,
-      profile.ruolo,
-      profile.area_id,
       limit,
       offset
     )
@@ -252,22 +250,22 @@ export async function GET(request: Request) {
         ok: !page25Error,
         error: formatAuthError(page25Error),
         auth_user_count: page25Data?.users.length ?? 0,
-        total: page25Data?.total ?? null,
-        next_page: page25Data?.nextPage ?? null,
+        total: getPaginationValue(page25Data, 'total'),
+        next_page: getPaginationValue(page25Data, 'nextPage'),
       },
       page_50: {
         ok: !page50Error,
         error: formatAuthError(page50Error),
         auth_user_count: page50Data?.users.length ?? 0,
-        total: page50Data?.total ?? null,
-        next_page: page50Data?.nextPage ?? null,
+        total: getPaginationValue(page50Data, 'total'),
+        next_page: getPaginationValue(page50Data, 'nextPage'),
       },
       page_75: {
         ok: !page75Error,
         error: formatAuthError(page75Error),
         auth_user_count: page75Data?.users.length ?? 0,
-        total: page75Data?.total ?? null,
-        next_page: page75Data?.nextPage ?? null,
+        total: getPaginationValue(page75Data, 'total'),
+        next_page: getPaginationValue(page75Data, 'nextPage'),
       },
     },
   })

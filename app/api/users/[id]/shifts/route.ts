@@ -23,7 +23,7 @@ export type StoricoMese = {
 
 export type StoricoDipendente = {
   nome: string
-  area_id: string
+  area_id: string | null
   shifts: StoricoShift[]
   byMonth: StoricoMese[]
   byHoliday: { name: string; count: number; mandatory: boolean }[]

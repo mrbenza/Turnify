@@ -19,13 +19,16 @@ export async function GET() {
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
   }
+  if (!profile.area_id) {
+    return NextResponse.json({ scheduling_mode: 'weekend_full', workers_per_day: 2 })
+  }
 
   // service_role: PATCH usa UPDATE areas (no policy write); manteniamo coerenza nel file
   const serviceClient = createServiceClient()
   const { data, error } = await serviceClient
     .from('areas')
     .select('scheduling_mode, workers_per_day')
-    .eq('id', profile?.area_id)
+    .eq('id', profile.area_id)
     .single()
 
   if (error || !data) {
@@ -41,6 +44,9 @@ export async function PATCH(request: Request) {
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   if (profile?.ruolo !== 'admin' && profile?.ruolo !== 'manager') {
     return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 })
+  }
+  if (!profile.area_id) {
+    return NextResponse.json({ error: 'Configurazione non trovata' }, { status: 404 })
   }
 
   let body: { scheduling_mode?: string; workers_per_day?: number }
@@ -64,7 +70,7 @@ export async function PATCH(request: Request) {
 
   // Leggi ID della riga area dell'utente
   const { data: existing } = await serviceClient
-    .from('areas').select('id').eq('id', profile?.area_id).single()
+    .from('areas').select('id').eq('id', profile.area_id).single()
 
   if (!existing) {
     return NextResponse.json({ error: 'Configurazione non trovata' }, { status: 404 })

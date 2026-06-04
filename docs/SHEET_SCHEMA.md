@@ -164,6 +164,87 @@ Indirizzi email aggiuntivi che ricevono la notifica "mese confermato".
 
 ---
 
+## Tabella: `push_subscriptions`
+Subscription Web Push registrate dai browser degli utenti.
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| user_id | uuid | FK → users.id, ON DELETE CASCADE |
+| endpoint | text | unique, dato sensibile mai esposto in chiaro nella UI |
+| p256dh | text | chiave subscription, dato sensibile |
+| auth | text | segreto subscription, dato sensibile |
+| expiration_time | timestamptz | nullable |
+| user_agent | text | nullable, usato per identificazione diagnostica |
+| created_at | timestamptz | default now() |
+| updated_at | timestamptz | aggiornato automaticamente |
+| last_seen_at | timestamptz | ultima conferma dal browser |
+| last_success_at | timestamptz | ultimo invio riuscito, nullable |
+| failure_count | integer | errori consecutivi, default 0 |
+| revoked_at | timestamptz | nullable; subscription esclusa dagli invii |
+
+**RLS:** attiva senza policy client. Accesso esclusivo tramite `service_role`.
+
+---
+
+## Tabella: `notification_events`
+Eventi logici creati quando un mese viene confermato e pubblicato.
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| event_type | text | `month_published` \| `month_republished` |
+| area_id | uuid | FK → areas.id |
+| month | integer | 1-12 |
+| year | integer | >= 2024 |
+| publication_number | integer | progressivo per area/mese/anno |
+| created_by | uuid | FK → users.id |
+| created_at | timestamptz | default now() |
+| status | text | `pending` \| `sending` \| `sent` \| `partial` \| `failed` |
+| completed_at | timestamptz | nullable |
+
+**Constraint:** unique su `(area_id, month, year, publication_number)`.
+**RLS:** attiva senza policy client. Accesso esclusivo tramite `service_role`.
+
+---
+
+## Tabella: `notification_deliveries`
+Esito della consegna di un evento a una singola subscription.
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| event_id | uuid | FK → notification_events.id, ON DELETE CASCADE |
+| subscription_id | uuid | FK → push_subscriptions.id, nullable dopo cancellazione |
+| user_id | uuid | snapshot destinatario, nullable dopo cancellazione utente |
+| status | text | `pending` \| `sent` \| `failed` \| `revoked` |
+| attempts | integer | numero tentativi, default 0 |
+| last_attempt_at | timestamptz | nullable |
+| sent_at | timestamptz | nullable |
+| http_status | integer | nullable, 100-599 |
+| error | text | errore diagnostico sanificato, nullable |
+
+**Constraint:** unique su `(event_id, subscription_id)`.
+**RLS:** attiva senza policy client. Accesso esclusivo tramite `service_role`.
+
+---
+
+## Funzione RPC: `confirm_month_and_create_notification_event`
+Conferma atomicamente un mese `locked` e crea il relativo evento di
+pubblicazione.
+
+**Firma:** `confirm_month_and_create_notification_event(p_area_id uuid, p_month integer, p_year integer, p_created_by uuid)`
+
+- eseguibile esclusivamente da `service_role`;
+- usa `SECURITY INVOKER`;
+- blocca la riga `month_status` con `FOR UPDATE`;
+- richiede `month_status.status = 'locked'`;
+- approva le disponibilita pending del periodo;
+- imposta il mese a `confirmed`;
+- crea `month_published` alla prima pubblicazione e `month_republished` alle successive.
+
+---
+
 ## Funzione RPC: `get_equity_scores`
 Calcola lo score di equita per ogni dipendente attivo.
 
@@ -239,3 +320,4 @@ ORDER BY score ASC;  -- score basso = priorita alta
 | 2026-05-26 | `users.last_login_at` denormalizzato con backfill iniziale da `auth.users.last_sign_in_at` | 019_users_last_login_at.sql |
 | 2026-05-26 | Rimossa RPC legacy `get_auth_last_sign_ins` dopo migrazione completa della UI su `users.last_login_at` | 020_drop_auth_last_sign_ins_rpc.sql |
 | 2026-06-03 | `users.area_id` nullable per admin globali, bonifica admin esistenti e vincolo `users_admin_area_null` | 021_admin_area_null.sql |
+| 2026-06-04 | Tabelle Web Push, consegne, eventi e conferma mese atomica | 20260604132549_pwa_notification_storage.sql |

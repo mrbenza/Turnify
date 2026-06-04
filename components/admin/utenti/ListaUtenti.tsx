@@ -104,8 +104,8 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
           if (comparison === 0) comparison = collator.compare(a.nome, b.nome)
           break
         case 'area': {
-          const areaA = areaMap.get(a.area_id) ?? ''
-          const areaB = areaMap.get(b.area_id) ?? ''
+          const areaA = a.area_id ? areaMap.get(a.area_id) ?? '' : ''
+          const areaB = b.area_id ? areaMap.get(b.area_id) ?? '' : ''
           comparison = collator.compare(areaA, areaB)
           if (comparison === 0) comparison = collator.compare(a.nome, b.nome)
           break
@@ -350,7 +350,7 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
                   </td>
                   {isAdmin && (
                     <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell text-xs">
-                      {areaMap.get(dipendente.area_id) ?? '—'}
+                      {dipendente.area_id ? areaMap.get(dipendente.area_id) ?? '—' : '—'}
                     </td>
                   )}
                   <td className="py-3 px-4 sm:px-2 text-gray-500 hidden sm:table-cell text-xs">

@@ -38,7 +38,7 @@ export async function DELETE(
   const shiftQuery = supabase.from('shifts').select('date, area_id').eq('id', id)
   const { data: existingShift } = await (
     profile.ruolo !== 'admin'
-      ? shiftQuery.eq('area_id', profile.area_id)
+      ? shiftQuery.eq('area_id', profile.area_id!)
       : shiftQuery
   ).maybeSingle()
 
@@ -47,7 +47,7 @@ export async function DELETE(
     const shiftMonth = shiftDate.getUTCMonth() + 1
     const shiftYear = shiftDate.getUTCFullYear()
     // Per admin usa l'area_id del turno stesso (l'admin non ha area propria)
-    const effectiveAreaId = profile.ruolo === 'admin' ? existingShift.area_id : profile.area_id
+    const effectiveAreaId = profile.ruolo === 'admin' ? existingShift.area_id : profile.area_id!
 
     const { data: monthStatus } = await supabase
       .from('month_status')
@@ -68,7 +68,7 @@ export async function DELETE(
   // Filtra anche per area_id: un manager non può eliminare turni di altre aree
   const deleteQuery = supabase.from('shifts').delete().eq('id', id)
   const finalDelete = profile.ruolo !== 'admin'
-    ? deleteQuery.eq('area_id', profile.area_id)
+    ? deleteQuery.eq('area_id', profile.area_id!)
     : deleteQuery
   const { error } = await finalDelete
 
