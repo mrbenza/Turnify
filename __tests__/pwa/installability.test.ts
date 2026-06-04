@@ -49,6 +49,8 @@ describe('PWA installability', () => {
   it('shows pushes and opens their target page', () => {
     expect(serviceWorkerSource).toContain("self.addEventListener('push'")
     expect(serviceWorkerSource).toContain('self.registration.showNotification')
+    expect(serviceWorkerSource).toContain("action: 'open'")
+    expect(serviceWorkerSource).toContain('renotify: true')
     expect(serviceWorkerSource).toContain("self.addEventListener('notificationclick'")
     expect(serviceWorkerSource).toContain('self.clients.openWindow')
   })
