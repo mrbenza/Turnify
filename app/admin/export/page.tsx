@@ -40,7 +40,7 @@ export default async function ExportPage() {
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Invio turni</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Verifica, genera e invia il file Excel del mese
+              Controlla, conferma e pubblica i turni del mese
             </p>
           </div>
 

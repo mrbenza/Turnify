@@ -54,9 +54,11 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<string>(templates[0]?.name ?? '')
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [confirmingMonth, setConfirmingMonth] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [monthStatus, setMonthStatus] = useState<string | null>(null)
+  const [monthStatusLoaded, setMonthStatusLoaded] = useState(false)
   const [emailInviata, setEmailInviata] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [areaId, setAreaId] = useState<string | null>(null)
@@ -68,6 +70,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
   async function fetchMonthStatus(month: number, year: number, overrideAreaId?: string) {
     const currentAreaId = overrideAreaId ?? areaId
     if (!currentAreaId) return
+    setMonthStatusLoaded(false)
     try {
       const supabase = createClient()
       const { data } = await supabase
@@ -83,6 +86,9 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
       // Se admin ha sbloccato (status torna open/locked), reset visivo dell'email
       setEmailInviata(status === 'confirmed' && (data?.email_inviata ?? false))
     } catch { /* non bloccante */ }
+    finally {
+      setMonthStatusLoaded(true)
+    }
   }
 
   // Carica area_id utente al mount, poi fetch stato mese iniziale
@@ -150,8 +156,37 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     setFilterYear(year)
     setPreview(null)
     setMonthStatus(null)
+    setMonthStatusLoaded(false)
     setEmailInviata(false)
     await fetchMonthStatus(month, year, areaId ?? undefined)
+  }
+
+  /* ---- Confirm month ---- */
+  async function handleConfirmMonth() {
+    setConfirmingMonth(true)
+    setErrorMsg(null)
+    try {
+      const res = await fetch('/api/month', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: filterMonth + 1,
+          year: filterYear,
+          action: 'confirm',
+          area_id: areaId,
+        }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error ?? `Errore HTTP ${res.status}`)
+      }
+      setMonthStatus('confirmed')
+    } catch (err) {
+      console.error('Errore conferma mese:', err)
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante la conferma del mese.')
+    } finally {
+      setConfirmingMonth(false)
+    }
   }
 
   /* ---- Export XLSX ---- */
@@ -160,7 +195,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     setErrorMsg(null)
     try {
       const templateParam = selectedTemplate ? `&template=${encodeURIComponent(selectedTemplate)}` : ''
-      const res = await fetch(`/api/export?month=${filterMonth + 1}&year=${filterYear}${templateParam}&noEmail=true`)
+      const res = await fetch(`/api/export?month=${filterMonth + 1}&year=${filterYear}${templateParam}`)
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? `Errore HTTP ${res.status}`)
@@ -210,8 +245,8 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
     </svg>
   )
 
-  const canExport = monthStatus === 'locked' || monthStatus === 'confirmed'
-  const stepNum = templates.length > 1 ? { period: 1, template: 2, preview: 3, send: 4 } : { period: 1, template: 0, preview: 2, send: 3 }
+  const canConfirm = monthStatus === 'locked' && preview !== null
+  const canSend = monthStatus === 'confirmed'
 
   return (
     <div className="space-y-8">
@@ -219,7 +254,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
       {/* Step 1: Periodo */}
       <section aria-labelledby="step-period-heading">
         <h2 id="step-period-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">{stepNum.period}</span>
+          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">1</span>
           Seleziona il periodo
         </h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -254,10 +289,9 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
 
       {/* Template selector — only when multiple */}
       {templates.length > 1 && (
-        <section aria-labelledby="step-template-heading">
-          <h2 id="step-template-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">{stepNum.template}</span>
-            Seleziona template
+        <section aria-labelledby="template-heading">
+          <h2 id="template-heading" className="text-sm font-semibold text-gray-700 mb-3">
+            Template Excel <span className="text-xs font-normal text-gray-400">(opzionale)</span>
           </h2>
           <select
             value={selectedTemplate}
@@ -271,20 +305,30 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
       )}
 
       {/* Stato mese — banner informativo */}
-      {monthStatus !== null && monthStatus !== 'locked' && monthStatus !== 'confirmed' && (
+      {monthStatusLoaded && monthStatus !== 'locked' && monthStatus !== 'confirmed' && (
         <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
           <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
           </svg>
-          Il mese non è ancora confermato. Prima di esportare, conferma il mese dal Calendario.
+          Il mese non è ancora salvato. Salvalo dalla pagina Disponibilità prima di confermarlo.
+        </div>
+      )}
+      {monthStatus === 'locked' && (
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+          Il mese è salvato e pronto per la conferma definitiva.
+        </div>
+      )}
+      {monthStatus === 'confirmed' && (
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">
+          Il mese è confermato e pubblicato.
         </div>
       )}
 
-      {/* Step 2: Anteprima */}
+      {/* Step 2: Controllo */}
       <section aria-labelledby="step-preview-heading">
         <h2 id="step-preview-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">{stepNum.preview}</span>
-          Anteprima turni
+          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">2</span>
+          Controlla turni
         </h2>
 
         {!preview && !loadingPreview && (
@@ -408,14 +452,57 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
         <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5" role="alert">{errorMsg}</p>
       )}
 
-      {/* Step 3: Genera e scarica */}
-      <section aria-labelledby="step-send-heading">
-        <h2 id="step-send-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">{stepNum.send}</span>
-          Genera ed invia
+      {/* Step 3: Conferma definitiva */}
+      <section aria-labelledby="step-confirm-heading">
+        <h2 id="step-confirm-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">3</span>
+          Conferma mese
         </h2>
 
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-5">
+        <div className="border border-gray-200 rounded-xl p-5">
+          <p className="text-sm text-gray-700">
+            Dopo la conferma, turni e disponibilità non potranno più essere modificati dal manager.
+            Solo un amministratore potrà riaprire il mese.
+          </p>
+          <div className="mt-4">
+            {monthStatus === 'confirmed' ? (
+              <span className="inline-flex items-center gap-2 text-sm font-medium text-green-700">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Mese confermato
+              </span>
+            ) : (
+              <button
+                onClick={handleConfirmMonth}
+                disabled={confirmingMonth || !canConfirm}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                {confirmingMonth ? <Spinner /> : null}
+                {confirmingMonth ? 'Conferma in corso...' : 'Conferma e pubblica'}
+              </button>
+            )}
+          </div>
+          {monthStatus !== 'confirmed' && (
+            <p className="text-xs text-gray-500 mt-2">
+              {monthStatus !== 'locked'
+                ? 'Prima salva il mese dalla pagina Disponibilità.'
+                : preview === null
+                  ? 'Carica e controlla l’anteprima prima della conferma.'
+                  : 'Il mese è pronto per la conferma definitiva.'}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Step 4: Genera e invia */}
+      <section aria-labelledby="step-send-heading">
+        <h2 id="step-send-heading" className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">4</span>
+          Genera e invia <span className="text-xs font-normal text-gray-400">(opzionale)</span>
+        </h2>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
           <div className="flex items-start gap-4">
             <span className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
@@ -427,12 +514,12 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
                 {MONTH_NAMES[filterMonth]} {filterYear}
               </p>
               <p className="text-xs text-gray-500 mt-0.5">
-                Genera il file Excel dal template aziendale — formattazione, logo e struttura originali preservati.
+                Dopo la conferma puoi scaricare il file Excel o inviare manualmente l&apos;email.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={handleExport}
-                  disabled={exporting || !canExport}
+                  disabled={exporting || !canSend}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                   aria-label={`Genera Excel turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
                 >
@@ -456,7 +543,7 @@ export default function ExportForm({ users, templates }: ExportFormProps) {
                 ) : (
                   <button
                     onClick={handleSendEmail}
-                    disabled={sendingEmail || !canExport}
+                    disabled={sendingEmail || !canSend}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-blue-300 text-blue-700 bg-white text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                     aria-label={`Invia email turni ${MONTH_NAMES[filterMonth]} ${filterYear}`}
                   >

@@ -40,8 +40,8 @@ export async function POST(request: Request) {
   if (typeof areaResult !== 'string') return areaResult
   const effectiveAreaId = areaResult
 
-  if (action !== 'lock' && action !== 'unlock') {
-    return NextResponse.json({ error: 'Valore action non valido. Atteso: lock | unlock' }, { status: 400 })
+  if (action !== 'lock' && action !== 'confirm' && action !== 'unlock') {
+    return NextResponse.json({ error: 'Valore action non valido. Atteso: lock | confirm | unlock' }, { status: 400 })
   }
 
   if (!Number.isInteger(month) || month < 1 || month > 12) {
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   const serviceClient = createServiceClient()
 
   // ----------------------------------------------------------------
-  // Validazione copertura: solo per action === 'lock'
+  // Validazione copertura: solo per il salvataggio reversibile (action === 'lock')
   // Ogni sabato, domenica e festività obbligatoria del mese deve avere
   // esattamente workers_per_day turni assegnati.
   // ----------------------------------------------------------------
@@ -120,18 +120,13 @@ export async function POST(request: Request) {
         const plural = uncovered.length === 1 ? 'o' : 'i'
         return NextResponse.json(
           {
-            error: `Impossibile confermare: ${uncovered.length} giorn${plural} senza copertura completa (${workersPerDay} reperibili richiesti): ${uncovered.map(fmt).join(', ')}`,
+            error: `Impossibile salvare: ${uncovered.length} giorn${plural} senza copertura completa (${workersPerDay} reperibili richiesti): ${uncovered.map(fmt).join(', ')}`,
           },
           { status: 422 }
         )
       }
     }
   }
-
-  const lockPayload =
-    action === 'lock'
-      ? { status: 'locked' as const, locked_by: user.id, locked_at: new Date().toISOString() }
-      : { status: 'open' as const, locked_by: null, locked_at: null, email_inviata: false, email_inviata_at: null }
 
   // Verifica se il record esiste già (e legge lo status corrente)
   const { data: existing } = await serviceClient
@@ -149,6 +144,58 @@ export async function POST(request: Request) {
       { status: 403 }
     )
   }
+
+  if (action === 'lock' && existing?.status === 'confirmed') {
+    return NextResponse.json(
+      { error: 'Il mese è già confermato. Solo un amministratore può riaprirlo.' },
+      { status: 409 }
+    )
+  }
+
+  if (action === 'confirm') {
+    if (existing?.status !== 'locked') {
+      return NextResponse.json(
+        { error: 'Il mese deve essere salvato prima di poter essere confermato.' },
+        { status: 409 }
+      )
+    }
+
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const from = `${year}-${String(month).padStart(2, '0')}-01`
+    const to = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+
+    const { error: availabilityError } = await serviceClient
+      .from('availability')
+      .update({ status: 'approved' })
+      .eq('status', 'pending')
+      .eq('area_id', effectiveAreaId)
+      .gte('date', from)
+      .lte('date', to)
+
+    if (availabilityError) {
+      console.error('Errore approvazione disponibilità:', availabilityError)
+      return NextResponse.json({ error: 'Errore durante la conferma del mese.' }, { status: 500 })
+    }
+
+    const { error } = await serviceClient
+      .from('month_status')
+      .update({ status: 'confirmed' })
+      .eq('month', month)
+      .eq('year', year)
+      .eq('area_id', effectiveAreaId)
+
+    if (error) {
+      console.error('Errore conferma mese:', error)
+      return NextResponse.json({ error: 'Errore durante la conferma del mese.' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  }
+
+  const lockPayload =
+    action === 'lock'
+      ? { status: 'locked' as const, locked_by: user.id, locked_at: new Date().toISOString() }
+      : { status: 'open' as const, locked_by: null, locked_at: null, email_inviata: false, email_inviata_at: null }
 
   if (existing) {
     const { error } = await serviceClient

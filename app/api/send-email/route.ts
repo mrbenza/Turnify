@@ -44,8 +44,8 @@ export async function POST(request: Request) {
     .eq('area_id', effectiveAreaId)
     .single()
 
-  if (!monthStatus || (monthStatus.status !== 'locked' && monthStatus.status !== 'confirmed')) {
-    return NextResponse.json({ error: 'Il mese non è ancora confermato' }, { status: 400 })
+  if (monthStatus?.status !== 'confirmed') {
+    return NextResponse.json({ error: 'Il mese deve essere confermato definitivamente prima dell\'invio.' }, { status: 400 })
   }
 
   // Fetch destinatari in parallelo con generazione Excel (shifts già inclusi nel result)
@@ -77,11 +77,10 @@ export async function POST(request: Request) {
     excelFileName: excelResult.fileName,
   })
 
-  // Setta confermato + email inviata
+  // Registra l'invio senza modificare lo stato del mese
   await serviceClient
     .from('month_status')
     .update({
-      status: 'confirmed',
       email_inviata: true,
       email_inviata_at: new Date().toISOString(),
     })

@@ -96,8 +96,8 @@ turnify/
 │       ├── shifts/route.ts          ← GET lista turni, POST assegna
 │       ├── shifts/[id]/route.ts     ← DELETE rimuovi turno
 │       ├── availability/route.ts    ← GET/POST disponibilita
-│       ├── month/route.ts           ← GET/POST stato mese (lock/unlock)
-│       ├── export/route.ts          ← GET genera XLSX da template + imposta status 'confirmed' + auto-email
+│       ├── month/route.ts           ← POST stato mese (lock/confirm/unlock)
+│       ├── export/route.ts          ← GET genera XLSX opzionale per mesi confirmed
 │       ├── send-email/route.ts      ← POST invia email manuale con allegato Excel
 │       ├── import-shifts/route.ts   ← POST importa storico da XLSX (JSZip)
 │       ├── import-shifts/resolve/route.ts ← POST risolve turni con utente non trovato
@@ -215,7 +215,7 @@ Navbar admin (sidebar desktop): Dashboard — Utenti — Sistema
 | `/admin` | Dashboard: card mese corrente + prossimo con stato colorato, sezione turni collassata di default, contatore dipendenti. Stati card: "Da completare" (grigio), "In corso" (ambra), "Pronto per invio" (blu), "Confermato" (verde). |
 | `/admin/disponibilita` | Calendario globale: righe = dipendenti, colonne = giorni, click su un giorno per assegnare turno con suggerimento per equita. |
 | `/admin/statistiche` | Score equita per dipendente, filtro per mese o tutti i tempi. |
-| `/admin/export` (UI: "Invio turni") | Anteprima turni con grafico distribuzione, genera Excel da template aziendale. Imposta il mese a `confirmed` dopo il download. |
+| `/admin/export` (UI: "Invio turni") | Controllo turni, conferma definitiva e strumenti opzionali per generare Excel o inviare email. |
 | `/admin/utenti` | Solo dipendenti: puo aggiungere nuovi (ruolo fisso = dipendente), attivare/disattivare, eliminare. Non puo cambiare ruolo. L'ultimo login arriva da `auth.users` tramite RPC server-side. |
 | `/admin/impostazioni` | Configurazione turni, indirizzi email notifiche, importa storico reperibilita (solo file della propria area). |
 
@@ -246,15 +246,14 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 3. Manager → /admin/statistiche
    Verifica la distribuzione equa dei turni per mese o storico.
 
-4. Manager → /admin/disponibilita → Conferma mese
+4. Manager → /admin/disponibilita → Salva mese
    Validazione: tutti i weekend e i festivi attivi devono avere almeno 1 turno.
    month_status → 'locked' (mese immutabile, disponibilita bloccate).
 
 5. Manager → /admin/export ("Invio turni")
-   Seleziona il mese, carica l'anteprima grafica (distribuzione turni).
-   Genera Excel dal template aziendale (JSZip, preserva logo/firma/formatting).
-   Download → month_status → 'confirmed' + email automatica via Brevo (se non gia inviata).
-   In alternativa: "Invia email" per invio manuale senza download.
+   Seleziona il mese e controlla l'anteprima grafica (distribuzione turni).
+   "Conferma e pubblica" → month_status → 'confirmed'.
+   Dopo la conferma puo opzionalmente generare Excel o inviare email.
 
 6. Admin → /admin/sistema (separato dal flusso operativo)
    Carica il template Excel.
@@ -338,8 +337,8 @@ Nota: gli admin sono globali e devono avere `area_id = NULL`; il vincolo `users_
 
 Status:
 - `open` — in lavorazione
-- `locked` — confermato dal manager, pronto per export; **immutabile** (nessuna write su availability/shifts/import consentita)
-- `confirmed` — Excel generato/scaricato (impostato automaticamente da `/api/export`); **immutabile** come `locked`
+- `locked` — salvato dal manager e in attesa di conferma definitiva; **immutabile**, ma riapribile dal manager
+- `confirmed` — confermato e pubblicato esplicitamente da `/api/month`; **immutabile**, riapribile solo dall'admin
 
 ### `email_settings`
 | Colonna | Tipo | Note |
