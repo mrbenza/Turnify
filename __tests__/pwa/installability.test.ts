@@ -3,6 +3,10 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const serviceWorker = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
+const installPrompt = readFileSync(
+  resolve(process.cwd(), 'components/PwaInstallPrompt.tsx'),
+  'utf8',
+)
 
 describe('PWA installability', () => {
   it('provides all manifest icons', () => {
@@ -19,5 +23,12 @@ describe('PWA installability', () => {
     expect(serviceWorker).toContain("url.pathname.startsWith('/api/')")
     expect(serviceWorker).toContain("request.mode === 'navigate'")
     expect(serviceWorker).toContain("caches.match(OFFLINE_URL)")
+  })
+
+  it('offers installation only through the browser install event', () => {
+    expect(installPrompt).toContain("'beforeinstallprompt'")
+    expect(installPrompt).toContain('event.preventDefault()')
+    expect(installPrompt).toContain('await installPrompt.prompt()')
+    expect(installPrompt).toContain("'appinstalled'")
   })
 })
