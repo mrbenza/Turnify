@@ -53,3 +53,35 @@ self.addEventListener('fetch', (event) => {
     )
   }
 })
+
+self.addEventListener('push', (event) => {
+  const payload = event.data?.json() ?? {}
+  event.waitUntil(
+    self.registration.showNotification(payload.title ?? 'Turnify', {
+      body: payload.body ?? 'Hai una nuova notifica.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: {
+        url: payload.url ?? '/user',
+      },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const requestedPath = event.notification.data?.url ?? '/user'
+  let targetUrl = new URL('/user', self.location.origin).href
+  if (typeof requestedPath === 'string' && requestedPath.startsWith('/') && !requestedPath.includes('\\')) {
+    const requestedUrl = new URL(requestedPath, self.location.origin)
+    if (requestedUrl.origin === self.location.origin) targetUrl = requestedUrl.href
+  }
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => client.url === targetUrl)
+      if (existing) return existing.focus()
+      return self.clients.openWindow(targetUrl)
+    })
+  )
+})

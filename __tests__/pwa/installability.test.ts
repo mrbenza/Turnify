@@ -7,6 +7,11 @@ const installPrompt = readFileSync(
   resolve(process.cwd(), 'components/PwaInstallPrompt.tsx'),
   'utf8',
 )
+const notificationPrompt = readFileSync(
+  resolve(process.cwd(), 'components/PushNotificationPrompt.tsx'),
+  'utf8',
+)
+const serviceWorkerSource = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
 
 describe('PWA installability', () => {
   it('provides all manifest icons', () => {
@@ -32,5 +37,19 @@ describe('PWA installability', () => {
     expect(installPrompt).toContain("'appinstalled'")
     expect(installPrompt).toContain("pathname.startsWith('/admin')")
     expect(installPrompt).toContain("pathname.startsWith('/user')")
+  })
+
+  it('requests notification permission only after an explicit action in standalone mode', () => {
+    expect(notificationPrompt).toContain("matchMedia('(display-mode: standalone)')")
+    expect(notificationPrompt).toContain('Notification.requestPermission()')
+    expect(notificationPrompt).toContain('registration.pushManager.subscribe')
+    expect(notificationPrompt).toContain("fetch('/api/push/subscriptions'")
+  })
+
+  it('shows pushes and opens their target page', () => {
+    expect(serviceWorkerSource).toContain("self.addEventListener('push'")
+    expect(serviceWorkerSource).toContain('self.registration.showNotification')
+    expect(serviceWorkerSource).toContain("self.addEventListener('notificationclick'")
+    expect(serviceWorkerSource).toContain('self.clients.openWindow')
   })
 })

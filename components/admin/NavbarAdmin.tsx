@@ -155,6 +155,15 @@ const DEBUG_NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    href: '/admin/test/notifiche',
+    label: 'Test notifiche',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082A23.848 23.848 0 0118 18c-1.5-1.5-2.25-3.75-2.25-6a3.75 3.75 0 10-7.5 0c0 2.25-.75 4.5-2.25 6a23.85 23.85 0 013.143-.918m5.714 0a3 3 0 11-5.714 0" />
+      </svg>
+    ),
+  },
 ]
 
 function readDebugCookie(): boolean {
@@ -198,6 +207,7 @@ function SidebarContent({
 }: SidebarContentProps) {
   function isActive(href: string): boolean {
     if (href === '/admin') return pathname === '/admin'
+    if (href === '/admin/test') return pathname === '/admin/test'
     return pathname.startsWith(href)
   }
 
@@ -358,6 +368,7 @@ export default function NavbarAdmin({ nomeAdmin, ruolo, areaNome }: NavbarAdminP
 
   function isActive(href: string): boolean {
     if (href === '/admin') return pathname === '/admin'
+    if (href === '/admin/test') return pathname === '/admin/test'
     return pathname.startsWith(href)
   }
 

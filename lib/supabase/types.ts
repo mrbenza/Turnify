@@ -6,7 +6,7 @@ export type AvailabilityStatus = 'pending' | 'approved' | 'locked'
 export type ShiftType = 'weekend' | 'festivo' | 'reperibilita'
 export type MonthStatusValue = 'open' | 'locked' | 'confirmed'
 export type SchedulingMode = 'weekend_full' | 'single_day' | 'sun_next_sat'
-export type NotificationEventType = 'month_published' | 'month_republished'
+export type NotificationEventType = 'month_published' | 'month_republished' | 'test'
 export type NotificationEventStatus = 'pending' | 'sending' | 'sent' | 'partial' | 'failed'
 export type NotificationDeliveryStatus = 'pending' | 'sent' | 'failed' | 'revoked'
 
@@ -112,14 +112,17 @@ export type PushSubscription = {
 export type NotificationEvent = {
   id: string
   event_type: NotificationEventType
-  area_id: string
-  month: number
-  year: number
-  publication_number: number
+  area_id: string | null
+  month: number | null
+  year: number | null
+  publication_number: number | null
   created_by: string
   created_at: string
   status: NotificationEventStatus
   completed_at: string | null
+  title: string | null
+  body: string | null
+  target_url: string | null
 }
 
 export type NotificationDelivery = {
@@ -276,9 +279,12 @@ export type Database = {
       }
       notification_events: {
         Row: NotificationEvent
-        Insert: Omit<NotificationEvent, 'id' | 'created_at' | 'status' | 'completed_at'> & {
+        Insert: Omit<NotificationEvent, 'id' | 'created_at' | 'status' | 'completed_at' | 'title' | 'body' | 'target_url'> & {
           status?: NotificationEventStatus
           completed_at?: string | null
+          title?: string | null
+          body?: string | null
+          target_url?: string | null
         }
         Update: Partial<Omit<NotificationEvent, 'id' | 'created_at'>>
         Relationships: [

@@ -12,6 +12,11 @@ const indexesMigration = readFileSync(
   'utf8',
 ).toLowerCase()
 
+const testEventsMigration = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20260604213002_pwa_notification_test_events.sql'),
+  'utf8',
+).toLowerCase()
+
 describe('PWA notification storage migration', () => {
   it('creates the three notification tables with anti-duplicate constraints', () => {
     expect(migration).toContain('create table public.push_subscriptions')
@@ -46,5 +51,12 @@ describe('PWA notification storage migration', () => {
   it('indexes notification foreign keys used by cleanup and diagnostics', () => {
     expect(indexesMigration).toContain('idx_notification_events_created_by')
     expect(indexesMigration).toContain('idx_notification_deliveries_user_id')
+  })
+
+  it('supports diagnostic test events without faking a month publication', () => {
+    expect(testEventsMigration).toContain("'month_republished', 'test'")
+    expect(testEventsMigration).toContain('event_type = \'test\'')
+    expect(testEventsMigration).toContain('add column title text')
+    expect(testEventsMigration).toContain('add column body text')
   })
 })

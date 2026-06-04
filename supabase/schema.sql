@@ -165,16 +165,38 @@ create trigger push_subscriptions_updated_at
 create table if not exists public.notification_events (
   id                 uuid        primary key default uuid_generate_v4(),
   event_type         text        not null
-                                 check (event_type in ('month_published', 'month_republished')),
-  area_id            uuid        not null references public.areas(id) on delete restrict,
-  month              integer     not null check (month between 1 and 12),
-  year               integer     not null check (year >= 2024),
-  publication_number integer     not null check (publication_number >= 1),
+                                 check (event_type in ('month_published', 'month_republished', 'test')),
+  area_id            uuid        references public.areas(id) on delete restrict,
+  month              integer     check (month is null or month between 1 and 12),
+  year               integer     check (year is null or year >= 2024),
+  publication_number integer     check (publication_number is null or publication_number >= 1),
   created_by         uuid        not null references public.users(id) on delete restrict,
   created_at         timestamptz not null default now(),
   status             text        not null default 'pending'
                                  check (status in ('pending', 'sending', 'sent', 'partial', 'failed')),
   completed_at       timestamptz,
+  title              text,
+  body               text,
+  target_url         text,
+  check (
+    (
+      event_type = 'test'
+      and area_id is null
+      and month is null
+      and year is null
+      and publication_number is null
+      and title is not null
+      and body is not null
+    )
+    or
+    (
+      event_type in ('month_published', 'month_republished')
+      and area_id is not null
+      and month is not null
+      and year is not null
+      and publication_number is not null
+    )
+  ),
   unique (area_id, month, year, publication_number)
 );
 

@@ -19,15 +19,15 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-01 | Definire evento e destinatari | Regola univoca che stabilisce quando inviare la notifica e a chi | Completato | Evento generato dalla conferma definitiva del manager; destinatari: dipendenti attivi dell'area |
 | PWA-02 | Progettare persistenza notifiche | Schema DB, RLS e strategia per subscription multiple per utente | Completato | Migration applicate e verificate sul database; accesso riservato al service role |
 | PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati, service worker e banner di installazione dopo il login | Completato | Installazione verificata su Chrome ed Edge; banner disponibile a tutti i ruoli dopo il login |
-| PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | Da fare | Il permesso deve essere richiesto dopo un'azione esplicita dell'utente |
-| PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Da fare | Uno stesso utente puo avere piu dispositivi/browser |
-| PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | Da fare | Conservare la chiave privata solo lato server |
+| PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | In corso | Richiesta esplicita mostrata solo nella PWA installata e dopo il login; da verificare sui browser |
+| PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | In corso | API implementata; uno stesso utente puo avere piu dispositivi/browser |
+| PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | In corso | Invio manuale di test implementato; invio pubblicazione mese ancora da collegare |
 | PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla prima conferma operativa del mese | Da fare | Deve essere idempotente e non duplicare gli invii |
 | PWA-08 | Gestire apertura notifica | Il click apre la pagina utente pertinente | Da fare | Destinazione iniziale proposta: `/user` |
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
 | PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Da fare | Testare almeno Edge desktop e Android |
 | PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Da fare | Evitare l'attivazione globale senza osservabilita |
-| PWA-12 | Pagina diagnostica admin | Vista Debug per utenti, subscription, consegne e azioni diagnostiche | Da fare | Identificazione dispositivi esclusivamente tramite `user_agent`; dati sensibili mascherati |
+| PWA-12 | Pagina diagnostica admin | Vista Debug per utenti, subscription, consegne e azioni diagnostiche | In corso | Pagina disponibile solo ad admin con debug attivo; endpoint e dati sensibili mascherati |
 
 ## Decisioni aperte
 
