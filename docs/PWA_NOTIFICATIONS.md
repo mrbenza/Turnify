@@ -21,7 +21,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati, service worker e banner di installazione dopo il login | Completato | Installazione verificata su Chrome ed Edge; banner disponibile a tutti i ruoli dopo il login |
 | PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | Completato | Richiesta esplicita mostrata solo nella PWA installata e dopo il login; verificato su Chrome Android, Edge compatibile ma mostra avvisi propri del browser |
 | PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Completato | API implementata e verificata con subscription reali; uno stesso utente puo avere piu dispositivi/browser |
-| PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | In corso | Invio manuale di test implementato; invio pubblicazione mese ancora da collegare |
+| PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | In corso | Motore di invio e test manuale; invio pubblicazione mese resta PWA-07 |
 | PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla prima conferma operativa del mese | Da fare | Deve essere idempotente e non duplicare gli invii |
 | PWA-08 | Gestire apertura notifica | Il click apre la pagina utente pertinente | Da fare | Destinazione iniziale proposta: `/user` |
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
@@ -295,6 +295,113 @@ Le chiavi VAPID non vengono salvate nel database:
 - `notification_events (area_id, year, month)`;
 - `notification_deliveries (event_id, status)`;
 - `notification_deliveries (subscription_id)`.
+
+## Specifica PWA-06: invio Web Push
+
+PWA-06 implementa il motore server-side che invia notifiche Web Push e registra
+gli esiti. Non decide quando pubblicare un mese: quel collegamento appartiene a
+PWA-07.
+
+### Confine dello step
+
+Incluso in PWA-06:
+
+- configurazione VAPID lato server;
+- invio Web Push a una o piu subscription gia presenti nel database;
+- creazione di eventi diagnostici `test`;
+- creazione e aggiornamento delle righe `notification_deliveries`;
+- aggiornamento di `last_success_at`, `failure_count` e `revoked_at`;
+- revoca automatica degli endpoint quando il push service risponde `404` o
+  `410`;
+- invio manuale da pagina debug admin.
+
+Escluso da PWA-06:
+
+- scelta automatica dei destinatari della pubblicazione mese;
+- invio automatico dopo `Conferma e pubblica`;
+- retry pianificati o code asincrone;
+- conferma che la notifica sia stata visualizzata sul dispositivo.
+
+Il browser/push service puo confermare solo l'accettazione dell'invio. La
+visualizzazione effettiva sul dispositivo non e garantibile lato server.
+
+### Configurazione
+
+Le variabili ambiente richieste sono:
+
+| Variabile | Uso |
+|---|---|
+| `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` | Chiave pubblica usata dal browser per creare la subscription |
+| `WEB_PUSH_VAPID_PRIVATE_KEY` | Chiave privata usata solo dal server per firmare l'invio |
+| `WEB_PUSH_SUBJECT` | Contatto VAPID, ad esempio `mailto:admin@turnify.vercel.app` |
+
+Se manca una variabile, l'invio deve fallire con errore server e non deve
+marcare la delivery come `sent`.
+
+### Payload
+
+Payload minimo:
+
+| Campo | Regola |
+|---|---|
+| `title` | massimo 100 caratteri |
+| `body` | massimo 500 caratteri |
+| `url` | percorso interno, deve iniziare con `/` e non puo essere URL esterno |
+
+Per i test manuali il testo e modificabile dall'admin. Per la pubblicazione
+operativa il testo verra definito da PWA-07 usando mese, anno e tipo evento.
+
+### Stati consegna
+
+Ogni invio a una subscription crea o aggiorna una riga
+`notification_deliveries`.
+
+| Stato | Significato |
+|---|---|
+| `pending` | riga creata, invio non ancora concluso |
+| `sent` | push service ha accettato la notifica |
+| `failed` | errore non definitivo o configurazione non valida |
+| `revoked` | endpoint non piu valido, subscription revocata |
+
+`sent_at` indica l'ora di accettazione da parte del push service, non l'ora di
+visualizzazione sul telefono.
+
+### Errori e revoche
+
+Regole:
+
+- `404` o `410`: delivery `revoked`, subscription `revoked_at = now`;
+- altri status HTTP: delivery `failed`, `failure_count` incrementato;
+- invio riuscito: delivery `sent`, `last_success_at = now`,
+  `failure_count = 0`;
+- gli errori salvati in `notification_deliveries.error` devono essere
+  sanificati e troncati;
+- endpoint, `p256dh`, `auth` e chiave privata VAPID non devono mai comparire
+  nella UI o nei log utente.
+
+### Evento aggregato
+
+Al termine degli invii collegati a uno stesso evento:
+
+| Risultato delivery | Stato evento |
+|---|---|
+| tutte `sent` | `sent` |
+| almeno una `sent` e almeno una `failed`/`revoked` | `partial` |
+| nessuna `sent` | `failed` |
+
+`completed_at` viene valorizzato alla fine dell'elaborazione.
+
+### Criteri di chiusura
+
+PWA-06 e completata quando:
+
+- l'invio manuale debug crea evento `test` e delivery per ogni subscription
+  selezionata;
+- le notifiche arrivano almeno su Chrome Android PWA installata;
+- delivery e subscription vengono aggiornate correttamente dopo successo;
+- endpoint non validi vengono marcati `revoked`;
+- la pagina debug mostra storico, orari, HTTP status ed errori;
+- build, lint e test passano.
 
 ### Ordine di implementazione
 
