@@ -9,7 +9,7 @@ Funzionalita da implementare in ordine di priorita.
 ### PWA notifiche Web Push
 - **Stato**: PWA-05 completata sul ramo `feat/pwa`.
 - **Implementato e verificato**: tabelle `push_subscriptions`, `notification_events`, `notification_deliveries`; RLS senza accesso client; API autenticate di registrazione/revoca subscription; RPC atomica `confirm_month_and_create_notification_event`; indici delle chiavi esterne.
-- **Requisito futuro notifiche**: la subscription resta attiva anche dopo logout o oltre 20 giorni senza accessi; non dipende dalla sessione Supabase.
+- **Requisito futuro notifiche**: la subscription resta attiva anche dopo logout o oltre 20 giorni senza accessi; non dipende dalla sessione Supabase. Gli utenti disattivati restano visibili in diagnostica, ma sono esclusi dagli invii automatici.
 - **Verificato**: installazione PWA su Chrome ed Edge tramite ambiente HTTPS; consenso e ricezione notifiche su Chrome Android. Edge Android resta compatibile ma mostra avvisi propri del browser.
 - **In corso**: invio manuale di test e pagina diagnostica admin.
 

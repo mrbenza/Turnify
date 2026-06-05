@@ -38,6 +38,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | D-03 | L'email resta attiva? | Resta disponibile come invio manuale opzionale, senza modificare lo stato del mese | Completato |
 | D-04 | Quali eventi conservare? | Conservare `month_published` e ogni `month_republished`; lo sblocco non genera notifiche | Completato |
 | D-05 | Quanto deve durare una subscription senza accessi recenti? | Deve restare attiva anche dopo logout o oltre 20 giorni senza accessi; viene revocata solo esplicitamente o dopo risposta `404`/`410` dal push service | Completato |
+| D-06 | Cosa succede alle subscription degli utenti disattivati? | Restano nel database per diagnostica admin, ma gli utenti con `attivo = false` sono sempre esclusi dagli invii automatici | Completato |
 
 ## Bug e rischi da controllare
 
@@ -110,6 +111,12 @@ Ricevono l'evento tutti i dipendenti che, al momento della conferma:
 - hanno `attivo = true`;
 - appartengono alla stessa `area_id` del mese confermato;
 - possiedono almeno una subscription Web Push attiva.
+
+Se un manager disattiva un dipendente (`users.attivo = false`), le sue
+subscription non vengono cancellate automaticamente: restano disponibili alla
+diagnostica admin, ma non possono essere selezionate dagli invii automatici di
+pubblicazione mese. L'admin decide successivamente se eliminare, riattivare o
+gestire manualmente l'utente.
 
 La notifica non e limitata ai soli dipendenti con un turno assegnato: la
 pubblicazione del calendario mensile interessa l'intera area e comunica anche
