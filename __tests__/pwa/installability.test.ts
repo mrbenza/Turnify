@@ -44,6 +44,7 @@ describe('PWA installability', () => {
     expect(notificationPrompt).toContain('Notification.requestPermission()')
     expect(notificationPrompt).toContain('registration.pushManager.subscribe')
     expect(notificationPrompt).toContain("fetch('/api/push/subscriptions'")
+    expect(notificationPrompt).toContain("clientMode: 'standalone'")
   })
 
   it('shows pushes and opens their target page', () => {

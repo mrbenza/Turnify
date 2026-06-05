@@ -154,7 +154,14 @@ create table if not exists public.push_subscriptions (
   last_seen_at    timestamptz not null default now(),
   last_success_at timestamptz,
   failure_count   integer     not null default 0 check (failure_count >= 0),
-  revoked_at      timestamptz
+  revoked_at      timestamptz,
+  client_mode     text        not null default 'browser'
+                               check (client_mode in ('standalone', 'browser')),
+  revoked_reason  text        check (
+                               revoked_reason is null
+                               or revoked_reason in ('manual_user', 'manual_admin', 'push_service_gone')
+                              ),
+  revoked_by      uuid        references public.users(id) on delete set null
 );
 
 drop trigger if exists push_subscriptions_updated_at on public.push_subscriptions;
@@ -236,6 +243,9 @@ create index if not exists idx_month_status_area_id   on public.month_status(are
 create index if not exists idx_email_settings_area_id on public.email_settings(area_id);
 create index if not exists idx_push_subscriptions_user_active
   on public.push_subscriptions(user_id) where revoked_at is null;
+create index if not exists idx_push_subscriptions_standalone_active
+  on public.push_subscriptions(user_id, last_seen_at)
+  where revoked_at is null and client_mode = 'standalone';
 create index if not exists idx_notification_events_area_period
   on public.notification_events(area_id, year, month);
 create index if not exists idx_notification_events_created_by

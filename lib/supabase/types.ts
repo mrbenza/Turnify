@@ -9,6 +9,8 @@ export type SchedulingMode = 'weekend_full' | 'single_day' | 'sun_next_sat'
 export type NotificationEventType = 'month_published' | 'month_republished' | 'test'
 export type NotificationEventStatus = 'pending' | 'sending' | 'sent' | 'partial' | 'failed'
 export type NotificationDeliveryStatus = 'pending' | 'sent' | 'failed' | 'revoked'
+export type PushSubscriptionClientMode = 'standalone' | 'browser'
+export type PushSubscriptionRevokedReason = 'manual_user' | 'manual_admin' | 'push_service_gone'
 
 export type User = {
   id: string
@@ -107,6 +109,9 @@ export type PushSubscription = {
   last_success_at: string | null
   failure_count: number
   revoked_at: string | null
+  client_mode: PushSubscriptionClientMode
+  revoked_reason: PushSubscriptionRevokedReason | null
+  revoked_by: string | null
 }
 
 export type NotificationEvent = {
@@ -258,6 +263,9 @@ export type Database = {
           | 'last_success_at'
           | 'failure_count'
           | 'revoked_at'
+          | 'client_mode'
+          | 'revoked_reason'
+          | 'revoked_by'
         > & {
           expiration_time?: string | null
           user_agent?: string | null
@@ -265,6 +273,9 @@ export type Database = {
           last_success_at?: string | null
           failure_count?: number
           revoked_at?: string | null
+          client_mode?: PushSubscriptionClientMode
+          revoked_reason?: PushSubscriptionRevokedReason | null
+          revoked_by?: string | null
         }
         Update: Partial<Omit<PushSubscription, 'id' | 'user_id' | 'created_at'>>
         Relationships: [

@@ -22,7 +22,7 @@ export async function GET() {
   const [subscriptionsResult, deliveriesResult] = await Promise.all([
     serviceClient
       .from('push_subscriptions')
-      .select('id, user_id, endpoint, expiration_time, user_agent, created_at, updated_at, last_seen_at, last_success_at, failure_count, revoked_at')
+      .select('id, user_id, endpoint, expiration_time, user_agent, created_at, updated_at, last_seen_at, last_success_at, failure_count, revoked_at, client_mode, revoked_reason, revoked_by')
       .order('last_seen_at', { ascending: false }),
     serviceClient
       .from('notification_deliveries')
@@ -177,6 +177,7 @@ export async function POST(request: Request) {
         serviceClient.from('push_subscriptions').update({
           failure_count: subscription.failure_count + 1,
           revoked_at: revoked ? now : subscription.revoked_at,
+          revoked_reason: revoked ? 'push_service_gone' : subscription.revoked_reason,
         }).eq('id', subscription.id),
       ])
     }
@@ -189,4 +190,36 @@ export async function POST(request: Request) {
   }).eq('id', event.id)
 
   return NextResponse.json({ ok: true, event_id: event.id, sent, failed, status: finalStatus })
+}
+
+export async function PATCH(request: Request) {
+  const auth = await requireDebugAdmin()
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+  let body: { subscriptionId?: string; action?: string }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
+  }
+
+  if (body.action !== 'revoke' || typeof body.subscriptionId !== 'string' || !body.subscriptionId) {
+    return NextResponse.json({ error: 'Azione non valida' }, { status: 400 })
+  }
+
+  const { data, error } = await createServiceClient()
+    .from('push_subscriptions')
+    .update({
+      revoked_at: new Date().toISOString(),
+      revoked_reason: 'manual_admin',
+      revoked_by: auth.user.id,
+    })
+    .eq('id', body.subscriptionId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) return NextResponse.json({ error: 'Impossibile revocare la subscription' }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'Subscription non trovata' }, { status: 404 })
+
+  return NextResponse.json({ ok: true })
 }

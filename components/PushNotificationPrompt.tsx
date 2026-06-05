@@ -15,7 +15,10 @@ async function saveSubscription(subscription: PushSubscription) {
   const response = await fetch('/api/push/subscriptions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(subscription.toJSON()),
+    body: JSON.stringify({
+      ...subscription.toJSON(),
+      clientMode: 'standalone',
+    }),
   })
   if (!response.ok) throw new Error('Impossibile salvare la subscription')
 }

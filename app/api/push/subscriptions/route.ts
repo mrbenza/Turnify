@@ -5,6 +5,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 type SubscriptionBody = {
   endpoint?: string
   expirationTime?: number | null
+  clientMode?: 'standalone' | 'browser'
   keys?: {
     p256dh?: string
     auth?: string
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
   const p256dh = body.keys?.p256dh
   const auth = body.keys?.auth
   const expirationTime = parsePushExpirationTime(body.expirationTime)
+  const clientMode = body.clientMode === 'browser' ? 'browser' : 'standalone'
 
   if (
     typeof endpoint !== 'string'
@@ -51,6 +53,9 @@ export async function POST(request: Request) {
     user_agent: request.headers.get('user-agent'),
     last_seen_at: now,
     revoked_at: null,
+    revoked_reason: null,
+    revoked_by: null,
+    client_mode: clientMode,
     failure_count: 0,
   }, { onConflict: 'endpoint' })
 
@@ -80,7 +85,7 @@ export async function DELETE(request: Request) {
 
   const { error } = await createServiceClient()
     .from('push_subscriptions')
-    .update({ revoked_at: new Date().toISOString() })
+    .update({ revoked_at: new Date().toISOString(), revoked_reason: 'manual_user', revoked_by: null })
     .eq('user_id', user.id)
     .eq('endpoint', endpoint)
 

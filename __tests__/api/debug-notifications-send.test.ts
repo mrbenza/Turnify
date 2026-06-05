@@ -28,7 +28,7 @@ vi.mock('@/lib/push/server', () => ({
   sanitizePushError: (error: unknown) => error instanceof Error ? error.message.slice(0, 500) : 'Errore Web Push sconosciuto',
 }))
 
-import { POST } from '@/app/api/debug/notifications/route'
+import { PATCH, POST } from '@/app/api/debug/notifications/route'
 import { requireDebugAdmin } from '@/lib/debug-auth'
 import { sendWebPush } from '@/lib/push/server'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -48,6 +48,9 @@ const subscriptions: PushSubscription[] = [
     last_success_at: null,
     failure_count: 0,
     revoked_at: null,
+    client_mode: 'standalone',
+    revoked_reason: null,
+    revoked_by: null,
   },
   {
     id: 'sub-gone',
@@ -63,6 +66,9 @@ const subscriptions: PushSubscription[] = [
     last_success_at: null,
     failure_count: 2,
     revoked_at: null,
+    client_mode: 'standalone',
+    revoked_reason: null,
+    revoked_by: null,
   },
 ]
 
@@ -77,6 +83,7 @@ function makeChain(result: { data?: unknown; error?: unknown }, updates: Array<{
     in: vi.fn(() => chain),
     is: vi.fn(() => chain),
     eq: vi.fn(() => chain),
+    maybeSingle: vi.fn().mockResolvedValue({ data: result.data ?? null, error: result.error ?? null }),
     single: vi.fn().mockResolvedValue({ data: result.data ?? null, error: result.error ?? null }),
     then: (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
       Promise.resolve({ data: result.data ?? null, error: result.error ?? null }).then(resolve),
@@ -151,7 +158,7 @@ describe('POST /api/debug/notifications', () => {
       { table: 'notification_deliveries', value: expect.objectContaining({ status: 'sent', http_status: 201 }) },
       { table: 'push_subscriptions', value: expect.objectContaining({ failure_count: 0, last_success_at: expect.any(String) }) },
       { table: 'notification_deliveries', value: expect.objectContaining({ status: 'revoked', http_status: 410, error: 'Endpoint scaduto' }) },
-      { table: 'push_subscriptions', value: expect.objectContaining({ failure_count: 3, revoked_at: expect.any(String) }) },
+      { table: 'push_subscriptions', value: expect.objectContaining({ failure_count: 3, revoked_at: expect.any(String), revoked_reason: 'push_service_gone' }) },
       { table: 'notification_events', value: expect.objectContaining({ status: 'partial', completed_at: expect.any(String) }) },
     ]))
   })
@@ -174,5 +181,25 @@ describe('POST /api/debug/notifications', () => {
     expect(res.status).toBe(400)
     expect(sendWebPush).not.toHaveBeenCalled()
     expect(createServiceClient).not.toHaveBeenCalled()
+  })
+
+  it('revoca manualmente una subscription dalla diagnostica admin', async () => {
+    const serviceClient = makeServiceClient()
+    vi.mocked(createServiceClient).mockReturnValue(serviceClient as never)
+
+    const res = await PATCH(new Request('http://localhost/api/debug/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'revoke', subscriptionId: 'sub-ok' }),
+    }))
+
+    expect(res.status).toBe(200)
+    expect(serviceClient.updates).toEqual(expect.arrayContaining([
+      { table: 'push_subscriptions', value: expect.objectContaining({
+        revoked_at: expect.any(String),
+        revoked_reason: 'manual_admin',
+        revoked_by: 'admin-1',
+      }) },
+    ]))
   })
 })

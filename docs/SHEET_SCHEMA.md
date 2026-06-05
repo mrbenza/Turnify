@@ -176,12 +176,15 @@ Subscription Web Push registrate dai browser degli utenti.
 | auth | text | segreto subscription, dato sensibile |
 | expiration_time | timestamptz | nullable |
 | user_agent | text | nullable, usato per identificazione diagnostica |
+| client_mode | text | `standalone` per PWA installata, `browser` per navigazione web |
 | created_at | timestamptz | default now() |
 | updated_at | timestamptz | aggiornato automaticamente |
 | last_seen_at | timestamptz | ultima conferma dal browser |
 | last_success_at | timestamptz | ultimo invio riuscito, nullable |
 | failure_count | integer | errori consecutivi, default 0 |
 | revoked_at | timestamptz | nullable; subscription esclusa dagli invii |
+| revoked_reason | text | nullable; `manual_user`, `manual_admin`, `push_service_gone` |
+| revoked_by | uuid | nullable; admin che ha revocato manualmente |
 
 **RLS:** attiva senza policy client. Accesso esclusivo tramite `service_role`.
 

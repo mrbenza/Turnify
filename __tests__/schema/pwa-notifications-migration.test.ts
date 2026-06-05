@@ -17,6 +17,11 @@ const testEventsMigration = readFileSync(
   'utf8',
 ).toLowerCase()
 
+const diagnosticsMigration = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20260605213149_pwa_subscription_diagnostics.sql'),
+  'utf8',
+).toLowerCase()
+
 describe('PWA notification storage migration', () => {
   it('creates the three notification tables with anti-duplicate constraints', () => {
     expect(migration).toContain('create table public.push_subscriptions')
@@ -58,5 +63,13 @@ describe('PWA notification storage migration', () => {
     expect(testEventsMigration).toContain('event_type = \'test\'')
     expect(testEventsMigration).toContain('add column title text')
     expect(testEventsMigration).toContain('add column body text')
+  })
+
+  it('tracks installed PWA subscriptions and revocation reasons for diagnostics', () => {
+    expect(diagnosticsMigration).toContain('add column if not exists client_mode')
+    expect(diagnosticsMigration).toContain("client_mode in ('standalone', 'browser')")
+    expect(diagnosticsMigration).toContain('add column if not exists revoked_reason')
+    expect(diagnosticsMigration).toContain("'manual_admin'")
+    expect(diagnosticsMigration).toContain('idx_push_subscriptions_standalone_active')
   })
 })

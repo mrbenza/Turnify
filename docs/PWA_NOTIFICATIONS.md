@@ -195,6 +195,8 @@ dispositivo. Uno stesso utente puo avere piu righe.
 | `last_success_at` | timestamptz nullable | Ultimo invio riuscito |
 | `failure_count` | integer | Errori consecutivi |
 | `revoked_at` | timestamptz nullable | Subscription disattivata |
+| `revoked_reason` | text nullable | `manual_user`, `manual_admin`, `push_service_gone` |
+| `revoked_by` | uuid nullable | Admin che ha revocato manualmente, se disponibile |
 
 Regole:
 
@@ -208,7 +210,7 @@ Regole:
 - le subscription `browser` possono restare visibili in diagnostica admin per
   test o pulizia manuale;
 - una subscription revocata non viene usata per nuovi invii;
-- risposte push `404` o `410` impostano `revoked_at`;
+- risposte push `404` o `410` impostano `revoked_at` e `revoked_reason = push_service_gone`;
 - il logout non revoca la subscription: le notifiche devono poter arrivare
   anche dopo lunghi periodi senza accessi;
 - la subscription viene revocata solo su richiesta esplicita dell'utente o
@@ -465,6 +467,7 @@ Dettaglio dispositivi:
 | Ultimo invio riuscito | `last_success_at` |
 | Errori consecutivi | `failure_count` |
 | Revocato il | `revoked_at` |
+| Motivo revoca | `revoked_reason` |
 | Ultimo errore | Messaggio diagnostico sanificato |
 | Stato diagnostico | Attiva, revocata, browser, PWA installata, vecchia/stale |
 
@@ -494,15 +497,14 @@ Azioni diagnostiche admin previste:
 - consultare lo storico notifiche di un utente;
 - revocare manualmente una subscription, ad esempio per telefono formattato,
   guasto, perso, sostituito o problemi notifiche;
-- distinguere revoca manuale da revoca automatica `404`/`410` quando il dato
-  sara disponibile;
+- distinguere revoca manuale da revoca automatica `404`/`410`;
 - ritentare una consegna fallita;
 - inviare una notifica di test a una singola subscription.
 
 La revoca manuale non cancella l'utente e non cambia `users.attivo`: imposta
-solo `push_subscriptions.revoked_at`. Se l'utente reinstallera la PWA o fara un
-nuovo login con permesso notifiche gia concesso, la webapp potra creare una
-nuova subscription valida e salvarla.
+`push_subscriptions.revoked_at`, `revoked_reason = manual_admin` e `revoked_by`.
+Se l'utente reinstallera la PWA o fara un nuovo login con permesso notifiche
+gia concesso, la webapp potra creare una nuova subscription valida e salvarla.
 
 ### Regole per invii automatici
 

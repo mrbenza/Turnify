@@ -95,6 +95,9 @@ describe('/api/push/subscriptions', () => {
       expiration_time: '2026-01-01T00:00:00.000Z',
       user_agent: 'Chrome Android',
       revoked_at: null,
+      revoked_reason: null,
+      revoked_by: null,
+      client_mode: 'standalone',
       failure_count: 0,
     }), { onConflict: 'endpoint' })
   })
@@ -112,7 +115,11 @@ describe('/api/push/subscriptions', () => {
     }))
 
     expect(res.status).toBe(200)
-    expect(table.update).toHaveBeenCalledWith(expect.objectContaining({ revoked_at: expect.any(String) }))
+    expect(table.update).toHaveBeenCalledWith(expect.objectContaining({
+      revoked_at: expect.any(String),
+      revoked_reason: 'manual_user',
+      revoked_by: null,
+    }))
     expect(table.eq).toHaveBeenCalledWith('user_id', 'user-1')
     expect(table.eq).toHaveBeenCalledWith('endpoint', 'https://fcm.googleapis.com/push/example')
   })
