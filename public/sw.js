@@ -61,11 +61,6 @@ self.addEventListener('push', (event) => {
       body: payload.body ?? 'Hai una nuova notifica.',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      tag: payload.tag ?? 'turnify-notification',
-      renotify: true,
-      actions: [
-        { action: 'open', title: 'Apri Turnify' },
-      ],
       data: {
         url: payload.url ?? '/user',
       },
@@ -75,8 +70,6 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  if (event.action && event.action !== 'open') return
-
   const requestedPath = event.notification.data?.url ?? '/user'
   let targetUrl = new URL('/user', self.location.origin).href
   if (typeof requestedPath === 'string' && requestedPath.startsWith('/') && !requestedPath.includes('\\')) {
