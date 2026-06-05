@@ -50,13 +50,15 @@ interface ListaUtentiProps {
   currentUserId: string
   isManager?: boolean
   areas?: Area[]
+  usersWithActiveNotifications?: string[]
 }
 
 type SortKey = 'nome' | 'email' | 'ruolo' | 'area' | 'last_login' | 'attivo'
 type SortDirection = 'asc' | 'desc'
 
-export default function ListaUtenti({ initialUsers, currentUserId, isManager = false, areas = [] }: ListaUtentiProps) {
+export default function ListaUtenti({ initialUsers, currentUserId, isManager = false, areas = [], usersWithActiveNotifications = [] }: ListaUtentiProps) {
   const [dipendentes, setUsers] = useState<User[]>(initialUsers)
+  const [notificationUserIds, setNotificationUserIds] = useState(() => new Set(usersWithActiveNotifications))
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [changingRole, setChangingRole] = useState<string | null>(null)
@@ -221,6 +223,11 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error ?? 'Errore sconosciuto')
       setSuccessMsg(`Notifiche revocate per ${dipendente.nome}.`)
+      setNotificationUserIds((current) => {
+        const next = new Set(current)
+        next.delete(dipendente.id)
+        return next
+      })
     } catch (err) {
       console.error('Errore revoca notifiche:', err)
       setErrorMsg(err instanceof Error ? err.message : 'Errore durante la revoca notifiche.')
@@ -442,16 +449,18 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
                   </td>
                   {isAdmin && (
                     <td className="py-3 px-4 sm:px-2">
-                      <button
-                        type="button"
-                        onClick={() => handleRevokeNotifications(dipendente)}
-                        disabled={dipendente.id === currentUserId || revokingNotifications === dipendente.id}
-                        aria-label={`Revoca notifiche di ${dipendente.nome}`}
-                        title={dipendente.id === currentUserId ? 'Non puoi revocare le notifiche del tuo account' : undefined}
-                        className="whitespace-nowrap rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {revokingNotifications === dipendente.id ? 'Revoca...' : 'Revoca notifiche'}
-                      </button>
+                      {notificationUserIds.has(dipendente.id) && (
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeNotifications(dipendente)}
+                          disabled={dipendente.id === currentUserId || revokingNotifications === dipendente.id}
+                          aria-label={`Revoca notifiche di ${dipendente.nome}`}
+                          title={dipendente.id === currentUserId ? 'Non puoi revocare le notifiche del tuo account' : undefined}
+                          className="whitespace-nowrap rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {revokingNotifications === dipendente.id ? 'Revoca...' : 'Revoca notifiche'}
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>

@@ -44,6 +44,29 @@ export async function POST(request: Request) {
 
   const serviceClient = createServiceClient()
   const now = new Date().toISOString()
+  const { data: existingSubscription, error: existingError } = await serviceClient
+    .from('push_subscriptions')
+    .select('id, user_id, revoked_at, revoked_reason')
+    .eq('endpoint', endpoint)
+    .maybeSingle()
+
+  if (existingError) {
+    console.error('Errore verifica push subscription esistente:', existingError)
+    return NextResponse.json({ error: 'Impossibile verificare la subscription' }, { status: 500 })
+  }
+
+  if (
+    existingSubscription?.user_id === user.id
+    && existingSubscription.revoked_at
+    && (existingSubscription.revoked_reason === 'manual_admin' || existingSubscription.revoked_reason === 'manual_user')
+  ) {
+    return NextResponse.json({
+      ok: true,
+      blocked: true,
+      reason: existingSubscription.revoked_reason,
+    })
+  }
+
   const { error } = await serviceClient.from('push_subscriptions').upsert({
     user_id: user.id,
     endpoint,

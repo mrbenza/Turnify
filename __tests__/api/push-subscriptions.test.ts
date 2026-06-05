@@ -25,11 +25,16 @@ function authClient(user: { id: string } | null) {
   }
 }
 
-function chain(result = { error: null }) {
+function chain(
+  result = { error: null },
+  maybeSingleResult: { data: unknown; error: unknown } = { data: null, error: null },
+) {
   const value = {
+    select: vi.fn(() => value),
     upsert: vi.fn(() => value),
     update: vi.fn(() => value),
     eq: vi.fn(() => value),
+    maybeSingle: vi.fn().mockResolvedValue(maybeSingleResult),
     then: (resolve: (result: { error: unknown }) => unknown) => Promise.resolve(result).then(resolve),
   }
 
@@ -100,6 +105,39 @@ describe('/api/push/subscriptions', () => {
       client_mode: 'standalone',
       failure_count: 0,
     }), { onConflict: 'endpoint' })
+  })
+
+  it('non riattiva automaticamente una subscription revocata manualmente', async () => {
+    const table = chain({ error: null }, {
+      data: {
+        id: 'sub-1',
+        user_id: 'user-1',
+        revoked_at: '2026-06-06T00:00:00.000Z',
+        revoked_reason: 'manual_admin',
+      },
+      error: null,
+    })
+    const serviceClient = { from: vi.fn(() => table) }
+    vi.mocked(createClient).mockResolvedValue(authClient({ id: 'user-1' }) as never)
+    vi.mocked(createServiceClient).mockReturnValue(serviceClient as never)
+
+    const res = await POST(new Request('http://localhost/api/push/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: 'https://fcm.googleapis.com/push/example',
+        expirationTime: null,
+        keys: { p256dh: 'p256dh', auth: 'auth' },
+      }),
+    }))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({
+      ok: true,
+      blocked: true,
+      reason: 'manual_admin',
+    })
+    expect(table.upsert).not.toHaveBeenCalled()
   })
 
   it('revoca la subscription dell utente corrente', async () => {

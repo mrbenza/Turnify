@@ -38,6 +38,18 @@ export default async function UtentiPage() {
 
   /* ---- Aree (per filtro admin) ---- */
   const serviceClient = createServiceClient()
+  const usersWithActiveNotifications: string[] = isAdmin
+    ? [
+        ...new Set(
+          (((await serviceClient
+            .from('push_subscriptions')
+            .select('user_id')
+            .is('revoked_at', null)).data ?? []) as Array<{ user_id: string | null }>)
+            .map((subscription) => subscription.user_id)
+            .filter((userId): userId is string => Boolean(userId)),
+        ),
+      ]
+    : []
   const areas: Area[] = isAdmin
     ? sortByNome(((await serviceClient.from('areas').select('*')).data ?? []) as Area[])
     : []
@@ -66,6 +78,7 @@ export default async function UtentiPage() {
               currentUserId={authUser.id}
               isManager={isManager}
               areas={areas}
+              usersWithActiveNotifications={usersWithActiveNotifications}
             />
           </section>
         </main>

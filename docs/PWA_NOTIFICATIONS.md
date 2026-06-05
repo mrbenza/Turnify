@@ -538,4 +538,8 @@ La pagina non mostra mai:
   mostrati, evitando liste enormi e paginazione profonda.
 - Azione rapida "Revoca notifiche" disponibile solo all'amministratore nella
   tabella `/admin/utenti`, utile per pulire le subscription di un utente senza
-  aprire la pagina debug.
+  aprire la pagina debug. Il pulsante viene mostrato solo agli utenti con almeno
+  una subscription attiva.
+- Una subscription revocata manualmente da admin o utente non viene riattivata
+  in modo silenzioso quando la PWA viene riaperta con permesso browser ancora
+  `granted`.
