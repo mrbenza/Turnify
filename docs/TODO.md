@@ -7,11 +7,11 @@ Funzionalita da implementare in ordine di priorita.
 ## Alta priorita
 
 ### PWA notifiche Web Push
-- **Stato**: PWA-05 completata sul ramo `feat/pwa`.
-- **Implementato e verificato**: tabelle `push_subscriptions`, `notification_events`, `notification_deliveries`; RLS senza accesso client; API autenticate di registrazione/revoca subscription; RPC atomica `confirm_month_and_create_notification_event`; indici delle chiavi esterne.
+- **Stato**: PWA-06 completata sul ramo `feat/pwa`.
+- **Implementato e verificato**: tabelle `push_subscriptions`, `notification_events`, `notification_deliveries`; RLS senza accesso client; API autenticate di registrazione/revoca subscription; motore server-side di invio Web Push con VAPID; RPC atomica `confirm_month_and_create_notification_event`; indici delle chiavi esterne.
 - **Requisito futuro notifiche**: la subscription resta attiva anche dopo logout o oltre 20 giorni senza accessi; non dipende dalla sessione Supabase. Gli utenti disattivati restano visibili in diagnostica, ma sono esclusi dagli invii automatici. Gli invii automatici useranno solo subscription registrate dalla PWA installata (`standalone`), non quelle abilitate dalla navigazione browser.
 - **Verificato**: installazione PWA su Chrome ed Edge tramite ambiente HTTPS; consenso e ricezione notifiche su Chrome Android. Edge Android resta compatibile ma mostra avvisi propri del browser.
-- **In corso**: PWA-06 motore invio Web Push e pagina diagnostica admin. L'invio automatico alla conferma mese resta PWA-07.
+- **In corso**: pagina diagnostica admin. L'invio automatico alla conferma mese resta PWA-07.
 
 ### Denormalizzare ultimo login in `public.users`
 - **Obiettivo**: aggiungere `public.users.last_login_at` per rendere la UI amministrativa indipendente da `auth.users`
