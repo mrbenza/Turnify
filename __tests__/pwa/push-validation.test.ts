@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isInternalPushTarget, isValidPushEndpoint } from '@/lib/push/validation'
+import { isInternalPushTarget, isValidPushEndpoint, parsePushExpirationTime } from '@/lib/push/validation'
 
 describe('Web Push validation', () => {
   it('accepts only internal notification targets', () => {
@@ -17,5 +17,13 @@ describe('Web Push validation', () => {
     expect(isValidPushEndpoint('https://user:password@example.com/push')).toBe(false)
     expect(isValidPushEndpoint('not-a-url')).toBe(false)
     expect(isValidPushEndpoint(123)).toBe(false)
+  })
+
+  it('parses optional subscription expiration times', () => {
+    expect(parsePushExpirationTime(null)).toBeNull()
+    expect(parsePushExpirationTime(undefined)).toBeNull()
+    expect(parsePushExpirationTime(Date.UTC(2026, 0, 1))).toBe('2026-01-01T00:00:00.000Z')
+    expect(parsePushExpirationTime(Number.POSITIVE_INFINITY)).toBeUndefined()
+    expect(parsePushExpirationTime('2026-01-01')).toBeUndefined()
   })
 })

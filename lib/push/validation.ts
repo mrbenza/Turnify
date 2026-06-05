@@ -22,3 +22,13 @@ export function isValidPushEndpoint(value: unknown) {
     return false
   }
 }
+
+export function parsePushExpirationTime(value: unknown) {
+  if (value === null || typeof value === 'undefined') return null
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return undefined
+
+  return date.toISOString()
+}

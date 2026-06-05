@@ -20,7 +20,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-02 | Progettare persistenza notifiche | Schema DB, RLS e strategia per subscription multiple per utente | Completato | Migration applicate e verificate sul database; accesso riservato al service role |
 | PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati, service worker e banner di installazione dopo il login | Completato | Installazione verificata su Chrome ed Edge; banner disponibile a tutti i ruoli dopo il login |
 | PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | Completato | Richiesta esplicita mostrata solo nella PWA installata e dopo il login; verificato su Chrome Android, Edge compatibile ma mostra avvisi propri del browser |
-| PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | In corso | API implementata; uno stesso utente puo avere piu dispositivi/browser |
+| PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Completato | API implementata e verificata con subscription reali; uno stesso utente puo avere piu dispositivi/browser |
 | PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | In corso | Invio manuale di test implementato; invio pubblicazione mese ancora da collegare |
 | PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla prima conferma operativa del mese | Da fare | Deve essere idempotente e non duplicare gli invii |
 | PWA-08 | Gestire apertura notifica | Il click apre la pagina utente pertinente | Da fare | Destinazione iniziale proposta: `/user` |
@@ -45,7 +45,7 @@ dipendenti quando i turni di un mese vengono confermati.
 |---|---|---|---|---|
 | BUG-PWA-01 | L'importazione storico imposta i mesi passati su `confirmed` | `POST /api/import-shifts` usa `confirmed` per un mese passato, correttamente per rappresentarne lo stato storico | L'import storico non deve mai generare notifiche push o invii email, ne interferire con lo stato degli invii | Da controllare |
 | RISK-PWA-01 | Esistono piu percorsi che impostano `month_status.status = confirmed` | Export, invio email e import storico possono scrivere lo stesso stato | L'invio deve dipendere da un evento applicativo esplicito e idempotente, non da un trigger generico su ogni `confirmed` | Da controllare |
-| RISK-PWA-02 | Uno stesso utente puo avere piu subscription | Ogni browser e dispositivo genera un endpoint diverso | Conservare subscription multiple e rimuovere solo gli endpoint scaduti o revocati | Da fare |
+| RISK-PWA-02 | Uno stesso utente puo avere piu subscription | Ogni browser e dispositivo genera un endpoint diverso | Conservare subscription multiple e rimuovere solo gli endpoint scaduti o revocati | Completato |
 
 ## Vincolo importazione storico
 

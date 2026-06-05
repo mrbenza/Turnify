@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isValidPushEndpoint } from '@/lib/push/validation'
+import { isValidPushEndpoint, parsePushExpirationTime } from '@/lib/push/validation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 type SubscriptionBody = {
@@ -26,6 +26,7 @@ export async function POST(request: Request) {
   const endpoint = body.endpoint
   const p256dh = body.keys?.p256dh
   const auth = body.keys?.auth
+  const expirationTime = parsePushExpirationTime(body.expirationTime)
 
   if (
     typeof endpoint !== 'string'
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     || typeof auth !== 'string'
     || p256dh.length > 500
     || auth.length > 500
+    || typeof expirationTime === 'undefined'
   ) {
     return NextResponse.json({ error: 'Subscription non valida' }, { status: 400 })
   }
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     endpoint,
     p256dh,
     auth,
-    expiration_time: body.expirationTime ? new Date(body.expirationTime).toISOString() : null,
+    expiration_time: expirationTime,
     user_agent: request.headers.get('user-agent'),
     last_seen_at: now,
     revoked_at: null,
