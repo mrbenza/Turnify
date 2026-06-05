@@ -27,7 +27,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
 | PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Da fare | Testare almeno Edge desktop e Android |
 | PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Da fare | Evitare l'attivazione globale senza osservabilita |
-| PWA-12 | Pagina diagnostica admin | Vista Debug per utenti, subscription, consegne e azioni diagnostiche | In corso | Pagina disponibile solo ad admin con debug attivo; endpoint e dati sensibili mascherati |
+| PWA-12 | Pagina diagnostica admin | Vista Debug per utenti, subscription, consegne, cleanup manuale e azioni diagnostiche | In corso | Pagina disponibile solo ad admin con debug attivo; endpoint e dati sensibili mascherati |
 
 ## Decisioni aperte
 
@@ -213,6 +213,9 @@ Regole:
   anche dopo lunghi periodi senza accessi;
 - la subscription viene revocata solo su richiesta esplicita dell'utente o
   quando il push service restituisce `404` o `410`.
+- a ogni apertura/login della PWA installata, se il permesso notifiche e gia
+  `granted`, il client controlla `pushManager.getSubscription()`: se la
+  subscription esiste la sincronizza con il DB, se manca la ricrea e la salva.
 
 ### Tabella `notification_events`
 
@@ -427,7 +430,7 @@ PWA-06 e completata quando:
 4. aggiungere test di vincoli, ownership e idempotenza;
 5. applicare e verificare la migration sul database solo dopo revisione.
 
-### Pagina diagnostica admin
+## Specifica PWA-12: diagnostica e cleanup admin
 
 Viene aggiunta una pagina dedicata alle notifiche sotto la sezione `Debug`
 della navigazione admin.
@@ -449,6 +452,7 @@ Vista principale per utente:
 | Ultima attivita | Massimo `last_seen_at` |
 | Ultima notifica | Evento piu recente |
 | Stato ultima notifica | `sent`, `partial`, `failed` |
+| Utente attivo | `users.attivo`; gli inattivi sono esclusi dagli automatici |
 
 Dettaglio dispositivi:
 
@@ -462,18 +466,58 @@ Dettaglio dispositivi:
 | Errori consecutivi | `failure_count` |
 | Revocato il | `revoked_at` |
 | Ultimo errore | Messaggio diagnostico sanificato |
+| Stato diagnostico | Attiva, revocata, browser, PWA installata, vecchia/stale |
 
 Non viene introdotto alcun nome dispositivo personalizzato. L'identificazione
 del dispositivo usa solamente il valore `user_agent`, che puo essere
 approssimativo.
 
+### Stati da evidenziare
+
+La pagina deve rendere chiari questi casi:
+
+| Caso | Significato | Azione consigliata |
+|---|---|---|
+| Utente inattivo | `users.attivo = false` | Non inviare automatici; lasciare visibile per valutazione admin |
+| Subscription revocata | `revoked_at is not null` | Non inviare; mostrare nello storico/diagnostica |
+| Dispositivo vecchio | `last_seen_at` molto distante | Evidenziare per cleanup manuale |
+| Browser subscription | `client_mode = browser` | Non usare negli automatici; disponibile per test/cleanup |
+| PWA subscription | `client_mode = standalone` | Usabile negli automatici se utente attivo |
+
+La soglia "vecchia/stale" e solo diagnostica, non una scadenza automatica. Non
+deve bloccare notifiche operative, perche un utente puo non aprire l'app per
+piu di 20 giorni e dover comunque ricevere la notifica.
+
 Azioni diagnostiche admin previste:
 
 - filtrare utenti o consegne con errori;
 - consultare lo storico notifiche di un utente;
-- revocare una subscription;
+- revocare manualmente una subscription, ad esempio per telefono formattato,
+  guasto, perso, sostituito o problemi notifiche;
+- distinguere revoca manuale da revoca automatica `404`/`410` quando il dato
+  sara disponibile;
 - ritentare una consegna fallita;
 - inviare una notifica di test a una singola subscription.
+
+La revoca manuale non cancella l'utente e non cambia `users.attivo`: imposta
+solo `push_subscriptions.revoked_at`. Se l'utente reinstallera la PWA o fara un
+nuovo login con permesso notifiche gia concesso, la webapp potra creare una
+nuova subscription valida e salvarla.
+
+### Regole per invii automatici
+
+Gli invii automatici della pubblicazione mese useranno solo subscription che
+rispettano tutte queste condizioni:
+
+- utente `attivo = true`;
+- ruolo destinatario dipendente;
+- stessa area della pubblicazione;
+- `push_subscriptions.revoked_at is null`;
+- `client_mode = standalone`;
+- endpoint ancora valido al momento dell'invio.
+
+Non vengono escluse automaticamente subscription solo per `last_seen_at`
+vecchio.
 
 La pagina non mostra mai:
 
