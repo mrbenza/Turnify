@@ -39,6 +39,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | D-04 | Quali eventi conservare? | Conservare `month_published` e ogni `month_republished`; lo sblocco non genera notifiche | Completato |
 | D-05 | Quanto deve durare una subscription senza accessi recenti? | Deve restare attiva anche dopo logout o oltre 20 giorni senza accessi; viene revocata solo esplicitamente o dopo risposta `404`/`410` dal push service | Completato |
 | D-06 | Cosa succede alle subscription degli utenti disattivati? | Restano nel database per diagnostica admin, ma gli utenti con `attivo = false` sono sempre esclusi dagli invii automatici | Completato |
+| D-07 | Quali subscription usare negli invii automatici? | Solo quelle registrate dalla PWA installata; eventuali subscription create dal browser restano diagnostiche o di cleanup | Completato |
 
 ## Bug e rischi da controllare
 
@@ -110,7 +111,8 @@ Ricevono l'evento tutti i dipendenti che, al momento della conferma:
 
 - hanno `attivo = true`;
 - appartengono alla stessa `area_id` del mese confermato;
-- possiedono almeno una subscription Web Push attiva.
+- possiedono almeno una subscription Web Push attiva registrata dalla PWA
+  installata.
 
 Se un manager disattiva un dipendente (`users.attivo = false`), le sue
 subscription non vengono cancellate automaticamente: restano disponibili alla
@@ -186,6 +188,7 @@ dispositivo. Uno stesso utente puo avere piu righe.
 | `auth` | text | Segreto auth della subscription |
 | `expiration_time` | timestamptz nullable | Se fornito dal browser |
 | `user_agent` | text nullable | Informazione diagnostica |
+| `client_mode` | text | `standalone` per PWA installata, `browser` per navigazione web |
 | `created_at` | timestamptz | Data prima registrazione |
 | `updated_at` | timestamptz | Data ultimo aggiornamento |
 | `last_seen_at` | timestamptz | Ultima conferma dal browser |
@@ -197,6 +200,13 @@ Regole:
 
 - `endpoint` e univoco globalmente;
 - una nuova registrazione dello stesso endpoint aggiorna la riga esistente;
+- il prompt di attivazione notifiche viene mostrato solo nella PWA installata,
+  non durante la semplice navigazione da browser;
+- gli invii automatici usano solo subscription `standalone`, per evitare
+  doppioni quando lo stesso utente ha abilitato notifiche sia da browser sia
+  dalla PWA;
+- le subscription `browser` possono restare visibili in diagnostica admin per
+  test o pulizia manuale;
 - una subscription revocata non viene usata per nuovi invii;
 - risposte push `404` o `410` impostano `revoked_at`;
 - il logout non revoca la subscription: le notifiche devono poter arrivare
