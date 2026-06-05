@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 const DISMISSED_KEY = 'turnify-notification-prompt-dismissed'
+const DENIED_DISMISSED_KEY = 'turnify-notification-denied-dismissed'
 
 function urlBase64ToUint8Array(value: string) {
   const padding = '='.repeat((4 - value.length % 4) % 4)
@@ -44,6 +45,7 @@ async function ensureSubscription() {
 export default function PushNotificationPrompt() {
   const pathname = usePathname()
   const [visible, setVisible] = useState(false)
+  const [permissionDenied, setPermissionDenied] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -54,6 +56,7 @@ export default function PushNotificationPrompt() {
 
     if (!authenticatedPage || !standalone || !supported) {
       setVisible(false)
+      setPermissionDenied(false)
       return
     }
 
@@ -62,13 +65,18 @@ export default function PushNotificationPrompt() {
         console.error('Sincronizzazione push subscription fallita:', syncError)
       })
       setVisible(false)
+      setPermissionDenied(false)
       return
     }
 
-    setVisible(
-      Notification.permission === 'default'
-      && sessionStorage.getItem(DISMISSED_KEY) !== 'true',
-    )
+    if (Notification.permission === 'denied') {
+      setPermissionDenied(true)
+      setVisible(sessionStorage.getItem(DENIED_DISMISSED_KEY) !== 'true')
+      return
+    }
+
+    setPermissionDenied(false)
+    setVisible(sessionStorage.getItem(DISMISSED_KEY) !== 'true')
   }, [pathname])
 
   async function enableNotifications() {
@@ -78,6 +86,11 @@ export default function PushNotificationPrompt() {
     try {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
+        if (permission === 'denied') {
+          setPermissionDenied(true)
+          setVisible(true)
+          return
+        }
         setVisible(false)
         return
       }
@@ -91,34 +104,38 @@ export default function PushNotificationPrompt() {
   }
 
   function dismiss() {
-    sessionStorage.setItem(DISMISSED_KEY, 'true')
+    sessionStorage.setItem(permissionDenied ? DENIED_DISMISSED_KEY : DISMISSED_KEY, 'true')
     setVisible(false)
   }
 
   if (!visible) return null
 
   return (
-    <aside className="fixed inset-x-0 bottom-0 z-[105] border-t border-emerald-500 bg-emerald-700 px-4 py-4 text-white shadow-[0_-8px_30px_rgba(15,23,42,0.2)] sm:px-6">
+    <aside className={`fixed inset-x-0 bottom-0 z-[105] border-t px-4 py-4 text-white shadow-[0_-8px_30px_rgba(15,23,42,0.2)] sm:px-6 ${permissionDenied ? 'border-amber-500 bg-amber-700' : 'border-emerald-500 bg-emerald-700'}`}>
       <div className="mx-auto max-w-3xl">
         <p className="text-sm leading-5 sm:text-base">
-          Attiva le notifiche per sapere quando i nuovi turni sono disponibili.
+          {permissionDenied
+            ? 'Le notifiche sono bloccate. Riattivale dalle impostazioni della PWA, del browser o del sistema operativo.'
+            : 'Attiva le notifiche per sapere quando i nuovi turni sono disponibili.'}
         </p>
-        {error && <p className="mt-2 text-xs text-emerald-100">{error}</p>}
+        {error && <p className={`mt-2 text-xs ${permissionDenied ? 'text-amber-100' : 'text-emerald-100'}`}>{error}</p>}
         <div className="mt-3 flex gap-2">
+          {!permissionDenied && (
+            <button
+              className="min-h-10 rounded-md bg-white px-5 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+              disabled={loading}
+              onClick={() => void enableNotifications()}
+              type="button"
+            >
+              {loading ? 'Attivazione...' : 'Attiva notifiche'}
+            </button>
+          )}
           <button
-            className="min-h-10 rounded-md bg-white px-5 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
-            disabled={loading}
-            onClick={() => void enableNotifications()}
-            type="button"
-          >
-            {loading ? 'Attivazione...' : 'Attiva notifiche'}
-          </button>
-          <button
-            className="min-h-10 rounded-md border border-emerald-300 px-5 text-sm font-semibold text-white hover:bg-emerald-600"
+            className={`min-h-10 rounded-md border px-5 text-sm font-semibold text-white ${permissionDenied ? 'border-amber-300 hover:bg-amber-600' : 'border-emerald-300 hover:bg-emerald-600'}`}
             onClick={dismiss}
             type="button"
           >
-            Non ora
+            {permissionDenied ? 'Ho capito' : 'Non ora'}
           </button>
         </div>
       </div>

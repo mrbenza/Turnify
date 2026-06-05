@@ -166,6 +166,65 @@ Lo step 4:
 - non genera notifiche push;
 - non e necessario per completare il flusso operativo.
 
+## Flusso app PWA e notifiche
+
+### Installazione
+
+1. L'utente naviga da browser e installa la PWA.
+2. Le notifiche vengono proposte solo dentro la PWA installata, non durante la
+   semplice navigazione da browser.
+3. Dopo il login nella PWA, Turnify controlla il supporto browser:
+   `Notification`, `serviceWorker` e `PushManager`.
+
+### Richiesta permesso notifiche
+
+Turnify usa il valore `Notification.permission`:
+
+| Permesso | Comportamento Turnify |
+|---|---|
+| `default` | Mostra il banner Turnify "Attiva notifiche"; al click apre il prompt nativo del browser |
+| `granted` | Controlla `pushManager.getSubscription()` e salva/sincronizza la subscription |
+| `denied` | Non puo aprire di nuovo il prompt nativo; deve mostrare un messaggio informativo |
+
+Se l'utente preme "Non ora" nel banner Turnify, il banner viene nascosto solo
+per la sessione corrente e potra essere riproposto in futuro.
+
+Se l'utente rifiuta il prompt nativo del browser e il permesso diventa
+`denied`, Turnify non puo richiedere di nuovo il permesso automaticamente.
+L'utente deve riabilitare le notifiche dalle impostazioni della PWA, del sito,
+del browser o del sistema operativo. Dopo che il permesso torna `granted`,
+Turnify potra creare o sincronizzare la subscription al successivo accesso
+dalla PWA.
+
+### Creazione e sincronizzazione subscription
+
+Quando il permesso e `granted`:
+
+1. Turnify legge `registration.pushManager.getSubscription()`.
+2. Se la subscription esiste e non e stata revocata manualmente lato Turnify,
+   viene salvata o aggiornata in `push_subscriptions`.
+3. Se non esiste, Turnify chiama `pushManager.subscribe()` e salva la nuova
+   subscription.
+4. La subscription viene registrata con `client_mode = standalone`.
+
+### Revoca e riattivazione
+
+La revoca admin non cancella l'utente e non cambia `users.attivo`: imposta
+`push_subscriptions.revoked_at`, `revoked_reason = manual_admin` e `revoked_by`.
+La stessa subscription revocata non viene riattivata in modo silenzioso al
+login, anche se il browser conserva ancora `Notification.permission = granted`.
+
+Se l'utente deve tornare a ricevere notifiche dopo una revoca admin, il flusso
+operativo semplice e:
+
+1. chiude/disinstalla la PWA;
+2. riapre Turnify da browser;
+3. installa nuovamente la PWA;
+4. accede dalla PWA installata;
+5. crea una nuova subscription valida.
+
+Non e previsto un toggle di riattivazione dentro Turnify in questa fase.
+
 ## Specifica PWA-02: persistenza notifiche
 
 La persistenza e divisa in tre responsabilita:
@@ -198,7 +257,7 @@ dispositivo. Uno stesso utente puo avere piu righe.
 | `revoked_reason` | text nullable | `manual_user`, `manual_admin`, `push_service_gone` |
 | `revoked_by` | uuid nullable | Admin che ha revocato manualmente, se disponibile |
 
-Regole:
+Regole dati:
 
 - `endpoint` e univoco globalmente;
 - una nuova registrazione dello stesso endpoint aggiorna la riga esistente;
@@ -217,7 +276,8 @@ Regole:
   quando il push service restituisce `404` o `410`.
 - a ogni apertura/login della PWA installata, se il permesso notifiche e gia
   `granted`, il client controlla `pushManager.getSubscription()`: se la
-  subscription esiste la sincronizza con il DB, se manca la ricrea e la salva.
+  subscription esiste la sincronizza con il DB solo se non risulta revocata
+  manualmente, se manca la ricrea e la salva.
 
 ### Tabella `notification_events`
 
@@ -501,10 +561,9 @@ Azioni diagnostiche admin previste:
 - ritentare una consegna fallita;
 - inviare una notifica di test a una singola subscription.
 
-La revoca manuale non cancella l'utente e non cambia `users.attivo`: imposta
-`push_subscriptions.revoked_at`, `revoked_reason = manual_admin` e `revoked_by`.
-Se l'utente reinstallera la PWA o fara un nuovo login con permesso notifiche
-gia concesso, la webapp potra creare una nuova subscription valida e salvarla.
+La revoca manuale segue il flusso descritto nella sezione "Revoca e
+riattivazione": non cancella l'utente, non cambia `users.attivo` e non viene
+riattivata automaticamente al login.
 
 ### Regole per invii automatici
 
@@ -543,3 +602,8 @@ La pagina non mostra mai:
 - Una subscription revocata manualmente da admin o utente non viene riattivata
   in modo silenzioso quando la PWA viene riaperta con permesso browser ancora
   `granted`.
+- Per riattivare dopo revoca admin non e previsto un toggle: l'utente deve
+  reinstallare la PWA e creare una nuova subscription.
+- Se `Notification.permission = denied`, Turnify non puo forzare un nuovo
+  prompt nativo: l'utente deve riabilitare le notifiche dalle impostazioni
+  browser/PWA/sistema operativo.

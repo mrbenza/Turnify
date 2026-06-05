@@ -45,6 +45,8 @@ describe('PWA installability', () => {
     expect(notificationPrompt).toContain('registration.pushManager.subscribe')
     expect(notificationPrompt).toContain("fetch('/api/push/subscriptions'")
     expect(notificationPrompt).toContain("clientMode: 'standalone'")
+    expect(notificationPrompt).toContain("Notification.permission === 'denied'")
+    expect(notificationPrompt).toContain('Le notifiche sono bloccate')
   })
 
   it('shows pushes and opens their target page', () => {
