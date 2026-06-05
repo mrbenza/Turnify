@@ -527,3 +527,15 @@ La pagina non mostra mai:
 - chiave `p256dh`;
 - segreto `auth`;
 - chiave privata VAPID.
+
+### Decisioni e debiti tecnici aperti
+
+- La regola definitiva per le subscription `browser` e ancora da decidere:
+  per ora la diagnostica distingue `browser` e `standalone`, ma non si cambia
+  la logica gia implementata.
+- La pagina debug notifiche non e pronta per volumi produttivi elevati: prima
+  della produzione deve imporre ricerca per nome o area e limitare i risultati
+  mostrati, evitando liste enormi e paginazione profonda.
+- Azione rapida "Revoca notifiche" disponibile solo all'amministratore nella
+  tabella `/admin/utenti`, utile per pulire le subscription di un utente senza
+  aprire la pagina debug.

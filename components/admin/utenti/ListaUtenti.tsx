@@ -60,7 +60,9 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [changingRole, setChangingRole] = useState<string | null>(null)
+  const [revokingNotifications, setRevokingNotifications] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [filterAreaId, setFilterAreaId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -210,6 +212,23 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
     }
   }
 
+  async function handleRevokeNotifications(dipendente: User) {
+    setRevokingNotifications(dipendente.id)
+    setErrorMsg(null)
+    setSuccessMsg(null)
+    try {
+      const res = await fetch(`/api/users/${dipendente.id}/notifications`, { method: 'PATCH' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'Errore sconosciuto')
+      setSuccessMsg(`Notifiche revocate per ${dipendente.nome}.`)
+    } catch (err) {
+      console.error('Errore revoca notifiche:', err)
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante la revoca notifiche.')
+    } finally {
+      setRevokingNotifications(null)
+    }
+  }
+
   const Spinner = () => (
     <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -268,6 +287,11 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
           {errorMsg}
         </p>
       )}
+      {successMsg && (
+        <p className="mb-4 text-sm text-green-700 bg-green-50 rounded-lg px-4 py-2.5" role="status">
+          {successMsg}
+        </p>
+      )}
 
       {/* Table */}
       {sorted.length === 0 ? (
@@ -309,6 +333,11 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
                     Attivo <span aria-hidden="true">{sortIndicator('attivo')}</span>
                   </button>
                 </th>
+                {isAdmin && (
+                  <th scope="col" className="text-left py-2.5 px-4 sm:px-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">
+                    Notifiche
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -411,6 +440,20 @@ export default function ListaUtenti({ initialUsers, currentUserId, isManager = f
                       })()}
                     </div>
                   </td>
+                  {isAdmin && (
+                    <td className="py-3 px-4 sm:px-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRevokeNotifications(dipendente)}
+                        disabled={dipendente.id === currentUserId || revokingNotifications === dipendente.id}
+                        aria-label={`Revoca notifiche di ${dipendente.nome}`}
+                        title={dipendente.id === currentUserId ? 'Non puoi revocare le notifiche del tuo account' : undefined}
+                        className="whitespace-nowrap rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {revokingNotifications === dipendente.id ? 'Revoca...' : 'Revoca notifiche'}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

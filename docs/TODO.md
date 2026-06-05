@@ -12,6 +12,10 @@ Funzionalita da implementare in ordine di priorita.
 - **Requisito futuro notifiche**: la subscription resta attiva anche dopo logout o oltre 20 giorni senza accessi; non dipende dalla sessione Supabase. Gli utenti disattivati restano visibili in diagnostica, ma sono esclusi dagli invii automatici. Gli invii automatici useranno solo subscription registrate dalla PWA installata (`standalone`), non quelle abilitate dalla navigazione browser. PWA-12 deve prevedere cleanup manuale admin per telefoni formattati, guasti, persi o sostituiti.
 - **Verificato**: installazione PWA su Chrome ed Edge tramite ambiente HTTPS; consenso e ricezione notifiche su Chrome Android. Edge Android resta compatibile ma mostra avvisi propri del browser.
 - **In corso**: pagina diagnostica admin con distinzione PWA/browser e cleanup manuale. L'invio automatico alla conferma mese resta PWA-07.
+- **Decisioni aperte**:
+  1. decidere se in futuro forzare la regola "browser = niente notifiche, PWA standalone = notifiche" oppure mantenere anche subscription browser per test/diagnostica;
+  2. prima della produzione, riprogettare la pagina debug notifiche: con molte subscription non deve caricare una lista enorme; deve richiedere ricerca per nome o area e limitare i risultati, senza paginazione profonda;
+- **Completato PWA-12**: pulsante "Revoca notifiche" nella riga utente di `/admin/utenti`, visibile solo all'amministratore e senza mostrare dettagli tecnici nella tabella utenti.
 
 ### Denormalizzare ultimo login in `public.users`
 - **Obiettivo**: aggiungere `public.users.last_login_at` per rendere la UI amministrativa indipendente da `auth.users`
