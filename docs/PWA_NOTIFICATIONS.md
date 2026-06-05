@@ -374,10 +374,24 @@ Regole:
 - altri status HTTP: delivery `failed`, `failure_count` incrementato;
 - invio riuscito: delivery `sent`, `last_success_at = now`,
   `failure_count = 0`;
+- PWA-06 non introduce retry automatici: ogni invio esegue un solo tentativo
+  immediato. Retry pianificati o code asincrone saranno valutati in uno step
+  successivo;
 - gli errori salvati in `notification_deliveries.error` devono essere
   sanificati e troncati;
 - endpoint, `p256dh`, `auth` e chiave privata VAPID non devono mai comparire
   nella UI o nei log utente.
+
+### Debug e invii automatici
+
+La pagina debug puo inviare notifiche manuali a qualsiasi subscription attiva,
+incluse quelle registrate dalla semplice navigazione browser. Questo serve per
+diagnostica e cleanup.
+
+Gli invii automatici operativi, invece, useranno solo subscription
+`standalone`, cioe registrate dalla PWA installata. Questa regola evita doppie
+notifiche quando lo stesso utente ha abilitato notifiche sia da browser sia da
+PWA.
 
 ### Evento aggregato
 
@@ -400,6 +414,8 @@ PWA-06 e completata quando:
 - le notifiche arrivano almeno su Chrome Android PWA installata;
 - delivery e subscription vengono aggiornate correttamente dopo successo;
 - endpoint non validi vengono marcati `revoked`;
+- la revoca degli endpoint `404`/`410` e coperta da test unitari o mock senza
+  dover rompere manualmente una subscription reale;
 - la pagina debug mostra storico, orari, HTTP status ed errori;
 - build, lint e test passano.
 
