@@ -23,7 +23,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Completato | API implementata e verificata con subscription reali; uno stesso utente puo avere piu dispositivi/browser |
 | PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | Completato | Motore di invio verificato con test manuali reali e mock di revoca; invio pubblicazione mese resta PWA-07 |
 | PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla prima conferma operativa del mese | Da fare | Deve essere idempotente e non duplicare gli invii |
-| PWA-08 | Gestire apertura notifica | Il click apre la pagina utente pertinente | Da fare | Destinazione iniziale proposta: `/user` |
+| PWA-08 | Gestire apertura notifica | Il click apre la home utente | Da fare | Destinazione: `/user`, cosi l'utente vede se ha turni assegnati |
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
 | PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Da fare | Testare almeno Edge desktop e Android |
 | PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Da fare | Evitare l'attivazione globale senza osservabilita |

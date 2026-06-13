@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeSupabaseMock } from '../helpers/supabase'
+import { DAILY_SESSION_COOKIE } from '@/lib/auth/dailySession'
 
 vi.mock('next/server', () => ({
   NextResponse: {
     json: (data: unknown, init?: { status?: number }) => ({
       status: init?.status ?? 200,
+      cookies: {
+        set: vi.fn(),
+      },
       json: async () => data,
     }),
   },
@@ -52,6 +56,11 @@ describe('POST /api/auth/track-login', () => {
     const res = await POST()
 
     expect(res.status).toBe(200)
+    expect(res.cookies.set).toHaveBeenCalledWith(
+      DAILY_SESSION_COOKIE,
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      expect.objectContaining({ path: '/', sameSite: 'lax' })
+    )
     expect(serviceClient.from).toHaveBeenCalledWith('users')
     const body = await res.json()
     expect(body.ok).toBe(true)

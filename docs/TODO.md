@@ -14,6 +14,7 @@ Funzionalita da implementare in ordine di priorita.
 - **In corso**: pagina diagnostica admin con distinzione PWA/browser e cleanup manuale. L'invio automatico alla conferma mese resta PWA-07.
 - **Regola revoca admin**: la stessa subscription revocata non si riattiva al login; se l'utente deve tornare a ricevere notifiche, disinstalla/chiude la PWA, la reinstalla da browser, accede dalla PWA installata e genera una nuova subscription.
 - **Regola permesso negato**: se l'utente rifiuta il prompt nativo e `Notification.permission = denied`, Turnify non puo riproporre il prompt; deve mostrare un messaggio informativo e l'utente deve riattivare le notifiche dalle impostazioni del browser/PWA/sistema operativo.
+- **PWA-08 definita**: il click sulla notifica porta alla home utente `/user`, cosi l'utente vede subito se ha turni assegnati.
 - **Decisioni aperte**:
   1. decidere se in futuro forzare la regola "browser = niente notifiche, PWA standalone = notifiche" oppure mantenere anche subscription browser per test/diagnostica;
   2. prima della produzione, riprogettare la pagina debug notifiche: con molte subscription non deve caricare una lista enorme; deve richiedere ricerca per nome o area e limitare i risultati, senza paginazione profonda;
@@ -111,7 +112,7 @@ Funzionalita da implementare in ordine di priorita.
 
 5. ✅ **Aggiornare README e docs post-security-hardening** — Documentazione riallineata a schema remoto, `last_login_at`, admin globali e cleanup file generati/orfani. (2026-06-03)
 
-6. **Valutare sessione inattività “rigida”** — Opzione futura: dopo 10 minuti di inattività, al primo refresh/interazione successiva la sessione deve essere considerata scaduta e l’utente deve tornare a `/login`. Da trattare come scelta di prodotto/UX, non come fix urgente.
+6. ✅ **Sessione giornaliera applicativa** — Cookie `turnify_login_day` impostato al login e validato da middleware/AuthGuard: ogni nuovo giorno Europe/Rome richiede un nuovo accesso, anche se Supabase avrebbe ancora una sessione valida. Il timeout inattività client-side da 10 minuti resta attivo. (2026-06-13)
 
 ---
 

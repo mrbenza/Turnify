@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import {
+  DAILY_SESSION_COOKIE,
+  DAILY_SESSION_MAX_AGE_SECONDS,
+  getDailySessionStamp,
+} from '@/lib/auth/dailySession'
 
 export async function POST() {
   const supabase = await createClient()
@@ -22,5 +27,13 @@ export async function POST() {
     return NextResponse.json({ error: 'Impossibile aggiornare il login' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, last_login_at: now })
+  const response = NextResponse.json({ ok: true, last_login_at: now })
+  response.cookies.set(DAILY_SESSION_COOKIE, getDailySessionStamp(), {
+    path: '/',
+    maxAge: DAILY_SESSION_MAX_AGE_SECONDS,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  })
+
+  return response
 }

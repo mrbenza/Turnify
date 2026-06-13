@@ -3,11 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { DAILY_SESSION_COOKIE, getDailySessionStamp } from '@/lib/auth/dailySession'
 
 const INACTIVITY_MINUTES = 10      // logout dopo 10 min di inattività
 const WARNING_BEFORE_SECONDS = 60  // avviso 60 sec prima del logout
 
 const EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']
+
+function readCookie(name: string): string | null {
+  const prefix = `${name}=`
+  const cookie = document.cookie.split('; ').find((entry) => entry.startsWith(prefix))
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null
+}
 
 export default function AuthGuard() {
   const router = useRouter()
@@ -22,6 +29,14 @@ export default function AuthGuard() {
     await supabase.auth.signOut()
     router.push('/login')
   }, [router])
+
+  const enforceDailySession = useCallback(async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && readCookie(DAILY_SESSION_COOKIE) !== getDailySessionStamp()) {
+      await logout()
+    }
+  }, [logout])
 
   const resetTimers = useCallback(() => {
     // Cancella timers esistenti
@@ -51,6 +66,8 @@ export default function AuthGuard() {
   useEffect(() => {
     const supabase = createClient()
 
+    void enforceDailySession()
+
     // Ascolta cambi di sessione Supabase
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
@@ -60,17 +77,21 @@ export default function AuthGuard() {
 
     // Avvia timers inattività (defer per evitare setState sincrono nell'effect)
     const initTimer = setTimeout(resetTimers, 0)
+    const dailySessionTimer = setInterval(() => {
+      void enforceDailySession()
+    }, 60 * 1000)
     EVENTS.forEach(e => window.addEventListener(e, resetTimers, { passive: true }))
 
     return () => {
       clearTimeout(initTimer)
+      clearInterval(dailySessionTimer)
       subscription.unsubscribe()
       if (timerRef.current) clearTimeout(timerRef.current)
       if (warningTimerRef.current) clearTimeout(warningTimerRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
       EVENTS.forEach(e => window.removeEventListener(e, resetTimers))
     }
-  }, [resetTimers, router])
+  }, [enforceDailySession, resetTimers, router])
 
   if (!showWarning) return null
 

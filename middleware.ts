@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { DAILY_SESSION_COOKIE, getDailySessionStamp } from '@/lib/auth/dailySession'
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
@@ -23,14 +24,16 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
+  const dailySessionStamp = request.cookies.get(DAILY_SESSION_COOKIE)?.value ?? null
+  const hasFreshDailySession = Boolean(user && dailySessionStamp === getDailySessionStamp())
 
   // Route /admin/* e /user/* richiedono autenticazione
-  if ((pathname.startsWith('/admin') || pathname.startsWith('/user')) && !user) {
+  if ((pathname.startsWith('/admin') || pathname.startsWith('/user')) && !hasFreshDailySession) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   // Route /login redirect alla home coerente col ruolo se già autenticato
-  if (pathname === '/login' && user) {
+  if (pathname === '/login' && hasFreshDailySession) {
     const { data: profile } = await supabase
       .from('users')
       .select('ruolo')
