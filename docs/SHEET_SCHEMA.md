@@ -44,7 +44,7 @@ Disponibilita inserite dai dipendenti (sabato, domenica, festivi attivi).
 
 **Status:**
 - `pending` → dipendente puo ancora modificare
-- `approved` → manager ha preso visione (impostato dopo export Excel)
+- `approved` → disponibilita approvata quando il mese viene confermato definitivamente
 - `locked` → mese confermato, immutabile
 
 **Constraint:** unique su `(user_id, date)`
@@ -109,14 +109,14 @@ Controlla lo stato e il lock di ogni mese.
 | status | text | `open` \| `locked` \| `confirmed` |
 | locked_by | uuid | FK → users.id (manager che ha bloccato) |
 | locked_at | timestamptz | quando e stato bloccato |
-| email_inviata | boolean | default false — true dopo invio notifica |
-| email_inviata_at | timestamptz | nullable — timestamp invio |
+| email_inviata | boolean | default false — true dopo invio email manuale/opzionale |
+| email_inviata_at | timestamptz | nullable — timestamp invio email |
 | area_id | uuid | FK → areas.id ON DELETE RESTRICT (migration 013) |
 
 **Status:**
 - `open` → mese in lavorazione, disponibilita modificabili
-- `locked` → confermato dal manager, pronto per export Excel, disponibilita immutabili
-- `confirmed` → Excel generato/scaricato; impostato automaticamente dall'API `/api/export` al momento del download
+- `locked` → salvato dal manager, pronto per conferma definitiva, disponibilita immutabili
+- `confirmed` → mese confermato e pubblicato da `/api/month` con `action = confirm`; Excel/email restano opzionali e non cambiano lo stato
 
 **Constraint:** unique su `(month, year, area_id)` — ogni area ha il proprio stato mensile
 **RLS:** admin e manager possono scrivere; tutti possono leggere.
@@ -191,22 +191,29 @@ Subscription Web Push registrate dai browser degli utenti.
 ---
 
 ## Tabella: `notification_events`
-Eventi logici creati quando un mese viene confermato e pubblicato.
+Eventi logici creati quando un mese viene confermato e pubblicato, piu eventi
+diagnostici `test` creati dalla pagina debug notifiche.
 
 | Colonna | Tipo | Note |
 |---------|------|------|
 | id | uuid | PK |
-| event_type | text | `month_published` \| `month_republished` |
-| area_id | uuid | FK → areas.id |
-| month | integer | 1-12 |
-| year | integer | >= 2024 |
-| publication_number | integer | progressivo per area/mese/anno |
+| event_type | text | `month_published` \| `month_republished` \| `test` |
+| area_id | uuid | FK → areas.id; nullable per eventi `test` |
+| month | integer | 1-12; nullable per eventi `test` |
+| year | integer | >= 2024; nullable per eventi `test` |
+| publication_number | integer | progressivo per area/mese/anno; nullable per eventi `test` |
 | created_by | uuid | FK → users.id |
 | created_at | timestamptz | default now() |
 | status | text | `pending` \| `sending` \| `sent` \| `partial` \| `failed` |
 | completed_at | timestamptz | nullable |
+| title | text | titolo payload Web Push; obbligatorio per eventi `test` |
+| body | text | testo payload Web Push; obbligatorio per eventi `test` |
+| target_url | text | percorso interno aperto al click, es. `/user?mese=2026-06` |
 
 **Constraint:** unique su `(area_id, month, year, publication_number)`.
+Gli eventi di pubblicazione mese richiedono `area_id`, `month`, `year` e
+`publication_number`; gli eventi `test` richiedono `title` e `body` ma non
+modificano lo stato mese.
 **RLS:** attiva senza policy client. Accesso esclusivo tramite `service_role`.
 
 ---
@@ -245,6 +252,11 @@ pubblicazione.
 - approva le disponibilita pending del periodo;
 - imposta il mese a `confirmed`;
 - crea `month_published` alla prima pubblicazione e `month_republished` alle successive.
+
+L'invio Web Push non avviene dentro la RPC: la route `/api/month`, dopo avere
+ricevuto l'evento, imposta `title`, `body`, `target_url`, seleziona i
+dipendenti attivi della stessa area con subscription PWA `standalone` e registra
+le consegne in `notification_deliveries`.
 
 ---
 

@@ -1,6 +1,23 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { resolveRequestArea } from '@/lib/utils/resolveRequestArea'
+import { sendNotificationEvent } from '@/lib/push/delivery'
+import type { NotificationEvent, PushSubscription } from '@/lib/supabase/types'
+
+const MONTH_NAMES = [
+  'gennaio',
+  'febbraio',
+  'marzo',
+  'aprile',
+  'maggio',
+  'giugno',
+  'luglio',
+  'agosto',
+  'settembre',
+  'ottobre',
+  'novembre',
+  'dicembre',
+]
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -160,36 +177,95 @@ export async function POST(request: Request) {
       )
     }
 
-    const daysInMonth = new Date(year, month, 0).getDate()
-    const from = `${year}-${String(month).padStart(2, '0')}-01`
-    const to = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+    const { data: event, error } = await serviceClient.rpc(
+      'confirm_month_and_create_notification_event',
+      {
+        p_area_id: effectiveAreaId,
+        p_month: month,
+        p_year: year,
+        p_created_by: user.id,
+      }
+    )
 
-    const { error: availabilityError } = await serviceClient
-      .from('availability')
-      .update({ status: 'approved' })
-      .eq('status', 'pending')
-      .eq('area_id', effectiveAreaId)
-      .gte('date', from)
-      .lte('date', to)
-
-    if (availabilityError) {
-      console.error('Errore approvazione disponibilità:', availabilityError)
-      return NextResponse.json({ error: 'Errore durante la conferma del mese.' }, { status: 500 })
-    }
-
-    const { error } = await serviceClient
-      .from('month_status')
-      .update({ status: 'confirmed' })
-      .eq('month', month)
-      .eq('year', year)
-      .eq('area_id', effectiveAreaId)
-
-    if (error) {
+    if (error || !event) {
       console.error('Errore conferma mese:', error)
       return NextResponse.json({ error: 'Errore durante la conferma del mese.' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    const monthName = MONTH_NAMES[month - 1]
+    const targetUrl = `/user?mese=${year}-${String(month).padStart(2, '0')}`
+    const title = event.event_type === 'month_republished'
+      ? `Turni di ${monthName} ${year} aggiornati`
+      : `Turni di ${monthName} ${year} confermati`
+    const message = event.event_type === 'month_republished'
+      ? `I turni di ${monthName} ${year} sono stati aggiornati. Consulta il calendario.`
+      : `Turni di ${monthName} ${year} confermati. Consulta il calendario.`
+
+    const { data: updatedEvent } = await serviceClient
+      .from('notification_events')
+      .update({
+        title,
+        body: message,
+        target_url: targetUrl,
+        status: 'sending',
+      })
+      .eq('id', event.id)
+      .select()
+      .single<NotificationEvent>()
+
+    const notificationEvent = updatedEvent ?? event
+
+    const { data: recipients, error: recipientsError } = await serviceClient
+      .from('users')
+      .select('id')
+      .eq('area_id', effectiveAreaId)
+      .eq('attivo', true)
+      .eq('ruolo', 'dipendente')
+
+    if (recipientsError) {
+      console.error('Errore lettura destinatari notifiche:', recipientsError)
+      await serviceClient
+        .from('notification_events')
+        .update({ status: 'failed', completed_at: new Date().toISOString() })
+        .eq('id', event.id)
+      return NextResponse.json({ error: 'Mese confermato, ma errore durante la preparazione notifiche.' }, { status: 500 })
+    }
+
+    const recipientIds = (recipients ?? []).map((recipient) => recipient.id)
+    const { data: subscriptions, error: subscriptionsError } = recipientIds.length
+      ? await serviceClient
+          .from('push_subscriptions')
+          .select('*')
+          .in('user_id', recipientIds)
+          .eq('client_mode', 'standalone')
+          .is('revoked_at', null)
+      : { data: [], error: null }
+
+    if (subscriptionsError) {
+      console.error('Errore lettura subscription notifiche:', subscriptionsError)
+      await serviceClient
+        .from('notification_events')
+        .update({ status: 'failed', completed_at: new Date().toISOString() })
+        .eq('id', event.id)
+      return NextResponse.json({ error: 'Mese confermato, ma errore durante la preparazione notifiche.' }, { status: 500 })
+    }
+
+    const delivery = await sendNotificationEvent(
+      serviceClient,
+      notificationEvent,
+      (subscriptions ?? []) as PushSubscription[],
+      { title, body: message, url: targetUrl },
+    )
+
+    return NextResponse.json({
+      success: true,
+      notification_event_id: event.id,
+      notifications: {
+        recipients: recipientIds.length,
+        subscriptions: subscriptions?.length ?? 0,
+        ...delivery,
+      },
+    })
   }
 
   const lockPayload =

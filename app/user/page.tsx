@@ -1,12 +1,40 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import type { User, SchedulingMode } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
 import CalendarioDisponibilita from '@/components/user/CalendarioDisponibilita'
 import StoricoTurni, { type ShiftRow } from '@/components/user/StoricoTurni'
+import TurniPubblicatiMini, {
+  type PublishedShift,
+} from '@/components/user/TurniPubblicatiMini'
 
-export default async function UserPage() {
+type UserPageSearchParams = {
+  mese?: string
+}
+
+function parsePublishedMonth(value: string | undefined) {
+  if (!value) return null
+
+  const match = /^(\d{4})-(\d{2})$/.exec(value)
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (!Number.isInteger(year) || !Number.isInteger(month)) return null
+  if (year < 2000 || year > 2100 || month < 1 || month > 12) return null
+
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`
+  return { year, month, monthKey }
+}
+
+export default async function UserPage({
+  searchParams,
+}: {
+  searchParams?: Promise<UserPageSearchParams>
+}) {
   const supabase = await createClient()
+  const resolvedSearchParams = searchParams ? await searchParams : undefined
+  const publishedMonth = parsePublishedMonth(resolvedSearchParams?.mese)
 
   // Auth check
   const {
@@ -88,6 +116,54 @@ export default async function UserPage() {
   const shifts = shiftsRes.data ?? []
 
   const allMonthStatuses = monthStatusRes.data ?? []
+  const publishedMonthStatus = publishedMonth
+    ? allMonthStatuses.find(
+        (status) =>
+          status.area_id === areaId &&
+          status.year === publishedMonth.year &&
+          status.month === publishedMonth.month
+      )
+    : null
+
+  let publishedShifts: PublishedShift[] = []
+  let publishedHolidays: { date: string; name: string; mandatory: boolean }[] = []
+
+  if (publishedMonth && publishedMonthStatus?.status === 'confirmed' && areaId) {
+    const serviceClient = createServiceClient()
+    const daysInMonth = new Date(publishedMonth.year, publishedMonth.month, 0).getDate()
+    const from = `${publishedMonth.monthKey}-01`
+    const to = `${publishedMonth.monthKey}-${String(daysInMonth).padStart(2, '0')}`
+
+    const [publishedShiftsRes, areaUsersRes, publishedHolidaysRes] = await Promise.all([
+      serviceClient
+        .from('shifts')
+        .select('id, date, user_id, user_nome, shift_type, reperibile_order')
+        .eq('area_id', areaId)
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
+        .order('reperibile_order', { ascending: true }),
+
+      serviceClient
+        .from('users')
+        .select('id, nome')
+        .eq('area_id', areaId),
+
+      serviceClient
+        .from('holidays')
+        .select('date, name, mandatory')
+        .gte('date', from)
+        .lte('date', to),
+    ])
+
+    const userNames = new Map((areaUsersRes.data ?? []).map((user) => [user.id, user.nome]))
+
+    publishedShifts = (publishedShiftsRes.data ?? []).map((shift) => ({
+      ...shift,
+      user_nome: shift.user_nome ?? userNames.get(shift.user_id) ?? 'Utente',
+    }))
+    publishedHolidays = publishedHolidaysRes.data ?? []
+  }
 
   const lockedMonths = new Set<string>(
     allMonthStatuses
@@ -148,6 +224,17 @@ export default async function UserPage() {
             schedulingMode={schedulingMode}
           />
         </section>
+
+        {publishedMonth && publishedMonthStatus?.status === 'confirmed' && (
+          <TurniPubblicatiMini
+            year={publishedMonth.year}
+            month={publishedMonth.month}
+            areaNome={areaNome}
+            currentUserId={authUser.id}
+            shifts={publishedShifts}
+            holidays={publishedHolidays}
+          />
+        )}
 
         {/* Storico */}
         <section

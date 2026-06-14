@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server'
 import { requireDebugAdmin } from '@/lib/debug-auth'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getPushStatusCode, sanitizePushError, sendWebPush } from '@/lib/push/server'
+import { sendNotificationEvent } from '@/lib/push/delivery'
 import { isInternalPushTarget } from '@/lib/push/validation'
 import type { PushSubscription } from '@/lib/supabase/types'
+
+const MONTH_NAMES = [
+  'gennaio',
+  'febbraio',
+  'marzo',
+  'aprile',
+  'maggio',
+  'giugno',
+  'luglio',
+  'agosto',
+  'settembre',
+  'ottobre',
+  'novembre',
+  'dicembre',
+]
 
 function maskEndpoint(endpoint: string) {
   try {
@@ -19,7 +34,7 @@ export async function GET() {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const serviceClient = createServiceClient()
-  const [subscriptionsResult, deliveriesResult] = await Promise.all([
+  const [subscriptionsResult, deliveriesResult, areasResult] = await Promise.all([
     serviceClient
       .from('push_subscriptions')
       .select('id, user_id, endpoint, expiration_time, user_agent, created_at, updated_at, last_seen_at, last_success_at, failure_count, revoked_at, client_mode, revoked_reason, revoked_by')
@@ -29,9 +44,13 @@ export async function GET() {
       .select('id, event_id, subscription_id, user_id, status, attempts, last_attempt_at, sent_at, http_status, error')
       .order('last_attempt_at', { ascending: false })
       .limit(100),
+    serviceClient
+      .from('areas')
+      .select('id, nome')
+      .order('nome', { ascending: true }),
   ])
 
-  if (subscriptionsResult.error || deliveriesResult.error) {
+  if (subscriptionsResult.error || deliveriesResult.error || areasResult.error) {
     return NextResponse.json({ error: 'Impossibile caricare la diagnostica' }, { status: 500 })
   }
 
@@ -56,6 +75,7 @@ export async function GET() {
   const eventMap = new Map((eventsResult.data ?? []).map((event) => [event.id, event]))
 
   return NextResponse.json({
+    areas: areasResult.data ?? [],
     users: userIds.map((userId) => ({
       ...userMap.get(userId),
       subscriptions: subscriptions
@@ -77,11 +97,107 @@ export async function POST(request: Request) {
   const auth = await requireDebugAdmin()
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-  let body: { subscriptionIds?: string[]; title?: string; message?: string; url?: string }
+  let body: {
+    mode?: string
+    subscriptionIds?: string[]
+    title?: string
+    message?: string
+    url?: string
+    areaId?: string
+    month?: number
+    year?: number
+    republished?: boolean
+  }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
+  }
+
+  if (body.mode === 'month-publication-test') {
+    const areaId = typeof body.areaId === 'string' ? body.areaId : ''
+    const month = Number(body.month)
+    const year = Number(body.year)
+
+    if (!areaId || !Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2024 || year > 2100) {
+      return NextResponse.json({ error: 'Area, mese o anno non validi' }, { status: 400 })
+    }
+
+    const serviceClient = createServiceClient()
+    const monthName = MONTH_NAMES[month - 1]
+    const targetUrl = `/user?mese=${year}-${String(month).padStart(2, '0')}`
+    const title = body.republished
+      ? `Turni di ${monthName} ${year} aggiornati`
+      : `Turni di ${monthName} ${year} confermati`
+    const message = body.republished
+      ? `I turni di ${monthName} ${year} sono stati aggiornati. Consulta il calendario.`
+      : `Turni di ${monthName} ${year} confermati. Consulta il calendario.`
+
+    const { data: recipients, error: recipientsError } = await serviceClient
+      .from('users')
+      .select('id')
+      .eq('area_id', areaId)
+      .eq('attivo', true)
+      .eq('ruolo', 'dipendente')
+
+    if (recipientsError) {
+      return NextResponse.json({ error: 'Impossibile caricare i destinatari' }, { status: 500 })
+    }
+
+    const recipientIds = (recipients ?? []).map((recipient) => recipient.id)
+    const { data: subscriptions, error: subscriptionsError } = recipientIds.length
+      ? await serviceClient
+          .from('push_subscriptions')
+          .select('*')
+          .in('user_id', recipientIds)
+          .eq('client_mode', 'standalone')
+          .is('revoked_at', null)
+      : { data: [], error: null }
+
+    if (subscriptionsError) {
+      return NextResponse.json({ error: 'Impossibile caricare le subscription' }, { status: 500 })
+    }
+
+    if (!subscriptions?.length) {
+      return NextResponse.json({ error: 'Nessuna subscription PWA attiva per questa area' }, { status: 400 })
+    }
+
+    const { data: event, error: eventError } = await serviceClient
+      .from('notification_events')
+      .insert({
+        event_type: 'test',
+        area_id: null,
+        month: null,
+        year: null,
+        publication_number: null,
+        created_by: auth.user.id,
+        title,
+        body: message,
+        target_url: targetUrl,
+        status: 'sending',
+      })
+      .select()
+      .single()
+
+    if (eventError || !event) {
+      return NextResponse.json({ error: 'Impossibile creare evento di test pubblicazione' }, { status: 500 })
+    }
+
+    const result = await sendNotificationEvent(
+      serviceClient,
+      event,
+      subscriptions as PushSubscription[],
+      { title, body: message, url: targetUrl },
+    )
+
+    return NextResponse.json({
+      ok: true,
+      event_id: event.id,
+      recipients: recipientIds.length,
+      subscriptions: subscriptions.length,
+      target_url: targetUrl,
+      ...result,
+    })
   }
 
   const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : ''
@@ -127,69 +243,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Impossibile creare evento di test' }, { status: 500 })
   }
 
-  let sent = 0
-  let failed = 0
+  const result = await sendNotificationEvent(
+    serviceClient,
+    event,
+    subscriptions as PushSubscription[],
+    { title, body: message, url: targetUrl },
+  )
 
-  for (const subscription of subscriptions as PushSubscription[]) {
-    const now = new Date().toISOString()
-    const { data: delivery } = await serviceClient
-      .from('notification_deliveries')
-      .insert({
-        event_id: event.id,
-        subscription_id: subscription.id,
-        user_id: subscription.user_id,
-        status: 'pending',
-        attempts: 1,
-        last_attempt_at: now,
-      })
-      .select()
-      .single()
-
-    if (!delivery) {
-      failed += 1
-      continue
-    }
-
-    try {
-      const response = await sendWebPush(subscription, { title, body: message, url: targetUrl })
-      sent += 1
-      await Promise.all([
-        serviceClient.from('notification_deliveries').update({
-          status: 'sent',
-          sent_at: now,
-          http_status: response.statusCode,
-        }).eq('id', delivery.id),
-        serviceClient.from('push_subscriptions').update({
-          last_success_at: now,
-          failure_count: 0,
-        }).eq('id', subscription.id),
-      ])
-    } catch (pushError) {
-      failed += 1
-      const statusCode = getPushStatusCode(pushError)
-      const revoked = statusCode === 404 || statusCode === 410
-      await Promise.all([
-        serviceClient.from('notification_deliveries').update({
-          status: revoked ? 'revoked' : 'failed',
-          http_status: statusCode,
-          error: sanitizePushError(pushError),
-        }).eq('id', delivery.id),
-        serviceClient.from('push_subscriptions').update({
-          failure_count: subscription.failure_count + 1,
-          revoked_at: revoked ? now : subscription.revoked_at,
-          revoked_reason: revoked ? 'push_service_gone' : subscription.revoked_reason,
-        }).eq('id', subscription.id),
-      ])
-    }
-  }
-
-  const finalStatus = failed === 0 ? 'sent' : sent === 0 ? 'failed' : 'partial'
-  await serviceClient.from('notification_events').update({
-    status: finalStatus,
-    completed_at: new Date().toISOString(),
-  }).eq('id', event.id)
-
-  return NextResponse.json({ ok: true, event_id: event.id, sent, failed, status: finalStatus })
+  return NextResponse.json({ ok: true, event_id: event.id, ...result })
 }
 
 export async function PATCH(request: Request) {

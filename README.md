@@ -18,7 +18,8 @@ e calendario festivita.
 | Auth | Supabase Auth | Email + password |
 | Export Excel | API route Next.js + JSZip | Modifica solo `xl/worksheets/sheet1.xml` del template; logo, firma e conditional formatting rimangono intatti |
 | Type Safety | TypeScript 5 + Supabase JS v2 | `lib/supabase/types.ts` generato da Supabase CLI; zero `any` cast nel codebase |
-| Email | Brevo SMTP API | Free tier, 300 email/giorno, allegato Excel in base64 |
+| Email | Brevo SMTP API | Free tier, 300 email/giorno, allegato Excel in base64; canale opzionale dopo conferma |
+| PWA Push | Web Push + VAPID | Canale operativo principale per pubblicazione mese |
 
 ---
 
@@ -96,9 +97,11 @@ turnify/
 │       ├── shifts/route.ts          ← GET lista turni, POST assegna
 │       ├── shifts/[id]/route.ts     ← DELETE rimuovi turno
 │       ├── availability/route.ts    ← GET/POST disponibilita
-│       ├── month/route.ts           ← POST stato mese (lock/confirm/unlock)
+│       ├── month/route.ts           ← POST stato mese (lock/confirm/unlock) + evento/invio Web Push
 │       ├── export/route.ts          ← GET genera XLSX opzionale per mesi confirmed
-│       ├── send-email/route.ts      ← POST invia email manuale con allegato Excel
+│       ├── send-email/route.ts      ← POST invia email manuale opzionale con allegato Excel
+│       ├── push/subscriptions/route.ts ← POST/DELETE subscription Web Push
+│       ├── debug/notifications/route.ts ← diagnostica, test e cleanup notifiche
 │       ├── import-shifts/route.ts   ← POST importa storico da XLSX (JSZip)
 │       ├── import-shifts/resolve/route.ts ← POST risolve turni con utente non trovato
 │       ├── holidays/route.ts        ← GET/POST/DELETE gestione festivita
@@ -118,6 +121,7 @@ turnify/
 │   ├── user/
 │   │   ├── NavbarUtente.tsx
 │   │   ├── CalendarioDisponibilita.tsx
+│   │   ├── TurniPubblicatiMini.tsx  ← snapshot grafico mese confirmed da /user?mese=YYYY-MM
 │   │   └── StoricoTurni.tsx         ← server component puro; riceve turni: ShiftRow[] come prop; vista mobile (card) + desktop (table)
 │   └── admin/
 │       ├── NavbarAdmin.tsx          ← sidebar desktop + bottom bar mobile; nav diversa per admin vs manager; "Altro" sempre visibile su mobile per accesso logout
@@ -203,7 +207,7 @@ turnify/
 | Pagina | Descrizione |
 |--------|-------------|
 | `/admin` | Dashboard: contatori utenti (manager + dipendenti, esclusi admin), stato template Excel, accesso rapido a Utenti e Sistema. |
-| `/admin/utenti` | Gestione utenti: vede tutti tranne altri admin (manager + dipendenti). Puo aggiungere, cambiare ruolo, attivare/disattivare, eliminare. L'ultimo login arriva da `auth.users` tramite RPC server-side. |
+| `/admin/utenti` | Gestione utenti: vede tutti tranne altri admin (manager + dipendenti). Puo aggiungere, cambiare ruolo, attivare/disattivare, eliminare e revocare notifiche se presenti. L'ultimo login arriva da `public.users.last_login_at`. |
 | `/admin/sistema` | Layout a 2 colonne: upload template Excel, importazione storico reperibilita da XLSX, calendario festivita (import da Nager.Date, toggle Attiva/Non attiva, aggiunta manuale, elimina). |
 
 Navbar admin (sidebar desktop): Dashboard — Utenti — Sistema
@@ -227,7 +231,7 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 
 | Pagina | Descrizione |
 |--------|-------------|
-| `/user` | Calendario disponibilita (mese corrente + prossimo) e storico turni assegnati. |
+| `/user` | Calendario disponibilita (mese corrente + prossimo), storico turni assegnati e, con `?mese=YYYY-MM`, mini calendario del mese pubblicato se `confirmed`. |
 
 ---
 
@@ -252,7 +256,7 @@ Navbar manager (sidebar desktop + bottom bar mobile):
 
 5. Manager → /admin/export ("Invio turni")
    Seleziona il mese e controlla l'anteprima grafica (distribuzione turni).
-   "Conferma e pubblica" → month_status → 'confirmed'.
+   "Conferma e pubblica" → month_status → 'confirmed', crea evento notifica e invia Web Push ai dipendenti attivi della stessa area.
    Dopo la conferma puo opzionalmente generare Excel o inviare email.
 
 6. Admin → /admin/sistema (separato dal flusso operativo)
@@ -338,7 +342,7 @@ Nota: gli admin sono globali e devono avere `area_id = NULL`; il vincolo `users_
 Status:
 - `open` — in lavorazione
 - `locked` — salvato dal manager e in attesa di conferma definitiva; **immutabile**, ma riapribile dal manager
-- `confirmed` — confermato e pubblicato esplicitamente da `/api/month`; **immutabile**, riapribile solo dall'admin
+- `confirmed` — confermato e pubblicato esplicitamente da `/api/month`; crea evento Web Push, **immutabile**, riapribile solo dall'admin
 
 ### `email_settings`
 | Colonna | Tipo | Note |
@@ -348,6 +352,32 @@ Status:
 | descrizione | text | nullable |
 | attivo | boolean | default true |
 | area_id | uuid | FK → areas.id — ownership per area; ogni manager gestisce solo le proprie |
+
+### `push_subscriptions`
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | uuid | PK |
+| user_id | uuid | FK → users.id |
+| endpoint | text | endpoint Web Push, mai mostrato completo in UI |
+| p256dh | text | chiave pubblica subscription |
+| auth | text | segreto subscription |
+| client_mode | text | `standalone` \| `browser` |
+| last_seen_at | timestamptz | ultima sincronizzazione client |
+| last_success_at | timestamptz | ultimo invio accettato dal push service |
+| failure_count | integer | errori consecutivi |
+| revoked_at | timestamptz | nullable; se valorizzato esclusa dagli invii |
+| revoked_reason | text | `manual_user` \| `manual_admin` \| `push_service_gone` |
+
+### `notification_events` / `notification_deliveries`
+`notification_events` rappresenta la pubblicazione logica o un test debug:
+`month_published`, `month_republished`, `test`.
+
+Campi principali: `area_id`, `month`, `year`, `publication_number`,
+`title`, `body`, `target_url`, `status`, `completed_at`.
+
+`notification_deliveries` registra l'esito per singola subscription:
+`pending`, `sent`, `failed`, `revoked`, con HTTP status, errore sanificato e
+orari di tentativo/successo.
 
 ---
 
@@ -670,6 +700,27 @@ Vedi `docs/TODO.md` per il backlog completo.
 
 ---
 
+### [2026-06-14] — PWA Push: pubblicazione mese, mini calendario e debug
+
+**File principali:**
+- `app/api/month/route.ts`
+- `app/api/debug/notifications/route.ts`
+- `app/user/page.tsx`
+- `components/user/TurniPubblicatiMini.tsx`
+- `components/admin/NotificationDebugPanel.tsx`
+- `lib/push/delivery.ts`
+
+**Sommario:** La conferma definitiva del mese (`locked -> confirmed`) crea
+l'evento `month_published`/`month_republished`, imposta il link
+`/user?mese=YYYY-MM` e invia Web Push ai dipendenti attivi della stessa area
+con subscription PWA installata. La home dipendente mostra un mini calendario
+del mese pubblicato. La pagina debug notifiche permette un test pubblicazione
+non distruttivo per area/mese/anno.
+
+**Status:** Completato
+
+---
+
 ### [2026-03-24] — DOCS AGENT — Documentazione aggiornata
 
 **File modificati:** `README.md`, `CLAUDE.md`, `docs/TODO.md`, `docs/ARCHITECTURE.md`
@@ -696,8 +747,8 @@ Vedi `docs/TODO.md` per il backlog completo.
 **Dettagli:**
 1. `sendTurniEmail.ts` — Invia email Brevo con tabella turni HTML + allegato Excel base64. `to` = mittente, `bcc` = dipendenti attivi + email_settings. Env vars: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`.
 2. `generateTurniExcel.ts` — Logica generazione XLSX estratta da `export/route.ts` e condivisa con `send-email/route.ts`.
-3. `export/route.ts` — Auto-invio email se `!email_inviata` dopo il download; setta `confirmed` + `email_inviata=true`.
-4. `send-email/route.ts` — Invio manuale da ExportForm; genera Excel + invia email + setta `confirmed` + `email_inviata=true`.
+3. `export/route.ts` — Storicamente confermava il mese e avviava email; oggi genera solo Excel opzionale per mesi gia `confirmed`.
+4. `send-email/route.ts` — Storicamente confermava il mese; oggi invia email opzionale e aggiorna solo `email_inviata`.
 5. `ExportForm.tsx` — Bottone "Invia email" + stato "Email inviata ✓".
 6. `CalendarioGlobale.tsx` — Prop `isConfirmed` separata da `locked`; mese `confirmed` = nessun unlock per manager; admin vede bottone "Sblocca" con dialog di conferma.
 7. `month/route.ts` — Unlock resetta `email_inviata=false`, `email_inviata_at=null`.

@@ -8,13 +8,15 @@ Funzionalita da implementare in ordine di priorita.
 
 ### PWA notifiche Web Push
 - **Stato**: PWA-12 in corso sul ramo `feat/pwa`.
-- **Implementato e verificato**: tabelle `push_subscriptions`, `notification_events`, `notification_deliveries`; RLS senza accesso client; API autenticate di registrazione/revoca subscription; motore server-side di invio Web Push con VAPID; RPC atomica `confirm_month_and_create_notification_event`; indici delle chiavi esterne.
+- **Implementato e verificato**: tabelle `push_subscriptions`, `notification_events`, `notification_deliveries`; RLS senza accesso client; API autenticate di registrazione/revoca subscription; motore server-side di invio Web Push con VAPID; RPC atomica `confirm_month_and_create_notification_event`; invio operativo alla conferma mese; mini calendario pubblicato; indici delle chiavi esterne.
 - **Requisito futuro notifiche**: la subscription resta attiva anche dopo logout o oltre 20 giorni senza accessi; non dipende dalla sessione Supabase. Gli utenti disattivati restano visibili in diagnostica, ma sono esclusi dagli invii automatici. Gli invii automatici useranno solo subscription registrate dalla PWA installata (`standalone`), non quelle abilitate dalla navigazione browser. PWA-12 deve prevedere cleanup manuale admin per telefoni formattati, guasti, persi o sostituiti.
 - **Verificato**: installazione PWA su Chrome ed Edge tramite ambiente HTTPS; consenso e ricezione notifiche su Chrome Android. Edge Android resta compatibile ma mostra avvisi propri del browser.
-- **In corso**: pagina diagnostica admin con distinzione PWA/browser e cleanup manuale. L'invio automatico alla conferma mese resta PWA-07.
+- **In corso**: pagina diagnostica admin con distinzione PWA/browser e cleanup manuale.
+- **Completato PWA-07**: quando il manager conferma definitivamente un mese gia salvato, la route crea l'evento `month_published`/`month_republished`, imposta la destinazione `/user?mese=YYYY-MM` e invia Web Push ai dipendenti attivi della stessa area con subscription PWA installata.
+- **Test PWA-07 da debug**: `/admin/test/notifiche` permette di simulare una pubblicazione mese per area/mese/anno senza modificare `month_status`, usando gli stessi destinatari automatici e la stessa destinazione della notifica reale.
 - **Regola revoca admin**: la stessa subscription revocata non si riattiva al login; se l'utente deve tornare a ricevere notifiche, disinstalla/chiude la PWA, la reinstalla da browser, accede dalla PWA installata e genera una nuova subscription.
 - **Regola permesso negato**: se l'utente rifiuta il prompt nativo e `Notification.permission = denied`, Turnify non puo riproporre il prompt; deve mostrare un messaggio informativo e l'utente deve riattivare le notifiche dalle impostazioni del browser/PWA/sistema operativo.
-- **PWA-08 definita**: il click sulla notifica porta alla home utente `/user`, cosi l'utente vede subito se ha turni assegnati.
+- **Completato PWA-08**: `/user?mese=YYYY-MM` mostra sotto il calendario disponibilita un mini calendario grafico del mese chiuso, solo se il mese dell'area e `confirmed`. Ogni dipendente vede tutti i turni della propria area, non quelli delle altre aree.
 - **Decisioni aperte**:
   1. decidere se in futuro forzare la regola "browser = niente notifiche, PWA standalone = notifiche" oppure mantenere anche subscription browser per test/diagnostica;
   2. prima della produzione, riprogettare la pagina debug notifiche: con molte subscription non deve caricare una lista enorme; deve richiedere ricerca per nome o area e limitare i risultati, senza paginazione profonda;
@@ -152,7 +154,7 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 - **[2026-03-24] Storico festivi nel drawer** — Per ogni festivo obbligatorio, sotto ogni nome utente appare "lavorato [nome] '[anno]" se ha lavorato quel festivo in anni precedenti. Query client-side su `holidays` (mandatory, year < corrente) + `shifts` su quelle date. Score non modificato.
 - **[2026-03-24] Pairing con conferma (tutti i modi)** — `weekend_full`: click Sab chiede conferma per Dom e viceversa. `sun_next_sat`: click Dom chiede conferma per Sab+7. In entrambi i casi il manager può scegliere "Solo Sab" / "Solo Dom". L'auto-pairing silenzioso è stato rimosso completamente. Dialog dinamico: testo e bottoni si adattano al giorno abbinato.
 - **[2026-03-24] Festività anni futuri** — Import manuale via bottone "Aggiorna festivita {anno}" in pagina Sistema. Usa API Nager.Date (`/api/v3/PublicHolidays/{year}/IT`) per qualsiasi anno tra 2024 e 2030. Upsert sicuro: se l'anno e gia presente, non duplica ma restituisce i record esistenti.
-- **[2026-03-23] Email notifica mese confermato** — Implementato con **Brevo** (brevo.com, free tier 300/giorno). `lib/email/sendTurniEmail.ts`: HTML + text + allegato Excel base64, BCC per tutti i destinatari. Auto-invio su export GET se `!email_inviata`; invio manuale via POST `/api/send-email`. Env vars: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`.
+- **[2026-03-23] Email turni Brevo** — Implementato con **Brevo** (brevo.com, free tier 300/giorno). `lib/email/sendTurniEmail.ts`: HTML + text + allegato Excel base64, BCC per tutti i destinatari. Nel flusso attuale l'email e opzionale dopo la conferma definitiva e non modifica `month_status.status`. Env vars: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`.
 - **[2026-03-23] Mesi confirmed immutabili** — Manager non puo sbloccare mesi `confirmed`; solo admin puo con dialog di conferma. CalendarioGlobale: `isConfirmed` prop separata da `locked`.
 - **[2026-03-23] Admin aggiunto alla navbar Disponibilita** — Admin accede al CalendarioGlobale e puo sbloccare mesi confirmed.
 - **[v1.2.0] Fix logout admin mobile** — Il pulsante "Altro" nella bottom bar mobile di `NavbarAdmin` e ora sempre visibile, garantendo accesso al logout anche per il ruolo admin che non ha voci nel menu overflow.
@@ -175,4 +177,4 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 - Gestione utenti per ruolo — admin vede manager + dipendenti, manager vede solo dipendenti (ruolo non modificabile)
 - Rename "Export" → "Invio turni" in navbar manager
 - Lista turni: weekend Sab+Dom raggruppati in riga unica
-- `month_status.status = 'confirmed'` impostato automaticamente dopo il download Excel
+- `month_status.status = 'confirmed'` impostato dalla conferma definitiva in Invio turni; Excel ed email sono opzionali

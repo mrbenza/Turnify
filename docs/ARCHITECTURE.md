@@ -16,6 +16,7 @@ Aggiornare dopo ogni modifica strutturale significativa.
 | Storage | Supabase Storage (bucket `templates`) |
 | Email | Brevo SMTP API |
 | Excel | JSZip (manipolazione XML interno .xlsx) |
+| PWA Push | Web Push + VAPID, Service Worker, manifest PWA |
 
 ---
 
@@ -129,6 +130,9 @@ get_equity_scores(p_month int, p_year int)    -- RPC usata da statistiche
   → { user_id, nome, turni_totali, festivi, score }
   -- score = turni_totali + festivi*2
   -- p_month=0 → all-time (ignora filtro mese/anno)
+confirm_month_and_create_notification_event(p_area_id uuid, p_month int, p_year int, p_created_by uuid)
+  → notification_events
+  -- transizione locked→confirmed + evento month_published/month_republished
 ```
 
 ### RLS (sintesi) — area-aware (migration 016)
@@ -140,6 +144,9 @@ get_equity_scores(p_month int, p_year int)    -- RPC usata da statistiche
 | availability | proprie (pending) | solo area propria | tutto |
 | shifts | proprie | solo area propria | tutto |
 | email_settings | — | legge + write solo area propria | tutto |
+| push_subscriptions | nessun accesso client | nessun accesso client | service role via API |
+| notification_events | nessun accesso client | nessun accesso client | service role via API |
+| notification_deliveries | nessun accesso client | nessun accesso client | service role via API |
 
 > **Scritture su `users`:** tutte le API route che modificano `public.users` (PATCH ruolo, PATCH attivo, DELETE, POST crea utente) usano `serviceClient` (service_role). La RLS manager-SELECT-only impedisce privilege escalation anche in caso di bypass diretto delle API.
 
@@ -194,13 +201,15 @@ Il type narrowing sfrutta `instanceof NextResponse`: se la funzione restituisce 
 | `/api/users/[id]` | PATCH | admin/manager | Modifica ruolo (admin only) o attivo/disattivato_at. Tutte le write su `public.users` usano `serviceClient` (RLS manager = SELECT only). Manager: verifica cross-area prima del toggle `attivo`. Se ruolo cambia a `manager`: aggiorna automaticamente `areas.manager_id`. Se ruolo scende da `manager`: rimuove `areas.manager_id` |
 | `/api/users/[id]/shifts` | GET | admin/manager | Storico turni di un utente. Manager: restituisce solo turni se l'utente appartiene alla propria area — 403 se cross-area. Admin: accesso totale |
 | `/api/users/[id]` | DELETE | admin | Elimina utente. Richiede attivo=false |
-| `/api/month` | POST | admin/manager | Lock (`locked`) o unlock (`open`) mese. Unlock resetta email_inviata=false. **Al lock**: validazione server-side che ogni sabato, domenica e festivo obbligatorio del mese abbia `workers_per_day` turni assegnati — 422 con lista giorni scoperti se la copertura è incompleta |
+| `/api/month` | POST | admin/manager | Lock (`locked`), confirm (`confirmed`) o unlock (`open`) mese. **Al lock**: validazione copertura completa. **Al confirm**: RPC atomica, evento notifica, payload `/user?mese=YYYY-MM` e invio Web Push ai dipendenti attivi della stessa area con subscription PWA `standalone`. Unlock resetta email_inviata=false |
 | `/api/holidays` | GET | admin/manager | Lista festività |
 | `/api/holidays` | POST | admin | Crea manuale o import da Nager.Date API |
 | `/api/holidays/[id]` | PATCH | admin | Modifica mandatory |
 | `/api/holidays/[id]` | DELETE | admin | Elimina (blocca se shifts esistono in quella data) |
-| `/api/export` | GET | admin/manager | Genera XLSX dal template, setta `confirmed`, invia email se !email_inviata. **Admin:** legge `area_id` da query param — `effectiveAreaId` risolto tramite `resolveRequestArea()` |
-| `/api/send-email` | POST | admin/manager | Genera XLSX, invia email con allegato, setta `confirmed` + email_inviata=true. **Admin:** accetta `area_id` nel body — `effectiveAreaId` risolto tramite `resolveRequestArea()` |
+| `/api/export` | GET | admin/manager | Genera XLSX dal template per mesi gia `confirmed`; non modifica lo stato mese. **Admin:** legge `area_id` da query param — `effectiveAreaId` risolto tramite `resolveRequestArea()` |
+| `/api/send-email` | POST | admin/manager | Genera XLSX, invia email opzionale con allegato e aggiorna solo `email_inviata`. Richiede mese gia `confirmed`. **Admin:** accetta `area_id` nel body — `effectiveAreaId` risolto tramite `resolveRequestArea()` |
+| `/api/push/subscriptions` | POST/DELETE | autenticato | Registra/sincronizza o revoca la subscription Web Push dell'utente corrente; usa service role dopo auth |
+| `/api/debug/notifications` | GET/POST/PATCH/DELETE | admin + debug attivo | Diagnostica notifiche: lista aree/utenti/subscription/delivery, invio test manuale, test pubblicazione mese non distruttivo, revoca e cancellazione subscription |
 | `/api/email-settings` | POST | admin/manager | Crea indirizzo extra notifiche; include `area_id` nel profilo e nell'insert — isolamento per area |
 | `/api/email-settings/[id]` | PATCH | admin/manager | Toggle attivo; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
 | `/api/email-settings/[id]` | DELETE | admin/manager | Elimina; filtra con `.eq('area_id', authResult.areaId)` — ownership check per area |
@@ -339,7 +348,7 @@ Raggruppa automaticamente Sab+Dom in riga unica weekend. Filtro mese/anno client
 
 | Pagina | Query | Componenti |
 |--------|-------|-----------|
-| `/user` | availability (mese corrente+prossimo), holidays, shifts, month_status (tutti), storico shifts 12 mesi | `CalendarioDisponibilita`, `StoricoTurni` |
+| `/user` | availability (mese corrente+prossimo), holidays, shifts, month_status (tutti), storico shifts 12 mesi; con `?mese=YYYY-MM` carica lo snapshot turni pubblicati dell'area se `confirmed` | `CalendarioDisponibilita`, `TurniPubblicatiMini`, `StoricoTurni` |
 | `/user/impostazioni` | — | `ImpostazioniPassword` |
 
 ---
@@ -356,9 +365,9 @@ CalendarioGlobale click cella
   → update UI ottimistico
 ```
 
-### 2. Lock/conferma mese
+### 2. Salva mese
 ```
-"Conferma e blocca" button
+"Salva mese" button
   → POST /api/month { month, year, action: 'lock' }
   → validazione server-side: ogni sab/dom/festivo obbligatorio deve avere workers_per_day turni
   → 422 con lista giorni scoperti se incompleto
@@ -368,30 +377,43 @@ CalendarioGlobale click cella
 
 **Immutabilità post-lock:** qualsiasi tentativo di write su availability, shifts, import-shifts, import-shifts/resolve per un mese `locked` o `confirmed` ritorna 422.
 
-### 3. Export Excel + auto-email
+### 3. Conferma e pubblica mese
+```
+"Conferma e pubblica" button (ExportForm)
+  → POST /api/month { month, year, action: 'confirm' }
+  → RPC confirm_month_and_create_notification_event()
+      → availability pending→approved
+      → month_status status='confirmed'
+      → notification_events month_published/month_republished
+  → update evento con title/body/target_url=/user?mese=YYYY-MM
+  → seleziona dipendenti attivi della stessa area
+  → seleziona solo push_subscriptions attive con client_mode='standalone'
+  → sendNotificationEvent() registra deliveries e invia Web Push
+```
+
+Il click sulla notifica apre `/user?mese=YYYY-MM`; la home dipendente mostra il
+mini calendario del mese chiuso solo se il mese della sua area e `confirmed`.
+
+### 4. Export Excel opzionale
 ```
 "Genera Excel" button (ExportForm)
   → GET /api/export?month=X&year=Y&template=name
-  → verifica status locked|confirmed
+  → verifica status confirmed
   → generateTurniExcel() → buffer
-  → UPDATE availability pending→approved
-  → UPDATE month_status status='confirmed'
-  → se !email_inviata → sendTurniEmail() con allegato Excel
-    → UPDATE email_inviata=true
   → restituisce file per download
 ```
 
-### 4. Invio email manuale
+### 5. Invio email manuale opzionale
 ```
 "Invia email" button (ExportForm)
   → POST /api/send-email { month, year }
-  → verifica status locked|confirmed
+  → verifica status confirmed
   → generateTurniExcel() + fetch recipients (dipendenti + email_settings)
   → sendTurniEmail() con allegato Excel, BCC per tutti
-  → UPDATE month_status status='confirmed', email_inviata=true
+  → UPDATE month_status email_inviata=true, email_inviata_at=now()
 ```
 
-### 5. Sblocco admin su mese confirmed
+### 6. Sblocco admin su mese confirmed
 ```
 "Sblocca" button (CalendarioGlobale, solo isAdmin=true)
   → dialog conferma (testo specifico per confirmed)
@@ -400,7 +422,7 @@ CalendarioGlobale click cella
   → setLocked(false), setIsConfirmed(false)
 ```
 
-### 6. Import storico (area-aware)
+### 7. Import storico (area-aware)
 Accessibile ad admin e manager. Manager: validazione aggiuntiva che `targetAreaId === profile.area_id` — 403 se mismatch.
 ```
 Upload .xlsx (ImportaStorico)

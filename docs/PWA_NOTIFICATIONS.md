@@ -21,9 +21,9 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-03 | Rendere Turnify installabile | Manifest, icone, metadati, service worker e banner di installazione dopo il login | Completato | Installazione verificata su Chrome ed Edge; banner disponibile a tutti i ruoli dopo il login |
 | PWA-04 | Gestire consenso utente | Attivazione, disattivazione e stato del permesso notifiche dalla UI | Completato | Richiesta esplicita mostrata solo nella PWA installata e dopo il login; verificato su Chrome Android, Edge compatibile ma mostra avvisi propri del browser |
 | PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Completato | API implementata e verificata con subscription reali; uno stesso utente puo avere piu dispositivi/browser |
-| PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | Completato | Motore di invio verificato con test manuali reali e mock di revoca; invio pubblicazione mese resta PWA-07 |
-| PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla prima conferma operativa del mese | Da fare | Deve essere idempotente e non duplicare gli invii |
-| PWA-08 | Gestire apertura notifica | Il click apre la home utente | Da fare | Destinazione: `/user`, cosi l'utente vede se ha turni assegnati |
+| PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | Completato | Motore condiviso tra test manuali, test pubblicazione e invio operativo PWA-07 |
+| PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla conferma operativa del mese | Completato | La conferma definitiva crea evento, imposta payload e invia ai dipendenti attivi della stessa area |
+| PWA-08 | Mini calendario mese chiuso | Il click apre la home utente con snapshot visuale dei turni pubblicati | Completato | Vista `/user?mese=YYYY-MM` per i mesi `confirmed`; tutti vedono tutti i turni della propria area |
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
 | PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Da fare | Testare almeno Edge desktop e Android |
 | PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Da fare | Evitare l'attivazione globale senza osservabilita |
@@ -46,7 +46,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | ID | Descrizione | Comportamento attuale | Comportamento richiesto | Stato |
 |---|---|---|---|---|
 | BUG-PWA-01 | L'importazione storico imposta i mesi passati su `confirmed` | `POST /api/import-shifts` usa `confirmed` per un mese passato, correttamente per rappresentarne lo stato storico | L'import storico non deve mai generare notifiche push o invii email, ne interferire con lo stato degli invii | Da controllare |
-| RISK-PWA-01 | Esistono piu percorsi che impostano `month_status.status = confirmed` | Export, invio email e import storico possono scrivere lo stesso stato | L'invio deve dipendere da un evento applicativo esplicito e idempotente, non da un trigger generico su ogni `confirmed` | Da controllare |
+| RISK-PWA-01 | Esistono piu percorsi che impostano `month_status.status = confirmed` | Import storico puo usare `confirmed` per mesi passati; export/email non devono piu confermare il mese | L'invio operativo dipende solo dalla conferma esplicita `/api/month?action=confirm` e dall'evento applicativo creato dalla RPC | Mitigato |
 | RISK-PWA-02 | Uno stesso utente puo avere piu subscription | Ogni browser e dispositivo genera un endpoint diverso | Conservare subscription multiple e rimuovere solo gli endpoint scaduti o revocati | Completato |
 
 ## Vincolo importazione storico
@@ -68,7 +68,8 @@ Di conseguenza:
 ### Evento applicativo
 
 La notifica viene generata quando un manager conferma definitivamente un mese
-gia salvato e bloccato.
+gia salvato e bloccato. In pratica coincide con il momento in cui il mese
+diventa `confirmed` e non e piu modificabile dal manager.
 
 Questa azione:
 
@@ -77,6 +78,8 @@ Questa azione:
 - imposta `month_status.status = confirmed`;
 - crea un evento applicativo `month_published`, indipendente dal valore
   `confirmed` usato anche dall'importazione storico.
+- invia le notifiche Web Push agli utenti dipendenti attivi appartenenti alla
+  stessa area del manager.
 
 Il primo pulsante del manager, rinominato `Salva`, continua invece a eseguire
 `POST /api/month` con `action = lock`. Questo blocco:
@@ -133,7 +136,7 @@ destinatari delle notifiche push del mese.
   `Turni di {mese} {anno} confermati. Consulta il calendario.`
 - Pubblicazione aggiornata:
   `I turni di {mese} {anno} sono stati aggiornati. Consulta il calendario.`
-- Destinazione al click: `/user`
+- Destinazione al click: `/user?mese=YYYY-MM`
 
 ### Stati e azioni UI
 
@@ -165,6 +168,30 @@ Lo step 4:
 - non modifica lo stato del mese;
 - non genera notifiche push;
 - non e necessario per completare il flusso operativo.
+
+### Mini calendario pubblicato
+
+Quando il manager conferma definitivamente il mese, la home utente deve poter
+mostrare un mini calendario del mese chiuso sotto al calendario disponibilita.
+Questo riquadro non e un file Excel salvato: e una vista temporanea HTML basata
+sui dati ufficiali presenti in `shifts`, `users`, `holidays` e `month_status`.
+
+Comportamento:
+
+- la notifica porta a `/user?mese=YYYY-MM`;
+- il riquadro viene mostrato solo se il mese dell'area e `confirmed`;
+- tutti i dipendenti dell'area vedono tutti i turni assegnati dell'area, ma
+  non vedono mai i turni delle altre aree;
+- il nome dell'utente loggato viene evidenziato;
+- se l'utente non ha turni assegnati, il riquadro mostra un messaggio chiaro;
+- il layout deve essere grafico e compatto, come uno "screenshot" del mese
+  chiuso: blocco data/festivo a sinistra, nome o nomi dei turnisti a destra;
+- i festivi devono essere riconoscibili visivamente;
+- se nello stesso giorno ci sono due turnisti, devono apparire nella stessa
+  riga/card del giorno.
+
+Il file Excel resta un output opzionale separato: viene generato al momento del
+download/invio e non deve essere necessario per popolare il mini calendario.
 
 ## Flusso app PWA e notifiche
 
@@ -286,15 +313,18 @@ Una riga rappresenta una pubblicazione logica di un mese, non un singolo invio.
 | Colonna | Tipo | Note |
 |---|---|---|
 | `id` | uuid PK | Identificativo evento |
-| `event_type` | text | `month_published` oppure `month_republished` |
-| `area_id` | uuid FK areas | Area destinataria |
-| `month` | integer | 1-12 |
-| `year` | integer | Anno del mese |
-| `publication_number` | integer | 1 per prima pubblicazione, crescente per ripubblicazioni |
+| `event_type` | text | `month_published`, `month_republished` oppure `test` |
+| `area_id` | uuid FK areas nullable | Area destinataria; null per eventi `test` |
+| `month` | integer nullable | 1-12 per pubblicazioni mese; null per eventi `test` |
+| `year` | integer nullable | Anno del mese; null per eventi `test` |
+| `publication_number` | integer nullable | 1 per prima pubblicazione, crescente per ripubblicazioni; null per eventi `test` |
 | `created_by` | uuid FK users | Manager o admin che conferma |
 | `created_at` | timestamptz | Data creazione evento |
 | `status` | text | `pending`, `sending`, `sent`, `partial`, `failed` |
 | `completed_at` | timestamptz nullable | Fine elaborazione |
+| `title` | text nullable | Titolo payload; obbligatorio per eventi `test` |
+| `body` | text nullable | Corpo payload; obbligatorio per eventi `test` |
+| `target_url` | text nullable | Percorso interno aperto al click |
 
 Vincolo di idempotenza:
 
@@ -364,8 +394,8 @@ Le chiavi VAPID non vengono salvate nel database:
 ## Specifica PWA-06: invio Web Push
 
 PWA-06 implementa il motore server-side che invia notifiche Web Push e registra
-gli esiti. Non decide quando pubblicare un mese: quel collegamento appartiene a
-PWA-07.
+gli esiti. Il motore e condiviso: viene usato dai test manuali, dal test
+pubblicazione mese della pagina debug e dall'invio operativo PWA-07.
 
 ### Confine dello step
 
@@ -378,12 +408,12 @@ Incluso in PWA-06:
 - aggiornamento di `last_success_at`, `failure_count` e `revoked_at`;
 - revoca automatica degli endpoint quando il push service risponde `404` o
   `410`;
-- invio manuale da pagina debug admin.
+- invio manuale da pagina debug admin;
+- invio non distruttivo "test pubblicazione mese" da pagina debug admin.
 
 Escluso da PWA-06:
 
-- scelta automatica dei destinatari della pubblicazione mese;
-- invio automatico dopo `Conferma e pubblica`;
+- modifica dello stato mese durante i test debug;
 - retry pianificati o code asincrone;
 - conferma che la notifica sia stata visualizzata sul dispositivo.
 
@@ -414,7 +444,8 @@ Payload minimo:
 | `url` | percorso interno, deve iniziare con `/` e non puo essere URL esterno |
 
 Per i test manuali il testo e modificabile dall'admin. Per la pubblicazione
-operativa il testo verra definito da PWA-07 usando mese, anno e tipo evento.
+operativa e per il test pubblicazione mese il testo viene generato da mese,
+anno e tipo evento.
 
 ### Stati consegna
 
@@ -561,6 +592,9 @@ Azioni diagnostiche admin previste:
 - distinguere revoca manuale da revoca automatica `404`/`410`;
 - ritentare una consegna fallita;
 - inviare una notifica di test a una singola subscription.
+- simulare una pubblicazione mese per area/mese/anno senza modificare
+  `month_status`, usando gli stessi destinatari automatici e la stessa
+  destinazione della notifica reale.
 
 La revoca manuale segue il flusso descritto nella sezione "Revoca e
 riattivazione": non cancella l'utente, non cambia `users.attivo` e non viene
@@ -577,6 +611,17 @@ rispettano tutte queste condizioni:
 - `push_subscriptions.revoked_at is null`;
 - `client_mode = standalone`;
 - endpoint ancora valido al momento dell'invio.
+
+La `target_url` degli eventi di pubblicazione mese deve puntare alla home
+utente con mese esplicito: `/user?mese=YYYY-MM`, cosi il click della notifica
+porta direttamente al mini calendario del mese chiuso.
+
+La pagina debug admin include anche un test non distruttivo di PWA-07:
+selezionando area, mese e anno, Turnify crea un evento `test` con lo stesso
+testo e la stessa `target_url` della pubblicazione mese, seleziona
+automaticamente le subscription PWA attive dei dipendenti attivi dell'area e
+registra le consegne nella diagnostica. Questo test non modifica
+`month_status` e non conferma realmente il mese.
 
 Non vengono escluse automaticamente subscription solo per `last_seen_at`
 vecchio.

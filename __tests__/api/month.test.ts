@@ -27,8 +27,13 @@ vi.mock('@/lib/supabase/server', () => ({
   createServiceClient: vi.fn(),
 }))
 
+vi.mock('@/lib/push/delivery', () => ({
+  sendNotificationEvent: vi.fn(),
+}))
+
 import { POST } from '@/app/api/month/route'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { sendNotificationEvent } from '@/lib/push/delivery'
 
 // ──────────────────────────────────────────────
 // Costanti
@@ -54,7 +59,14 @@ function mockRequest(body: object) {
 // ──────────────────────────────────────────────
 
 describe('POST /api/month — lock / confirm / unlock', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(sendNotificationEvent).mockResolvedValue({
+      sent: 1,
+      failed: 0,
+      status: 'sent',
+    })
+  })
 
   it('lock: copertura incompleta → 422 con messaggio esplicito', async () => {
     const client = makeSupabaseMock({
@@ -163,7 +175,7 @@ describe('POST /api/month — lock / confirm / unlock', () => {
     expect(body.error).toMatch(/salvato/i)
   })
 
-  it('confirm: mese locked → 200', async () => {
+  it('confirm: mese locked → 200 e invia notifiche agli utenti attivi dell area', async () => {
     const client = makeSupabaseMock({
       user: { id: MANAGER_ID },
       tables: {
@@ -175,10 +187,50 @@ describe('POST /api/month — lock / confirm / unlock', () => {
       tables: {
         month_status: [
           ok({ id: 'ms-1', status: 'locked' }),
-          { data: null, error: null },
         ],
-        availability: [{ data: null, error: null }],
+        notification_events: [
+          ok({
+            id: 'event-1',
+            event_type: 'month_published',
+            area_id: AREA_ID,
+            month: 3,
+            year: 2026,
+            publication_number: 1,
+            created_by: MANAGER_ID,
+            created_at: '2026-03-01T00:00:00.000Z',
+            status: 'sending',
+            completed_at: null,
+            title: 'Turni di marzo 2026 confermati',
+            body: 'Turni di marzo 2026 confermati. Consulta il calendario.',
+            target_url: '/user?mese=2026-03',
+          }),
+        ],
+        users: [
+          ok([{ id: 'user-1' }, { id: 'user-2' }]),
+        ],
+        push_subscriptions: [
+          ok([{ id: 'sub-1', user_id: 'user-1' }]),
+        ],
       },
+    }) as ReturnType<typeof makeSupabaseMock> & { rpc: ReturnType<typeof vi.fn> }
+
+    serviceClient.rpc = vi.fn().mockResolvedValue({
+      data: {
+        id: 'event-1',
+        event_type: 'month_published',
+        area_id: AREA_ID,
+        month: 3,
+        year: 2026,
+        publication_number: 1,
+        created_by: MANAGER_ID,
+        created_at: '2026-03-01T00:00:00.000Z',
+        status: 'pending',
+        completed_at: null,
+        title: null,
+        body: null,
+        target_url: null,
+      },
+      error: null,
     })
 
     vi.mocked(createClient).mockResolvedValue(client as never)
@@ -187,6 +239,36 @@ describe('POST /api/month — lock / confirm / unlock', () => {
     const res = await POST(mockRequest({ month: 3, year: 2026, action: 'confirm', area_id: AREA_ID }))
 
     expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({
+      success: true,
+      notification_event_id: 'event-1',
+      notifications: {
+        recipients: 2,
+        subscriptions: 1,
+        sent: 1,
+        failed: 0,
+        status: 'sent',
+      },
+    })
+    expect(serviceClient.rpc).toHaveBeenCalledWith(
+      'confirm_month_and_create_notification_event',
+      {
+        p_area_id: AREA_ID,
+        p_month: 3,
+        p_year: 2026,
+        p_created_by: MANAGER_ID,
+      }
+    )
+    expect(sendNotificationEvent).toHaveBeenCalledWith(
+      serviceClient,
+      expect.objectContaining({ id: 'event-1' }),
+      [{ id: 'sub-1', user_id: 'user-1' }],
+      {
+        title: 'Turni di marzo 2026 confermati',
+        body: 'Turni di marzo 2026 confermati. Consulta il calendario.',
+        url: '/user?mese=2026-03',
+      },
+    )
   })
 
   it('unlock: admin può sbloccare mese confirmed → 200', async () => {

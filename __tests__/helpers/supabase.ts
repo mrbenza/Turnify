@@ -20,7 +20,7 @@ export function makeChain(result: QueryResult) {
   for (const m of [
     'select', 'insert', 'update', 'delete', 'upsert',
     'eq', 'neq', 'gte', 'lte', 'gt', 'lt',
-    'in', 'limit', 'order', 'range',
+    'in', 'is', 'limit', 'order', 'range',
   ]) {
     chain[m] = () => chain
   }

@@ -29,6 +29,11 @@ type UserRow = {
   subscriptions: SubscriptionRow[]
 }
 
+type AreaRow = {
+  id: string
+  nome: string
+}
+
 type DeliveryRow = {
   id: string
   status: string
@@ -79,14 +84,21 @@ function StatusBadge({ children, tone = 'gray' }: { children: ReactNode; tone?: 
 }
 
 export default function NotificationDebugPanel() {
+  const now = new Date()
+  const [areas, setAreas] = useState<AreaRow[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [title, setTitle] = useState('Notifica di test Turnify')
   const [message, setMessage] = useState('Questa e una notifica di test.')
   const [targetUrl, setTargetUrl] = useState('/user')
+  const [publicationAreaId, setPublicationAreaId] = useState('')
+  const [publicationMonth, setPublicationMonth] = useState(now.getMonth() + 1)
+  const [publicationYear, setPublicationYear] = useState(now.getFullYear())
+  const [publicationRepublished, setPublicationRepublished] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [sendingPublication, setSendingPublication] = useState(false)
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState('')
@@ -100,8 +112,10 @@ export default function NotificationDebugPanel() {
       return
     }
     const data = await response.json()
+    setAreas(data.areas ?? [])
     setUsers(data.users ?? [])
     setDeliveries(data.deliveries ?? [])
+    setPublicationAreaId((current) => current || data.areas?.[0]?.id || '')
     setLoading(false)
   }, [])
 
@@ -159,6 +173,33 @@ export default function NotificationDebugPanel() {
       setFeedback('Invio non riuscito. Controlla la connessione e riprova.')
     } finally {
       setSending(false)
+    }
+  }
+
+  async function sendPublicationTest() {
+    setSendingPublication(true)
+    setFeedback('')
+    try {
+      const response = await fetch('/api/debug/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'month-publication-test',
+          areaId: publicationAreaId,
+          month: publicationMonth,
+          year: publicationYear,
+          republished: publicationRepublished,
+        }),
+      })
+      const result = await response.json()
+      setFeedback(response.ok
+        ? `Test pubblicazione inviato a ${result.subscriptions} dispositivo/i PWA. Accettate: ${result.sent}. Fallite: ${result.failed}. Link: ${result.target_url}.`
+        : result.error ?? 'Test pubblicazione non riuscito.')
+      if (response.ok) void load()
+    } catch {
+      setFeedback('Test pubblicazione non riuscito. Controlla la connessione e riprova.')
+    } finally {
+      setSendingPublication(false)
     }
   }
 
@@ -231,6 +272,85 @@ export default function NotificationDebugPanel() {
         <div className="border border-gray-200 bg-white p-4">
           <p className="text-xs font-medium text-gray-500">Revocate</p>
           <p className="mt-2 text-2xl font-semibold text-red-700">{stats.revoked}</p>
+        </div>
+      </section>
+
+      <section className="border border-gray-200 bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Test pubblicazione mese</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Simula PWA-07 senza confermare un mese reale: destinatari automatici, solo PWA attive della stessa area.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <label className="text-sm text-gray-700 md:col-span-2">
+            Area
+            <select
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              onChange={(event) => setPublicationAreaId(event.target.value)}
+              value={publicationAreaId}
+            >
+              {areas.map((area) => (
+                <option key={area.id} value={area.id}>{area.nome}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm text-gray-700">
+            Mese
+            <select
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              onChange={(event) => setPublicationMonth(Number(event.target.value))}
+              value={publicationMonth}
+            >
+              {[
+                'Gennaio',
+                'Febbraio',
+                'Marzo',
+                'Aprile',
+                'Maggio',
+                'Giugno',
+                'Luglio',
+                'Agosto',
+                'Settembre',
+                'Ottobre',
+                'Novembre',
+                'Dicembre',
+              ].map((monthName, index) => (
+                <option key={monthName} value={index + 1}>{monthName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm text-gray-700">
+            Anno
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              max={2100}
+              min={2024}
+              onChange={(event) => setPublicationYear(Number(event.target.value))}
+              type="number"
+              value={publicationYear}
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              checked={publicationRepublished}
+              onChange={(event) => setPublicationRepublished(event.target.checked)}
+              type="checkbox"
+            />
+            Simula aggiornamento turni
+          </label>
+          <button
+            className="min-h-10 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+            disabled={sendingPublication || !publicationAreaId}
+            onClick={() => void sendPublicationTest()}
+            type="button"
+          >
+            {sendingPublication ? 'Invio...' : 'Invia test pubblicazione'}
+          </button>
         </div>
       </section>
 
