@@ -33,7 +33,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Route /login redirect alla home coerente col ruolo se già autenticato
-  if (pathname === '/login' && hasFreshDailySession) {
+  if (pathname === '/login' && hasFreshDailySession && user) {
     const { data: profile } = await supabase
       .from('users')
       .select('ruolo')

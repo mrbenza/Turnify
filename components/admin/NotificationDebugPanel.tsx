@@ -88,6 +88,7 @@ export default function NotificationDebugPanel() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState('')
 
   const load = useCallback(async () => {
@@ -180,6 +181,29 @@ export default function NotificationDebugPanel() {
       setFeedback('Revoca non riuscita. Controlla la connessione e riprova.')
     } finally {
       setRevokingId(null)
+    }
+  }
+
+  async function deleteSubscription(subscriptionId: string) {
+    if (!window.confirm('Eliminare definitivamente questa subscription dal database?')) return
+    setDeletingId(subscriptionId)
+    setFeedback('')
+    try {
+      const response = await fetch('/api/debug/notifications', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId }),
+      })
+      const result = await response.json()
+      setFeedback(response.ok ? 'Subscription eliminata dal database.' : result.error ?? 'Eliminazione non riuscita.')
+      if (response.ok) {
+        setSelected((current) => current.filter((id) => id !== subscriptionId))
+        void load()
+      }
+    } catch {
+      setFeedback('Eliminazione non riuscita. Controlla la connessione e riprova.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -317,14 +341,25 @@ export default function NotificationDebugPanel() {
                           <td className="py-3 pr-3 text-gray-600">{subscription.failure_count}</td>
                           <td className="py-3 font-mono text-gray-500">{subscription.endpoint}</td>
                           <td className="py-3">
-                            <button
-                              className="rounded-md border border-red-200 px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
-                              disabled={revoked || revokingId === subscription.id}
-                              onClick={() => void revoke(subscription.id)}
-                              type="button"
-                            >
-                              {revokingId === subscription.id ? 'Revoca...' : 'Revoca'}
-                            </button>
+                            {revoked ? (
+                              <button
+                                className="rounded-md border border-red-300 px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                disabled={deletingId === subscription.id}
+                                onClick={() => void deleteSubscription(subscription.id)}
+                                type="button"
+                              >
+                                {deletingId === subscription.id ? 'Elimina...' : 'Elimina'}
+                              </button>
+                            ) : (
+                              <button
+                                className="rounded-md border border-red-200 px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                disabled={revokingId === subscription.id}
+                                onClick={() => void revoke(subscription.id)}
+                                type="button"
+                              >
+                                {revokingId === subscription.id ? 'Revoca...' : 'Revoca'}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )

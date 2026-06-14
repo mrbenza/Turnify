@@ -28,7 +28,7 @@ vi.mock('@/lib/push/server', () => ({
   sanitizePushError: (error: unknown) => error instanceof Error ? error.message.slice(0, 500) : 'Errore Web Push sconosciuto',
 }))
 
-import { PATCH, POST } from '@/app/api/debug/notifications/route'
+import { DELETE, PATCH, POST } from '@/app/api/debug/notifications/route'
 import { requireDebugAdmin } from '@/lib/debug-auth'
 import { sendWebPush } from '@/lib/push/server'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -76,6 +76,7 @@ function makeChain(result: { data?: unknown; error?: unknown }, updates: Array<{
   const chain = {
     select: vi.fn(() => chain),
     insert: vi.fn(() => chain),
+    delete: vi.fn(() => chain),
     update: vi.fn((value: unknown) => {
       updates.push({ table, value })
       return chain
@@ -201,5 +202,50 @@ describe('POST /api/debug/notifications', () => {
         revoked_by: 'admin-1',
       }) },
     ]))
+  })
+
+  it('elimina definitivamente una subscription gia revocata', async () => {
+    const updates: Array<{ table: string; value: unknown }> = []
+    const readChain = makeChain({
+      data: { id: 'sub-old', revoked_at: '2026-06-06T00:00:00.000Z' },
+      error: null,
+    }, updates, 'push_subscriptions')
+    const deleteChain = makeChain({ data: null, error: null }, updates, 'push_subscriptions')
+    const serviceClient = {
+      from: vi.fn()
+        .mockReturnValueOnce(readChain)
+        .mockReturnValueOnce(deleteChain),
+    }
+    vi.mocked(createServiceClient).mockReturnValue(serviceClient as never)
+
+    const res = await DELETE(new Request('http://localhost/api/debug/notifications', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscriptionId: 'sub-old' }),
+    }))
+
+    expect(res.status).toBe(200)
+    expect(readChain.maybeSingle).toHaveBeenCalled()
+    expect(deleteChain.delete).toHaveBeenCalled()
+    expect(deleteChain.eq).toHaveBeenCalledWith('id', 'sub-old')
+  })
+
+  it('non elimina una subscription ancora attiva', async () => {
+    const updates: Array<{ table: string; value: unknown }> = []
+    const readChain = makeChain({
+      data: { id: 'sub-ok', revoked_at: null },
+      error: null,
+    }, updates, 'push_subscriptions')
+    const serviceClient = { from: vi.fn(() => readChain) }
+    vi.mocked(createServiceClient).mockReturnValue(serviceClient as never)
+
+    const res = await DELETE(new Request('http://localhost/api/debug/notifications', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscriptionId: 'sub-ok' }),
+    }))
+
+    expect(res.status).toBe(400)
+    expect(readChain.delete).not.toHaveBeenCalled()
   })
 })

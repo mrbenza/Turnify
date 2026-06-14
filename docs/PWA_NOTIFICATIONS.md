@@ -557,6 +557,7 @@ Azioni diagnostiche admin previste:
 - consultare lo storico notifiche di un utente;
 - revocare manualmente una subscription, ad esempio per telefono formattato,
   guasto, perso, sostituito o problemi notifiche;
+- eliminare definitivamente dal DB una subscription gia revocata;
 - distinguere revoca manuale da revoca automatica `404`/`410`;
 - ritentare una consegna fallita;
 - inviare una notifica di test a una singola subscription.
@@ -599,6 +600,9 @@ La pagina non mostra mai:
   tabella `/admin/utenti`, utile per pulire le subscription di un utente senza
   aprire la pagina debug. Il pulsante viene mostrato solo agli utenti con almeno
   una subscription attiva.
+- La pagina debug permette anche di eliminare definitivamente dal DB una
+  subscription gia revocata. Le subscription attive devono essere revocate prima
+  di poter essere cancellate.
 - Una subscription revocata manualmente da admin o utente non viene riattivata
   in modo silenzioso quando la PWA viene riaperta con permesso browser ancora
   `granted`.

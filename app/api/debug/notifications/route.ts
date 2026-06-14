@@ -223,3 +223,41 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({ ok: true })
 }
+
+export async function DELETE(request: Request) {
+  const auth = await requireDebugAdmin()
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+  let body: { subscriptionId?: string }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Body non valido' }, { status: 400 })
+  }
+
+  if (typeof body.subscriptionId !== 'string' || !body.subscriptionId) {
+    return NextResponse.json({ error: 'Subscription non valida' }, { status: 400 })
+  }
+
+  const serviceClient = createServiceClient()
+  const { data: subscription, error: readError } = await serviceClient
+    .from('push_subscriptions')
+    .select('id, revoked_at')
+    .eq('id', body.subscriptionId)
+    .maybeSingle()
+
+  if (readError) return NextResponse.json({ error: 'Impossibile verificare la subscription' }, { status: 500 })
+  if (!subscription) return NextResponse.json({ error: 'Subscription non trovata' }, { status: 404 })
+  if (!subscription.revoked_at) {
+    return NextResponse.json({ error: 'Revoca la subscription prima di eliminarla' }, { status: 400 })
+  }
+
+  const { error: deleteError } = await serviceClient
+    .from('push_subscriptions')
+    .delete()
+    .eq('id', body.subscriptionId)
+
+  if (deleteError) return NextResponse.json({ error: 'Impossibile eliminare la subscription' }, { status: 500 })
+
+  return NextResponse.json({ ok: true })
+}
