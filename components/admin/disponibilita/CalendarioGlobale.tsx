@@ -186,6 +186,7 @@ export default function CalendarioGlobale({
     dateStr: string
     userName: string
   } | null>(null)
+  const isReadOnly = locked && !isAdmin
 
   /* ---- Drawer ref for focus trap ---- */
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -727,7 +728,7 @@ export default function CalendarioGlobale({
     const isSelected = selectedDay?.dateStr === dateStr
 
     const hasShift = shifts.some((s) => s.date === dateStr)
-    const hasUncoveredWarning = !locked && !hasShift && interactive
+    const hasUncoveredWarning = !isReadOnly && !hasShift && interactive
 
     // Background color logic
     let bgClass = 'bg-white'
@@ -816,7 +817,7 @@ export default function CalendarioGlobale({
         {interactive && (
           <div className="mt-1 flex flex-wrap gap-0.5">
             {(() => {
-              if (locked) {
+              if (isReadOnly) {
                 // Mese bloccato: usa shifts direttamente (include utenti disattivati)
                 const dayShifts = shifts
                   .filter(s => s.date === dateStr)
@@ -1167,25 +1168,30 @@ export default function CalendarioGlobale({
                 const dateStr = selectedDay.dateStr
                 const suggestedId = getSuggestedUserId(dateStr)
 
-                // Per mesi bloccati: costruisci lista assegnati direttamente dai turni
+                // Per mesi in sola lettura: costruisci lista assegnati direttamente dai turni
                 // (include anche utenti disattivati nel frattempo)
-                const assignedShifts = locked
+                const assignedShifts = isReadOnly
                   ? shifts.filter(s => s.date === dateStr).sort((a, b) => a.reperibile_order - b.reperibile_order)
                   : []
-                const assigned = locked
+                const assigned = isReadOnly
                   ? assignedShifts.map(s => users.find(u => u.id === s.user_id) ?? null).filter(Boolean) as User[]
                   : users.filter(u => shiftMap.has(`${u.id}-${dateStr}`))
                 const dayFull    = assigned.length >= workersPerDay
                 const recOrder = { ideal: 0, neutral: 1, warning: 2, avoid: 3 }
                 const available  = dayFull ? [] : users
-                  .filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && !isWeekendBlocked(u.id, dateStr))
+                  .filter(u => {
+                    if (shiftMap.has(`${u.id}-${dateStr}`)) return false
+                    if (isAdmin) return true
+                    return Boolean(availabilityMap.get(`${u.id}-${dateStr}`)?.available) && !isWeekendBlocked(u.id, dateStr)
+                  })
                   .sort((a, b) => {
+                    if (isAdmin) return a.nome.localeCompare(b.nome, 'it', { numeric: true })
                     const sa = a.id === suggestedId ? -1 : recOrder[getRecommendationLevel(a.id, dateStr)]
                     const sb = b.id === suggestedId ? -1 : recOrder[getRecommendationLevel(b.id, dateStr)]
                     return sa - sb
                   })
-                const inTurno    = !dayFull ? users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && isWeekendBlocked(u.id, dateStr)) : []
-                const notAvail   = users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && !availabilityMap.get(`${u.id}-${dateStr}`)?.available)
+                const inTurno    = !dayFull && !isAdmin ? users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && availabilityMap.get(`${u.id}-${dateStr}`)?.available && isWeekendBlocked(u.id, dateStr)) : []
+                const notAvail   = !isAdmin ? users.filter(u => !shiftMap.has(`${u.id}-${dateStr}`) && !availabilityMap.get(`${u.id}-${dateStr}`)?.available) : []
 
                 return (
                   <>
@@ -1202,7 +1208,7 @@ export default function CalendarioGlobale({
                     )}
 
                     {/* ── Assegnati oggi ── */}
-                    {locked ? (
+                    {isReadOnly ? (
                       // Mese bloccato: mostra direttamente dai turni (include utenti disattivati)
                       assignedShifts.length > 0 && (
                         <section aria-label="Assegnati">
@@ -1301,7 +1307,7 @@ export default function CalendarioGlobale({
                                     return note ? <p className="text-[10px] text-orange-500 mt-0.5">{note}</p> : null
                                   })()}
                                 </div>
-                                {!locked && (
+                                {!isReadOnly && (
                                   <div className="shrink-0">
                                     {loadingAction === `${u.id}-${dateStr}` ? <Spinner small /> : (
                                       <button

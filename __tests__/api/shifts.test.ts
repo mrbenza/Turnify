@@ -60,16 +60,18 @@ function buildClient({
   monthStatus,
   targetAreaId,
   includeInsert = false,
+  role = 'manager',
 }: {
   monthStatus: { status: string } | null
   targetAreaId: string
   includeInsert?: boolean
+  role?: 'admin' | 'manager'
 }) {
   return makeSupabaseMock({
     user: { id: MANAGER_ID },
     tables: {
       users: [
-        ok({ ruolo: 'manager', area_id: AREA_A }),
+        ok({ ruolo: role, area_id: role === 'admin' ? null : AREA_A }),
         ok({ nome: 'Mario Rossi', area_id: targetAreaId }),
       ],
       areas:    [ok({ scheduling_mode: 'single_day', workers_per_day: 1 })],
@@ -129,6 +131,24 @@ describe('POST /api/shifts — immutabilità e isolamento area', () => {
     vi.mocked(createClient).mockResolvedValue(client as never)
 
     const res = await POST(mockRequest({ date: WEEKDAY_DATE, user_id: TARGET_USER_A }))
+
+    expect(res.status).toBe(201)
+  })
+
+  it('admin: può assegnare turno anche su mese confirmed → 201', async () => {
+    const client = buildClient({
+      monthStatus: { status: 'confirmed' },
+      targetAreaId: AREA_A,
+      includeInsert: true,
+      role: 'admin',
+    })
+    vi.mocked(createClient).mockResolvedValue(client as never)
+
+    const res = await POST(mockRequest({
+      date: WEEKDAY_DATE,
+      user_id: TARGET_USER_A,
+      area_id: AREA_A,
+    }))
 
     expect(res.status).toBe(201)
   })

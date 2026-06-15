@@ -185,6 +185,14 @@ flowchart TD
 
 **Stato `confirmed`**: impostato esplicitamente dalla pagina Invio turni dopo il controllo dell'anteprima. Solo un amministratore puo riaprire il mese. La conferma crea l'evento di notifica e invia Web Push ai dipendenti attivi della stessa area. La notifica apre `/user?mese=YYYY-MM`, inizializzando il calendario utente sul mese pubblicato; lo snapshot dei turni confermati viene mostrato sotto il calendario e segue il mese selezionato con le frecce. Download Excel e invio email sono operazioni opzionali e non modificano lo stato.
 
+**Correzioni amministratore**: l'admin puo correggere manualmente il piano
+reperibilita anche su mesi gia passati, `locked` o `confirmed`. In questo caso
+puo assegnare o rimuovere turni anche se l'utente non aveva disponibilita o ha
+gia lavorato nello stesso mese. Restano validi il limite di reperibili per
+giorno (`workers_per_day`) e l'area selezionata. I manager mantengono invece i
+blocchi ordinari su disponibilita, doppio turno speciale e mese salvato o
+confermato.
+
 ---
 
 ## Domande frequenti

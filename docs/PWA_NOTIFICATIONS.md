@@ -25,9 +25,9 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla conferma operativa del mese | Completato | La conferma definitiva crea evento, imposta payload e invia ai dipendenti attivi della stessa area |
 | PWA-08 | Snapshot mese chiuso | Il click apre la home utente con riepilogo visuale dei turni pubblicati sotto il calendario | Completato | `/user?mese=YYYY-MM` inizializza il mese del calendario; lo snapshot segue il mese selezionato; tutti vedono tutti i turni della propria area |
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
-| PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Da fare | Testare almeno Edge desktop e Android |
-| PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Da fare | Evitare l'attivazione globale senza osservabilita |
-| PWA-12 | Pagina diagnostica admin | Vista Debug per utenti, subscription, consegne, cleanup manuale e azioni diagnostiche | In corso | Pagina disponibile solo ad admin con debug attivo; endpoint e dati sensibili mascherati |
+| PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Completato | Verifica manuale positiva su installazione Chrome/Edge, notifiche reali, debug e flusso di pubblicazione; Firefox documentato come non garantito |
+| PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Futuro produzione | Da riprendere solo prima del rollout reale su dominio definitivo, con monitoraggio e checklist operativa |
+| PWA-12 | Pagina diagnostica admin | Vista Debug per utenti, subscription, consegne, cleanup manuale e azioni diagnostiche | Completato | Pagina disponibile solo ad admin con debug attivo; endpoint e dati sensibili mascherati; revoca disponibile anche dalla lista utenti admin |
 
 ## Decisioni aperte
 
@@ -40,6 +40,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | D-05 | Quanto deve durare una subscription senza accessi recenti? | Deve restare attiva anche dopo logout o oltre 20 giorni senza accessi; viene revocata solo esplicitamente o dopo risposta `404`/`410` dal push service | Completato |
 | D-06 | Cosa succede alle subscription degli utenti disattivati? | Restano nel database per diagnostica admin, ma gli utenti con `attivo = false` sono sempre esclusi dagli invii automatici | Completato |
 | D-07 | Quali subscription usare negli invii automatici? | Solo quelle registrate dalla PWA installata; eventuali subscription create dal browser restano diagnostiche o di cleanup | Completato |
+| D-08 | Quali browser sono supportati per installazione e notifiche operative? | Chrome ed Edge sono il target operativo; Firefox resta supportato per navigazione normale ma non garantisce installazione PWA e richiesta notifiche | Completato |
 
 ## Bug e rischi da controllare
 
@@ -48,6 +49,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | BUG-PWA-01 | L'importazione storico imposta i mesi passati su `confirmed` | `POST /api/import-shifts` usa `confirmed` per un mese passato, correttamente per rappresentarne lo stato storico | L'import storico non deve mai generare notifiche push o invii email, ne interferire con lo stato degli invii | Da controllare |
 | RISK-PWA-01 | Esistono piu percorsi che impostano `month_status.status = confirmed` | Import storico puo usare `confirmed` per mesi passati; export/email non devono piu confermare il mese | L'invio operativo dipende solo dalla conferma esplicita `/api/month?action=confirm` e dall'evento applicativo creato dalla RPC | Mitigato |
 | RISK-PWA-02 | Uno stesso utente puo avere piu subscription | Ogni browser e dispositivo genera un endpoint diverso | Conservare subscription multiple e rimuovere solo gli endpoint scaduti o revocati | Completato |
+| DEBT-PWA-01 | Scalabilita pagina debug notifiche | La pagina debug mostra gli utenti con subscription e i relativi dispositivi | Prima della produzione con molti utenti, rendere obbligatoria la ricerca per nome/area e limitare i risultati visibili, evitando liste troppo grandi | Da pianificare |
 
 ## Vincolo importazione storico
 
@@ -199,6 +201,24 @@ Il file Excel resta un output opzionale separato: viene generato al momento del
 download/invio e non deve essere necessario per popolare il mini calendario.
 
 ## Flusso app PWA e notifiche
+
+### Compatibilita browser
+
+Turnify deve restare navigabile dai principali browser moderni, ma il canale
+operativo PWA/notifiche e supportato solo dove il browser espone un flusso
+installabile affidabile.
+
+| Browser | Navigazione web | Installazione PWA | Notifiche operative Turnify |
+|---|---|---|---|
+| Chrome | Supportata | Supportata | Supportate |
+| Edge | Supportata | Supportata | Supportate |
+| Firefox | Supportata | Non garantita | Non garantite |
+
+Firefox non supporta in modo affidabile il prompt automatico
+`beforeinstallprompt`. Inoltre Turnify propone le notifiche solo nella PWA
+installata/standalone: se Firefox resta in modalita browser, la richiesta
+notifiche non viene mostrata. Per gli utenti che devono ricevere notifiche push
+il browser consigliato resta Chrome o Edge.
 
 ### Installazione
 

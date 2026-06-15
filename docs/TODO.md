@@ -6,22 +6,6 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Alta priorita
 
-### PWA notifiche Web Push
-- **Stato**: PWA-12 in corso sul ramo `feat/pwa`.
-- **Implementato e verificato**: tabelle `push_subscriptions`, `notification_events`, `notification_deliveries`; RLS senza accesso client; API autenticate di registrazione/revoca subscription; motore server-side di invio Web Push con VAPID; RPC atomica `confirm_month_and_create_notification_event`; invio operativo alla conferma mese; mini calendario pubblicato; indici delle chiavi esterne.
-- **Requisito futuro notifiche**: la subscription resta attiva anche dopo logout o oltre 20 giorni senza accessi; non dipende dalla sessione Supabase. Gli utenti disattivati restano visibili in diagnostica, ma sono esclusi dagli invii automatici. Gli invii automatici useranno solo subscription registrate dalla PWA installata (`standalone`), non quelle abilitate dalla navigazione browser. PWA-12 deve prevedere cleanup manuale admin per telefoni formattati, guasti, persi o sostituiti.
-- **Verificato**: installazione PWA su Chrome ed Edge tramite ambiente HTTPS; consenso e ricezione notifiche su Chrome Android. Edge Android resta compatibile ma mostra avvisi propri del browser.
-- **In corso**: pagina diagnostica admin con distinzione PWA/browser e cleanup manuale.
-- **Completato PWA-07**: quando il manager conferma definitivamente un mese gia salvato, la route crea l'evento `month_published`/`month_republished`, imposta la destinazione `/user?mese=YYYY-MM` e invia Web Push ai dipendenti attivi della stessa area con subscription PWA installata.
-- **Test PWA-07 da debug**: `/admin/test/notifiche` permette di simulare una pubblicazione mese per area/mese/anno senza modificare `month_status`, usando gli stessi destinatari automatici e la stessa destinazione della notifica reale.
-- **Regola revoca admin**: la stessa subscription revocata non si riattiva al login; se l'utente deve tornare a ricevere notifiche, disinstalla/chiude la PWA, la reinstalla da browser, accede dalla PWA installata e genera una nuova subscription.
-- **Regola permesso negato**: se l'utente rifiuta il prompt nativo e `Notification.permission = denied`, Turnify non puo riproporre il prompt; deve mostrare un messaggio informativo e l'utente deve riattivare le notifiche dalle impostazioni del browser/PWA/sistema operativo.
-- **Completato PWA-08**: `/user?mese=YYYY-MM` mostra sotto il calendario disponibilita un mini calendario grafico del mese chiuso, solo se il mese dell'area e `confirmed`. Ogni dipendente vede tutti i turni della propria area, non quelli delle altre aree.
-- **Decisioni aperte**:
-  1. decidere se in futuro forzare la regola "browser = niente notifiche, PWA standalone = notifiche" oppure mantenere anche subscription browser per test/diagnostica;
-  2. prima della produzione, riprogettare la pagina debug notifiche: con molte subscription non deve caricare una lista enorme; deve richiedere ricerca per nome o area e limitare i risultati, senza paginazione profonda;
-- **Completato PWA-12**: pulsante "Revoca notifiche" nella riga utente di `/admin/utenti`, visibile solo all'amministratore e senza mostrare dettagli tecnici nella tabella utenti.
-
 ### Denormalizzare ultimo login in `public.users`
 - **Obiettivo**: aggiungere `public.users.last_login_at` per rendere la UI amministrativa indipendente da `auth.users`
 - **Motivazione**: il dato di ultimo accesso serviva operativamente a manager e admin, ma prima viveva fuori dalla tabella applicativa principale
@@ -102,6 +86,21 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Bug noti / Debito tecnico
 
+### PWA notifiche Web Push — produzione
+
+La fase funzionale PWA-01..PWA-12 e completata sul ramo `feat/pwa`. Prima del
+rollout reale su dominio definitivo restano attivita operative, non bloccanti
+per lo sviluppo corrente:
+
+1. definire checklist di rilascio graduale e monitoraggio errori notifiche;
+2. riprogettare la pagina debug notifiche per grandi volumi: ricerca
+   obbligatoria per nome/area, massimo 100 risultati visibili, nessuna
+   paginazione profonda;
+3. confermare le variabili VAPID sull'ambiente produzione definitivo;
+4. comunicare agli utenti che Chrome ed Edge sono i browser supportati per
+   installazione PWA e notifiche; Firefox resta supportato solo per navigazione
+   web normale.
+
 ### Refactoring / Infrastruttura (da fare, non urgente)
 
 1. **Centralizzare auth/ruolo/area_id in helper server-side** — Creare helper riutilizzabili (`requireUser`, `requireAdminOrManager`, `requireArea`) per evitare duplicazione del blocco auth+profile in ogni route.
@@ -142,6 +141,7 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 
 ## Completato
 
+- **[2026-06-15] PWA notifiche Web Push — PWA-01..PWA-12 chiuse** — Manifest, icone, service worker, banner installazione, consenso notifiche solo in PWA installata, salvataggio/revoca subscription, invio server-side VAPID, invio automatico alla conferma definitiva del mese, pagina debug admin, test manuale notifiche, revoca dalla lista utenti admin e snapshot compatto del mese pubblicato sotto al calendario utente. La notifica apre `/user?mese=YYYY-MM`, inizializzando il calendario sul mese pubblicato. Chrome ed Edge sono il target operativo per PWA/notifiche; Firefox resta compatibile per navigazione web ma non garantito per installazione e notifiche.
 - **[2026-06-04] Flusso salvataggio e conferma mese separato** — In Disponibilita il manager usa "Salva mese" per portare il mese a `locked`, stato reversibile dal manager. In Invio turni controlla l'anteprima e usa "Conferma e pubblica" per portarlo a `confirmed`, riapribile solo dall'admin. Excel ed email sono operazioni opzionali successive e non modificano piu lo stato.
 - **[2026-03-26] Security hardening — API cross-area + RLS area-aware (migration 016)** — `DELETE /api/shifts/[id]`: query filtrata per `area_id` per i manager (admin: accesso totale). `POST /api/shifts`: verifica che `user_id` appartenga all'area del manager — 403 se cross-area. `GET /api/users/[id]/shifts`: storico visibile al manager solo per utenti della propria area — 403 se cross-area. `supabase/migrations/016_rls_area_aware.sql`: nuove funzioni `current_user_area_id()` e `is_manager()`; policy RLS riscritte per shifts, availability, month_status, users, email_settings con separazione admin/manager per area. `supabase/schema.sql`: aggiornato progressivamente con le migration applicative.
 - **[2026-03-26] Fix sun_next_sat: distanza Dom→Sab corretta (±6)** — `CalendarioGlobale.tsx` `getPairedDate`: blocco `sun_next_sat` precede `holiday`, distanza corretta `d+6`. `app/api/shifts/route.ts`: rimossa `isHolidayOnWeekend` che forzava `weekend_full` in `sun_next_sat`. Rimozione turno: `handleRemove` agisce solo sul giorno cliccato (no pairing inverso). DB: disponibilità Area4 aprile 2026 allineate alle coppie corrette.

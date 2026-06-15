@@ -77,6 +77,25 @@ describe('DELETE /api/shifts/[id] — immutabilità e isolamento area', () => {
     expect(res.status).toBe(409)
   })
 
+  it('admin: elimina turno anche su mese confirmed → 200', async () => {
+    const client = makeSupabaseMock({
+      user: { id: MANAGER_ID },
+      tables: {
+        users:        [ok({ ruolo: 'admin', area_id: null })],
+        shifts:       [
+          ok({ date: '2026-03-07', area_id: AREA_A }),
+          { data: null, error: null },
+        ],
+        month_status: [ok({ status: 'confirmed' })],
+      },
+    })
+    vi.mocked(createClient).mockResolvedValue(client as never)
+
+    const res = await DELETE({} as Request, mockParams)
+
+    expect(res.status).toBe(200)
+  })
+
   it('manager elimina turno di altra area → 200 silenzioso (nessuna info disclosure)', async () => {
     // Il shift non viene trovato perché la query è filtrata per area_id del manager.
     // La delete prosegue silenziosamente senza rivelare l'esistenza del turno.

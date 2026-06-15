@@ -57,7 +57,7 @@ export async function DELETE(
       .eq('area_id', effectiveAreaId)
       .maybeSingle()
 
-    if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
+    if (profile.ruolo !== 'admin' && (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed')) {
       return NextResponse.json(
         { error: 'Impossibile modificare un mese confermato.' },
         { status: 409 }

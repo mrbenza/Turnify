@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti: date, user_id' }, { status: 400 })
   }
 
+  const isAdmin = profile.ruolo === 'admin'
   const areaResult = resolveRequestArea(profile, bodyAreaId)
   if (typeof areaResult !== 'string') return areaResult
   const effectiveAreaId = areaResult
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
   const reperibile_order = existingCount + 1
 
   // Regola: max 1 turno speciale (weekend o festivo) per dipendente per mese
-  if (shiftType === 'weekend' || shiftType === 'festivo') {
+  if (!isAdmin && (shiftType === 'weekend' || shiftType === 'festivo')) {
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
 
@@ -155,7 +156,7 @@ export async function POST(request: Request) {
     .eq('area_id', effectiveAreaId)
     .maybeSingle()
 
-  if (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed') {
+  if (!isAdmin && (monthStatus?.status === 'locked' || monthStatus?.status === 'confirmed')) {
     return NextResponse.json(
       { error: 'Impossibile modificare un mese confermato.' },
       { status: 409 }
