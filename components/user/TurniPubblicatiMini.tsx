@@ -16,6 +16,7 @@ type TurniPubblicatiMiniProps = {
   currentUserId: string
   shifts: PublishedShift[]
   holidays: Pick<Holiday, 'date' | 'name' | 'mandatory'>[]
+  variant?: 'section' | 'inline'
 }
 
 const MONTH_NAMES = [
@@ -51,6 +52,12 @@ function getWeekdayName(dateStr: string) {
   return WEEKDAY_NAMES[new Date(year, month - 1, day).getDay()]
 }
 
+function isWeekend(dateStr: string) {
+  const { year, month, day } = parseDateParts(dateStr)
+  const dow = new Date(year, month - 1, day).getDay()
+  return dow === 0 || dow === 6
+}
+
 function groupShiftsByDate(shifts: PublishedShift[]) {
   const grouped = new Map<string, PublishedShift[]>()
 
@@ -75,10 +82,128 @@ export default function TurniPubblicatiMini({
   currentUserId,
   shifts,
   holidays,
+  variant = 'section',
 }: TurniPubblicatiMiniProps) {
   const holidaysByDate = new Map(holidays.map((holiday) => [holiday.date, holiday]))
   const groupedShifts = groupShiftsByDate(shifts)
   const currentUserShiftCount = shifts.filter((shift) => shift.user_id === currentUserId).length
+
+  if (variant === 'inline') {
+    return (
+      <div
+        aria-labelledby="turni-pubblicati-heading"
+        className="mt-5 border-t border-gray-100 pt-4"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3
+              id="turni-pubblicati-heading"
+              className="text-sm font-semibold text-gray-900"
+            >
+              Turni pubblicati
+            </h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Snapshot del mese confermato
+              {areaNome ? ` - ${areaNome}` : ''}
+            </p>
+          </div>
+
+          <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-900">
+            {currentUserShiftCount > 0
+              ? `${currentUserShiftCount} turn${currentUserShiftCount === 1 ? 'o' : 'i'} per te`
+              : 'Nessun tuo turno'}
+          </span>
+        </div>
+
+        {groupedShifts.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-600">
+            Nessun turno pubblicato per {MONTH_NAMES[month - 1]} {year}.
+          </div>
+        ) : (
+          <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+            <div className="border-b border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
+              {MONTH_NAMES[month - 1]} {year}
+            </div>
+
+            <div className="divide-y divide-gray-200">
+              {groupedShifts.map(([date, dayShifts]) => {
+                const { day } = parseDateParts(date)
+                const holiday = holidaysByDate.get(date)
+                const dayIsWeekend = isWeekend(date)
+
+                return (
+                  <article
+                    key={date}
+                    className={holiday ? 'bg-amber-50/70' : dayIsWeekend ? 'bg-white' : 'bg-gray-50'}
+                  >
+                    <div className="flex items-center gap-2 px-3 py-1.5">
+                      <div
+                        className={`flex shrink-0 flex-col items-center justify-center rounded-md border text-center ${
+                          holiday
+                            ? 'border-amber-200 bg-amber-100 text-amber-950'
+                            : 'border-gray-200 bg-white text-gray-900'
+                        }`}
+                        style={{ width: 48, height: 42 }}
+                      >
+                        <span className="text-xs font-medium uppercase leading-none">
+                          {getWeekdayName(date)}
+                        </span>
+                        <span className="mt-0.5 text-base font-semibold leading-none">{day}</span>
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div
+                          className="flex min-w-0 shrink-0 flex-wrap items-center gap-1.5"
+                          style={{ width: 150 }}
+                        >
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-xs font-medium leading-none ${
+                              holiday
+                                ? 'bg-amber-200 text-amber-950'
+                                : 'bg-gray-200 text-gray-700'
+                            }`}
+                          >
+                            {holiday ? 'Festivo' : 'Weekend'}
+                          </span>
+                          {holiday && (
+                            <span className="text-xs font-medium text-amber-950">
+                              {holiday.name}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                          {dayShifts.map((shift) => {
+                            const isCurrentUser = shift.user_id === currentUserId
+
+                            return (
+                              <div
+                                key={shift.id}
+                                className={`rounded-md border px-2.5 py-1.5 ${
+                                  isCurrentUser
+                                    ? 'border-emerald-200 bg-emerald-50'
+                                    : 'border-gray-200 bg-white'
+                                }`}
+                                style={{ minWidth: 170, maxWidth: 240 }}
+                              >
+                                <p className="truncate text-sm font-semibold leading-tight text-gray-900">
+                                  {shift.user_nome ?? 'Utente'}
+                                </p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <section
@@ -131,7 +256,7 @@ export default function TurniPubblicatiMini({
                     isHoliday ? 'bg-amber-600' : 'bg-slate-900'
                   }`}
                 >
-                  <span className="text-xs font-medium uppercase tracking-wide">
+                  <span className="text-xs font-medium uppercase">
                     {getWeekdayName(date)}
                   </span>
                   <span className="text-2xl font-semibold leading-none">{day}</span>

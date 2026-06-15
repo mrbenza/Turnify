@@ -4,9 +4,7 @@ import type { User, SchedulingMode } from '@/lib/supabase/types'
 import NavbarUtente from '@/components/user/NavbarUtente'
 import CalendarioDisponibilita from '@/components/user/CalendarioDisponibilita'
 import StoricoTurni, { type ShiftRow } from '@/components/user/StoricoTurni'
-import TurniPubblicatiMini, {
-  type PublishedShift,
-} from '@/components/user/TurniPubblicatiMini'
+import type { PublishedShift } from '@/components/user/TurniPubblicatiMini'
 
 type UserPageSearchParams = {
   mese?: string
@@ -63,9 +61,22 @@ export default async function UserPage({
 
   const now = new Date()
 
-  // Calendario: 12 mesi indietro fino a fine mese prossimo (per navigazione storica)
-  const calFromStr = new Date(now.getFullYear() - 1, now.getMonth(), 1).toISOString().slice(0, 10)
-  const calToStr   = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10)
+  // Calendario: 12 mesi indietro fino a fine mese prossimo (per navigazione storica).
+  // Se la notifica punta a un mese fuori range, includilo nel primo caricamento.
+  const defaultCalFrom = new Date(now.getFullYear() - 1, now.getMonth(), 1)
+  const defaultCalTo = new Date(now.getFullYear(), now.getMonth() + 2, 0)
+  const publishedMonthStart = publishedMonth
+    ? new Date(publishedMonth.year, publishedMonth.month - 1, 1)
+    : null
+  const publishedMonthEnd = publishedMonth
+    ? new Date(publishedMonth.year, publishedMonth.month, 0)
+    : null
+  const calFromDate =
+    publishedMonthStart && publishedMonthStart < defaultCalFrom ? publishedMonthStart : defaultCalFrom
+  const calToDate =
+    publishedMonthEnd && publishedMonthEnd > defaultCalTo ? publishedMonthEnd : defaultCalTo
+  const calFromStr = calFromDate.toISOString().slice(0, 10)
+  const calToStr = calToDate.toISOString().slice(0, 10)
 
   // Availability: solo mese corrente + prossimo (quelli passati non sono modificabili)
   const availFromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
@@ -116,31 +127,18 @@ export default async function UserPage({
   const shifts = shiftsRes.data ?? []
 
   const allMonthStatuses = monthStatusRes.data ?? []
-  const publishedMonthStatus = publishedMonth
-    ? allMonthStatuses.find(
-        (status) =>
-          status.area_id === areaId &&
-          status.year === publishedMonth.year &&
-          status.month === publishedMonth.month
-      )
-    : null
-
   let publishedShifts: PublishedShift[] = []
-  let publishedHolidays: { date: string; name: string; mandatory: boolean }[] = []
 
-  if (publishedMonth && publishedMonthStatus?.status === 'confirmed' && areaId) {
+  if (areaId) {
     const serviceClient = createServiceClient()
-    const daysInMonth = new Date(publishedMonth.year, publishedMonth.month, 0).getDate()
-    const from = `${publishedMonth.monthKey}-01`
-    const to = `${publishedMonth.monthKey}-${String(daysInMonth).padStart(2, '0')}`
 
-    const [publishedShiftsRes, areaUsersRes, publishedHolidaysRes] = await Promise.all([
+    const [publishedShiftsRes, areaUsersRes] = await Promise.all([
       serviceClient
         .from('shifts')
         .select('id, date, user_id, user_nome, shift_type, reperibile_order')
         .eq('area_id', areaId)
-        .gte('date', from)
-        .lte('date', to)
+        .gte('date', calFromStr)
+        .lte('date', calToStr)
         .order('date', { ascending: true })
         .order('reperibile_order', { ascending: true }),
 
@@ -148,12 +146,6 @@ export default async function UserPage({
         .from('users')
         .select('id, nome')
         .eq('area_id', areaId),
-
-      serviceClient
-        .from('holidays')
-        .select('date, name, mandatory')
-        .gte('date', from)
-        .lte('date', to),
     ])
 
     const userNames = new Map((areaUsersRes.data ?? []).map((user) => [user.id, user.nome]))
@@ -162,7 +154,6 @@ export default async function UserPage({
       ...shift,
       user_nome: shift.user_nome ?? userNames.get(shift.user_id) ?? 'Utente',
     }))
-    publishedHolidays = publishedHolidaysRes.data ?? []
   }
 
   const lockedMonths = new Set<string>(
@@ -222,19 +213,13 @@ export default async function UserPage({
             shifts={shifts}
             lockedMonths={lockedMonths}
             schedulingMode={schedulingMode}
+            initialViewYear={publishedMonth?.year}
+            initialViewMonth={publishedMonth ? publishedMonth.month - 1 : undefined}
+            monthStatuses={allMonthStatuses}
+            publishedShifts={publishedShifts}
+            areaNome={areaNome}
           />
         </section>
-
-        {publishedMonth && publishedMonthStatus?.status === 'confirmed' && (
-          <TurniPubblicatiMini
-            year={publishedMonth.year}
-            month={publishedMonth.month}
-            areaNome={areaNome}
-            currentUserId={authUser.id}
-            shifts={publishedShifts}
-            holidays={publishedHolidays}
-          />
-        )}
 
         {/* Storico */}
         <section

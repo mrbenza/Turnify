@@ -23,7 +23,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | PWA-05 | Salvare le subscription | API autenticate per creare, aggiornare e revocare subscription Web Push | Completato | API implementata e verificata con subscription reali; uno stesso utente puo avere piu dispositivi/browser |
 | PWA-06 | Implementare invio Web Push | Invio server-side con VAPID e gestione endpoint non piu validi | Completato | Motore condiviso tra test manuali, test pubblicazione e invio operativo PWA-07 |
 | PWA-07 | Collegare invio alla conferma | Creazione evento e invio notifiche alla conferma operativa del mese | Completato | La conferma definitiva crea evento, imposta payload e invia ai dipendenti attivi della stessa area |
-| PWA-08 | Mini calendario mese chiuso | Il click apre la home utente con snapshot visuale dei turni pubblicati | Completato | Vista `/user?mese=YYYY-MM` per i mesi `confirmed`; tutti vedono tutti i turni della propria area |
+| PWA-08 | Snapshot mese chiuso | Il click apre la home utente con riepilogo visuale dei turni pubblicati sotto il calendario | Completato | `/user?mese=YYYY-MM` inizializza il mese del calendario; lo snapshot segue il mese selezionato; tutti vedono tutti i turni della propria area |
 | PWA-09 | Definire fallback email | Email ed Excel restano azioni opzionali successive alla pubblicazione | Completato | Le notifiche push rappresentano il canale operativo principale |
 | PWA-10 | Test end-to-end | Verifica permessi, ricezione a PWA chiusa, multi-device, retry e revoca | Da fare | Testare almeno Edge desktop e Android |
 | PWA-11 | Rilascio graduale | Attivazione controllata, monitoraggio errori e documentazione operativa | Da fare | Evitare l'attivazione globale senza osservabilita |
@@ -169,17 +169,22 @@ Lo step 4:
 - non genera notifiche push;
 - non e necessario per completare il flusso operativo.
 
-### Mini calendario pubblicato
+### Snapshot mese pubblicato
 
 Quando il manager conferma definitivamente il mese, la home utente deve poter
-mostrare un mini calendario del mese chiuso sotto al calendario disponibilita.
-Questo riquadro non e un file Excel salvato: e una vista temporanea HTML basata
-sui dati ufficiali presenti in `shifts`, `users`, `holidays` e `month_status`.
+mostrare uno snapshot del mese chiuso sotto al calendario disponibilita. Questo
+riquadro non e un file Excel salvato: e una vista temporanea HTML basata sui
+dati ufficiali presenti in `shifts`, `users`, `holidays` e `month_status`.
 
 Comportamento:
 
-- la notifica porta a `/user?mese=YYYY-MM`;
-- il riquadro viene mostrato solo se il mese dell'area e `confirmed`;
+- la notifica porta a `/user?mese=YYYY-MM` e inizializza il calendario utente
+  su quel mese;
+- lo snapshot non ha una navigazione anno/mese primaria separata: segue sempre
+  il mese visibile nel calendario disponibilita;
+- se l'utente cambia mese con le frecce del calendario, anche lo snapshot cambia
+  mese;
+- lo snapshot viene mostrato solo se il mese visibile dell'area e `confirmed`;
 - tutti i dipendenti dell'area vedono tutti i turni assegnati dell'area, ma
   non vedono mai i turni delle altre aree;
 - il nome dell'utente loggato viene evidenziato;

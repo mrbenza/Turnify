@@ -177,13 +177,13 @@ flowchart TD
     H --> I[month_status → 'confirmed']
     I --> J[Evento notifica\nmonth_published/month_republished]
     J --> K[Web Push ai dipendenti attivi\ndella stessa area]
-    K --> L[/user?mese=YYYY-MM\nmini calendario pubblicato]
+    K --> L[/user?mese=YYYY-MM\ncalendario sul mese pubblicato]
     I --> M[Excel ed email\ndisponibili come opzioni]
 ```
 
 **Un mese locked non puo essere modificato.** Puo essere riaperto dal manager tramite il pulsante "Modifica mese", che riporta lo stato a `open`.
 
-**Stato `confirmed`**: impostato esplicitamente dalla pagina Invio turni dopo il controllo dell'anteprima. Solo un amministratore puo riaprire il mese. La conferma crea l'evento di notifica e invia Web Push ai dipendenti attivi della stessa area. Download Excel e invio email sono operazioni opzionali e non modificano lo stato.
+**Stato `confirmed`**: impostato esplicitamente dalla pagina Invio turni dopo il controllo dell'anteprima. Solo un amministratore puo riaprire il mese. La conferma crea l'evento di notifica e invia Web Push ai dipendenti attivi della stessa area. La notifica apre `/user?mese=YYYY-MM`, inizializzando il calendario utente sul mese pubblicato; lo snapshot dei turni confermati viene mostrato sotto il calendario e segue il mese selezionato con le frecce. Download Excel e invio email sono operazioni opzionali e non modificano lo stato.
 
 ---
 

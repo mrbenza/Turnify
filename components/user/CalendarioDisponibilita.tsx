@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition, useCallback } from 'react'
-import type { Availability, Holiday, Shift, SchedulingMode } from '@/lib/supabase/types'
+import TurniPubblicatiMini, { type PublishedShift } from '@/components/user/TurniPubblicatiMini'
+import type { Availability, Holiday, MonthStatus, Shift, SchedulingMode } from '@/lib/supabase/types'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -14,6 +15,11 @@ interface CalendarioDisponibilitaProps {
   shifts: Shift[]
   lockedMonths: Set<string>
   schedulingMode?: SchedulingMode
+  initialViewYear?: number
+  initialViewMonth?: number
+  monthStatuses?: MonthStatus[]
+  publishedShifts?: PublishedShift[]
+  areaNome?: string | null
 }
 
 type DayState =
@@ -60,12 +66,17 @@ export default function CalendarioDisponibilita({
   shifts,
   lockedMonths,
   schedulingMode = 'weekend_full',
+  initialViewYear,
+  initialViewMonth,
+  monthStatuses = [],
+  publishedShifts = [],
+  areaNome = null,
 }: CalendarioDisponibilitaProps) {
   const today = new Date()
   const todayStr = toDateString(today.getFullYear(), today.getMonth(), today.getDate())
 
-  const [viewYear, setViewYear] = useState(today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const [viewYear, setViewYear] = useState(initialViewYear ?? today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(initialViewMonth ?? today.getMonth())
 
   // Optimistic local state for availability
   const [localAvailability, setLocalAvailability] = useState<Availability[]>(availabilityList)
@@ -75,6 +86,16 @@ export default function CalendarioDisponibilita({
   )
   const shiftDates = new Set(shifts.map((s) => s.date))
   const holidayDates = new Set(holidays.map((h) => h.date))
+  const visibleMonthKey = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+  const visibleMonthStatus = monthStatuses.find(
+    (status) => status.year === viewYear && status.month === viewMonth + 1
+  )?.status
+  const visiblePublishedShifts = publishedShifts.filter((shift) =>
+    shift.date.startsWith(visibleMonthKey)
+  )
+  const visiblePublishedHolidays = holidays.filter((holiday) =>
+    holiday.date.startsWith(visibleMonthKey)
+  )
 
   const [savingDates, setSavingDates] = useState<Set<string>>(new Set())
   const [tooltip, setTooltip] = useState<{ date: string; msg: string } | null>(null)
@@ -436,6 +457,18 @@ export default function CalendarioDisponibilita({
         <LegendItem color="bg-yellow-100 border-2 border-yellow-400" label="Turno assegnato" />
         <LegendItem color="bg-red-100 border-2 border-red-400" label="Mese confermato" />
       </div>
+
+      {visibleMonthStatus === 'confirmed' && (
+        <TurniPubblicatiMini
+          year={viewYear}
+          month={viewMonth + 1}
+          areaNome={areaNome}
+          currentUserId={userId}
+          shifts={visiblePublishedShifts}
+          holidays={visiblePublishedHolidays}
+          variant="inline"
+        />
+      )}
     </section>
   )
 }
