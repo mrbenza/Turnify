@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 
 type SubscriptionRow = {
   id: string
@@ -26,6 +26,7 @@ type UserRow = {
   ruolo: string
   attivo: boolean
   area_id: string | null
+  area_nome: string | null
   subscriptions: SubscriptionRow[]
 }
 
@@ -48,6 +49,15 @@ type DeliveryRow = {
     created_at: string
   } | null
   user: { nome: string; email: string } | null
+}
+
+type FilterInfo = {
+  search: string
+  areaId: string
+  limit: number
+  usersLoaded: boolean
+  scannedUsers: number
+  returnedUsers: number
 }
 
 const STALE_DAYS = 90
@@ -88,6 +98,10 @@ export default function NotificationDebugPanel() {
   const [areas, setAreas] = useState<AreaRow[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>([])
+  const [searchText, setSearchText] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [areaFilterId, setAreaFilterId] = useState('')
+  const [filterInfo, setFilterInfo] = useState<FilterInfo | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [title, setTitle] = useState('Notifica di test Turnify')
   const [message, setMessage] = useState('Questa e una notifica di test.')
@@ -105,19 +119,28 @@ export default function NotificationDebugPanel() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const response = await fetch('/api/debug/notifications', { cache: 'no-store' })
+    const params = new URLSearchParams()
+    if (appliedSearch.trim()) params.set('search', appliedSearch.trim())
+    if (areaFilterId) params.set('areaId', areaFilterId)
+    const query = params.toString()
+    const response = await fetch(`/api/debug/notifications${query ? `?${query}` : ''}`, { cache: 'no-store' })
     if (!response.ok) {
       setFeedback('Impossibile caricare la diagnostica.')
       setLoading(false)
       return
     }
     const data = await response.json()
+    const visibleSubscriptionIds = new Set<string>(
+      (data.users ?? []).flatMap((user: UserRow) => user.subscriptions.map((subscription) => subscription.id)),
+    )
     setAreas(data.areas ?? [])
     setUsers(data.users ?? [])
     setDeliveries(data.deliveries ?? [])
+    setFilterInfo(data.filters ?? null)
+    setSelected((current) => current.filter((id) => visibleSubscriptionIds.has(id)))
     setPublicationAreaId((current) => current || data.areas?.[0]?.id || '')
     setLoading(false)
-  }, [])
+  }, [appliedSearch, areaFilterId])
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void load(), 0)
@@ -153,6 +176,19 @@ export default function NotificationDebugPanel() {
     setSelected((current) => current.includes(subscriptionId)
       ? current.filter((id) => id !== subscriptionId)
       : [...current, subscriptionId])
+  }
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAppliedSearch(searchText.trim())
+    setSelected([])
+  }
+
+  function resetFilters() {
+    setSearchText('')
+    setAppliedSearch('')
+    setAreaFilterId('')
+    setSelected([])
   }
 
   async function send() {
@@ -407,16 +443,84 @@ export default function NotificationDebugPanel() {
       </section>
 
       <section>
-        <h2 className="text-base font-semibold text-gray-900">Utenti con app e notifiche registrate</h2>
-        <p className="mt-1 text-xs text-gray-500">Sono mostrati solo utenti con almeno una subscription Web Push.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Utenti con app e notifiche registrate</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Seleziona un area o cerca per nome/email per caricare gli utenti con subscription. I risultati sono limitati a 70 utenti per evitare query troppo grandi.
+            </p>
+          </div>
+          {filterInfo && (
+            <StatusBadge tone={filterInfo.returnedUsers >= filterInfo.limit ? 'amber' : 'gray'}>
+              {filterInfo.returnedUsers}/{filterInfo.limit} utenti mostrati
+            </StatusBadge>
+          )}
+        </div>
+
+        <form
+          className="mt-3 grid gap-3 border border-gray-200 bg-white p-4 md:grid-cols-[1fr_220px_auto_auto]"
+          onSubmit={applyFilters}
+        >
+          <label className="text-sm text-gray-700">
+            Cerca
+            <input
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              maxLength={80}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="Nome o email"
+              value={searchText}
+            />
+          </label>
+          <label className="text-sm text-gray-700">
+            Area
+            <select
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              onChange={(event) => {
+                setAreaFilterId(event.target.value)
+                setSelected([])
+              }}
+              value={areaFilterId}
+            >
+              <option value="">Seleziona area</option>
+              {areas.map((area) => (
+                <option key={area.id} value={area.id}>{area.nome}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="self-end rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+            type="submit"
+          >
+            Cerca
+          </button>
+          <button
+            className="self-end rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            onClick={resetFilters}
+            type="button"
+          >
+            Reset
+          </button>
+        </form>
+
         <div className="mt-3 space-y-3">
-          {users.length === 0 && <p className="border border-gray-200 bg-white p-4 text-sm text-gray-500">Nessun dispositivo registrato.</p>}
+          {filterInfo && !filterInfo.usersLoaded && (
+            <p className="border border-gray-200 bg-white p-4 text-sm text-gray-500">
+              Seleziona un area oppure cerca un utente per visualizzare i dispositivi registrati.
+            </p>
+          )}
+          {filterInfo?.usersLoaded && users.length === 0 && (
+            <p className="border border-gray-200 bg-white p-4 text-sm text-gray-500">
+              Nessun dispositivo registrato per i filtri selezionati.
+            </p>
+          )}
           {users.map((user) => (
             <article className="border border-gray-200 bg-white p-4" key={user.id}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div>
                   <h3 className="font-semibold text-gray-900">{user.nome}</h3>
-                  <p className="text-xs text-gray-500">{user.email} - {user.ruolo} - {user.attivo ? 'attivo' : 'inattivo'}</p>
+                  <p className="text-xs text-gray-500">
+                    {user.email} - {user.ruolo} - {user.area_nome ?? 'Area non disponibile'} - {user.attivo ? 'attivo' : 'inattivo'}
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!user.attivo && <StatusBadge tone="red">Utente inattivo</StatusBadge>}

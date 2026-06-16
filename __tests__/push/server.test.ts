@@ -25,6 +25,9 @@ const subscription: PushSubscription = {
   last_success_at: null,
   failure_count: 0,
   revoked_at: null,
+  client_mode: 'standalone',
+  revoked_reason: null,
+  revoked_by: null,
 }
 
 describe('Web Push server helpers', () => {

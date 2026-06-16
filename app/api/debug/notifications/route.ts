@@ -29,16 +29,34 @@ function maskEndpoint(endpoint: string) {
   }
 }
 
-export async function GET() {
+const DEBUG_USERS_LIMIT = 70
+const DEBUG_USER_SCAN_LIMIT = 70
+
+function sanitizeSearch(value: string | null) {
+  return (value ?? '').trim().replace(/[,%]/g, '').slice(0, 80)
+}
+
+export async function GET(request: Request) {
   const auth = await requireDebugAdmin()
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
+  const { searchParams } = new URL(request.url)
+  const search = sanitizeSearch(searchParams.get('search'))
+  const areaId = (searchParams.get('areaId') ?? '').trim()
   const serviceClient = createServiceClient()
-  const [subscriptionsResult, deliveriesResult, areasResult] = await Promise.all([
-    serviceClient
-      .from('push_subscriptions')
-      .select('id, user_id, endpoint, expiration_time, user_agent, created_at, updated_at, last_seen_at, last_success_at, failure_count, revoked_at, client_mode, revoked_reason, revoked_by')
-      .order('last_seen_at', { ascending: false }),
+
+  let usersQuery = serviceClient
+    .from('users')
+    .select('id, nome, email, ruolo, attivo, area_id')
+    .order('nome', { ascending: true })
+    .limit(DEBUG_USER_SCAN_LIMIT)
+
+  const shouldLoadUsers = Boolean(areaId || search)
+  if (areaId) usersQuery = usersQuery.eq('area_id', areaId)
+  if (search) usersQuery = usersQuery.or(`nome.ilike.%${search}%,email.ilike.%${search}%`)
+
+  const [usersResult, deliveriesResult, areasResult] = await Promise.all([
+    shouldLoadUsers ? usersQuery : Promise.resolve({ data: [], error: null }),
     serviceClient
       .from('notification_deliveries')
       .select('id, event_id, subscription_id, user_id, status, attempts, last_attempt_at, sent_at, http_status, error')
@@ -50,36 +68,71 @@ export async function GET() {
       .order('nome', { ascending: true }),
   ])
 
-  if (subscriptionsResult.error || deliveriesResult.error || areasResult.error) {
+  if (usersResult.error || deliveriesResult.error || areasResult.error) {
+    return NextResponse.json({ error: 'Impossibile caricare la diagnostica' }, { status: 500 })
+  }
+
+  const candidateUsers = usersResult.data ?? []
+  const candidateUserIds = candidateUsers.map((user) => user.id)
+  const subscriptionsResult = candidateUserIds.length
+    ? await serviceClient
+        .from('push_subscriptions')
+        .select('id, user_id, endpoint, expiration_time, user_agent, created_at, updated_at, last_seen_at, last_success_at, failure_count, revoked_at, client_mode, revoked_reason, revoked_by')
+        .in('user_id', candidateUserIds)
+        .order('last_seen_at', { ascending: false })
+    : { data: [], error: null }
+
+  if (subscriptionsResult.error) {
     return NextResponse.json({ error: 'Impossibile caricare la diagnostica' }, { status: 500 })
   }
 
   const subscriptions = subscriptionsResult.data ?? []
-  const userIds = [...new Set(subscriptions.map((subscription) => subscription.user_id))]
+  const userIdsWithSubscriptions = new Set(subscriptions.map((subscription) => subscription.user_id))
+  const visibleUsers = candidateUsers
+    .filter((user) => userIdsWithSubscriptions.has(user.id))
+    .slice(0, DEBUG_USERS_LIMIT)
+  const visibleUserIds = new Set(visibleUsers.map((user) => user.id))
   const eventIds = [...new Set((deliveriesResult.data ?? []).map((delivery) => delivery.event_id))]
+  const deliveryUserIds = [...new Set((deliveriesResult.data ?? [])
+    .map((delivery) => delivery.user_id)
+    .filter((userId): userId is string => typeof userId === 'string' && !visibleUserIds.has(userId)))]
 
-  const [usersResult, eventsResult] = await Promise.all([
-    userIds.length
-      ? serviceClient.from('users').select('id, nome, email, ruolo, attivo, area_id').in('id', userIds)
+  const [deliveryUsersResult, eventsResult] = await Promise.all([
+    deliveryUserIds.length
+      ? serviceClient.from('users').select('id, nome, email, ruolo, attivo, area_id').in('id', deliveryUserIds)
       : Promise.resolve({ data: [], error: null }),
     eventIds.length
       ? serviceClient.from('notification_events').select('id, event_type, title, body, target_url, created_at, status, completed_at').in('id', eventIds)
       : Promise.resolve({ data: [], error: null }),
   ])
 
-  if (usersResult.error || eventsResult.error) {
+  if (deliveryUsersResult.error || eventsResult.error) {
     return NextResponse.json({ error: 'Impossibile completare la diagnostica' }, { status: 500 })
   }
 
-  const userMap = new Map((usersResult.data ?? []).map((user) => [user.id, user]))
+  const areaMap = new Map((areasResult.data ?? []).map((area) => [area.id, area.nome]))
+  const userMap = new Map([
+    ...visibleUsers.map((user) => [user.id, user] as const),
+    ...(deliveryUsersResult.data ?? []).map((user) => [user.id, user] as const),
+  ])
   const eventMap = new Map((eventsResult.data ?? []).map((event) => [event.id, event]))
+  const visibleSubscriptionUserIds = new Set(visibleUsers.map((user) => user.id))
 
   return NextResponse.json({
     areas: areasResult.data ?? [],
-    users: userIds.map((userId) => ({
-      ...userMap.get(userId),
+    filters: {
+      search,
+      areaId,
+      limit: DEBUG_USERS_LIMIT,
+      usersLoaded: shouldLoadUsers,
+      scannedUsers: candidateUsers.length,
+      returnedUsers: visibleUsers.length,
+    },
+    users: visibleUsers.map((user) => ({
+      ...user,
+      area_nome: user.area_id ? areaMap.get(user.area_id) ?? null : null,
       subscriptions: subscriptions
-        .filter((subscription) => subscription.user_id === userId)
+        .filter((subscription) => subscription.user_id === user.id)
         .map((subscription) => ({
           ...subscription,
           endpoint: maskEndpoint(subscription.endpoint),
@@ -88,7 +141,9 @@ export async function GET() {
     deliveries: (deliveriesResult.data ?? []).map((delivery) => ({
       ...delivery,
       event: eventMap.get(delivery.event_id) ?? null,
-      user: delivery.user_id ? userMap.get(delivery.user_id) ?? null : null,
+      user: delivery.user_id
+        ? userMap.get(delivery.user_id) ?? (visibleSubscriptionUserIds.has(delivery.user_id) ? null : null)
+        : null,
     })),
   })
 }

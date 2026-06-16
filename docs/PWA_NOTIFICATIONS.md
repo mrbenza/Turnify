@@ -49,7 +49,7 @@ dipendenti quando i turni di un mese vengono confermati.
 | BUG-PWA-01 | L'importazione storico imposta i mesi passati su `confirmed` | `POST /api/import-shifts` usa `confirmed` per un mese passato, correttamente per rappresentarne lo stato storico | L'import storico non deve mai generare notifiche push o invii email, ne interferire con lo stato degli invii | Da controllare |
 | RISK-PWA-01 | Esistono piu percorsi che impostano `month_status.status = confirmed` | Import storico puo usare `confirmed` per mesi passati; export/email non devono piu confermare il mese | L'invio operativo dipende solo dalla conferma esplicita `/api/month?action=confirm` e dall'evento applicativo creato dalla RPC | Mitigato |
 | RISK-PWA-02 | Uno stesso utente puo avere piu subscription | Ogni browser e dispositivo genera un endpoint diverso | Conservare subscription multiple e rimuovere solo gli endpoint scaduti o revocati | Completato |
-| DEBT-PWA-01 | Scalabilita pagina debug notifiche | La pagina debug mostra gli utenti con subscription e i relativi dispositivi | Prima della produzione con molti utenti, rendere obbligatoria la ricerca per nome/area e limitare i risultati visibili, evitando liste troppo grandi | Da pianificare |
+| DEBT-PWA-01 | Scalabilita pagina debug notifiche | La pagina debug carica subito solo aree/consegne; utenti e subscription vengono caricati solo dopo filtro area o ricerca nome/email, con limite a 70 utenti | Prima della produzione con molti utenti, valutare ulteriori ottimizzazioni operative se il volume cresce oltre il perimetro del debug manuale | Mitigato |
 
 ## Vincolo importazione storico
 

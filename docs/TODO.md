@@ -6,18 +6,7 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Alta priorita
 
-### Denormalizzare ultimo login in `public.users`
-- **Obiettivo**: aggiungere `public.users.last_login_at` per rendere la UI amministrativa indipendente da `auth.users`
-- **Motivazione**: il dato di ultimo accesso serviva operativamente a manager e admin, ma prima viveva fuori dalla tabella applicativa principale
-- **Vantaggi attesi**:
-  1. query utenti completamente lineari da `public.users`
-  2. nessuna dipendenza runtime da RPC/Auth per la colonna "Ultimo login"
-  3. semplificazione futura di filtri, export e reportistica amministrativa
-- **Passi previsti**:
-  1. ✅ migration schema: `alter table public.users add column last_login_at timestamptz null` (`019_users_last_login_at.sql`)
-  2. ✅ backfill iniziale da `auth.users.last_sign_in_at` (`019_users_last_login_at.sql`)
-  3. ✅ sync in scrittura al login riuscito tramite `POST /api/auth/track-login`
-  4. ✅ migrazione di `/admin/utenti` da RPC a `public.users.last_login_at`
+*(nessun item aperto)*
 
 ---
 
@@ -32,45 +21,7 @@ Funzionalita da implementare in ordine di priorita.
 
 ## Media priorita
 
-### Multi-area con scheduling modes diversi
-- **Obiettivo**: supportare piu aree aziendali, ognuna con la propria logica di turnazione e i propri dipendenti
-- **Stato attuale (2026-03-25)**: implementazione multi-area avanzata. `area_id` su tutte le tabelle principali (migration 013). UI selettore area su `/admin/disponibilita`. Email settings isolate per area. 14 aree seed con dati demo realistici.
-- **Scheduling modes previsti**:
-  | Mode | Comportamento |
-  |------|--------------|
-  | `weekend_full` | Sab+Dom con conferma: assegni uno, il sistema propone l'altro |
-  | `single_day` | Sab e Dom indipendenti, assegnabili a persone diverse |
-  | `sun_next_sat` | Chi lavora Dom lavora anche il Sab della settimana successiva |
-- **Completato**:
-  1. `area_id` su `users`, `availability`, `shifts`, `month_status` (migration 013)
-  2. Seed 14 aree (Area1-Area14, regioni italiane), 1 manager + 8-18 dipendenti per area, 15.780 disponibilità per weekend 2026
-  3. API email_settings: POST include `area_id` nel profilo e nell'insert; PATCH/DELETE filtrano per `area_id`
-  4. UI `/admin/disponibilita`: accetta `searchParams`, selettore area via `<AreaSelector>` (dropdown)
-  5. `components/admin/disponibilita/AreaSelector.tsx`: nuovo componente `<select>` client-side per navigare tra aree
-  6. `components/admin/utenti/ListaUtenti.tsx`: filtro area pill → `<select>` dropdown
-  7. Dashboard admin: badge "Aree" (verde) accanto ad Area Manager e ATC
-- **Completato (2026-03-25)**:
-  8. Gestione aree UI: dropdown manager in modal Modifica area mostra `Nome — NomeArea` se manager già assegnato, banner ambra se si seleziona manager già occupato
-  9. API PATCH `/api/areas/[id]`: trasferimento manager in cascata (azzera `manager_id` dell'area precedente, aggiorna `users.area_id` del nuovo manager)
-  10. Pagina `/admin/equita` (solo admin): panoramica equità cross-area con badge salute (verde/giallo/rosso), ranking espandibile per area, filtro mese/anno con toggle "Questo mese / Tutti i tempi"
-  11. API `/api/equity-overview`: aggrega `get_equity_scores` in parallelo per tutte le aree, ritorna array `AreaEquitySummary`
-  12. NavbarAdmin: voce "Equità" aggiunta per admin (tra Aree e Sistema)
-  13. Export Excel area-aware: `generateTurniExcel` scrive nome area in A1 e cognome manager in B51 letti da DB tramite `areaId` (rimossi valori hardcoded)
-  14. Seed DB fix: Area2-Liguria con `manager_id` impostato (Marco Ferrari); nomi utenti resi unici con suffisso numerico
-- **Completato (2026-03-26)**:
-  15. `import-shifts/route.ts`: area matching a 3 livelli (esatto → prefisso ilike → normalizzato)
-  16. `import-shifts/resolve/route.ts`: fix `area_id` letto dal body della request (non da `profile.area_id` dell'admin)
-  17. `users/route.ts`: accetta `area_id` opzionale nel body; se caller e admin, usa quello del body
-  18. `users/[id]/route.ts`: cambio ruolo → manager aggiorna `areas.manager_id`; cambio da manager rimuove `areas.manager_id`
-  19. `generateTurniExcel.ts`: nome file area-aware (`Area4_Marzo_2026.xlsx`); A1 parte corta uppercase; team leader in C51 (non B51)
-  20. `CalendarioGlobale.tsx`: navigazione mesi filtra `month_status` per `area_id`
-  21. `lib/utils/sort.ts`: nuovo file con `sortByNome` (Intl.Collator numeric)
-  22. `ListaUtenti.tsx`: campo "Cerca per nome"
-  23. `app/user/page.tsx`: nome area mostrato nel saluto dashboard dipendente
-  24. `NavbarAdmin.tsx`: fix warning import pkg.version
-  25. Template Excel: rinominato `AREA4.xlsx` → `template_turni.xlsx`; celle A1/C51 svuotate per universalita
-- **Ancora da fare**: *(nessun item aperto)*
-- **Comportamento `sun_next_sat` chiarito**: se il Sab successivo e gia occupato il manager riceve un avviso (non un blocco) e decide autonomamente.
+*(nessun item aperto)*
 
 ### ✅ Bug pairing Dom↔Sab — NESSUNA MODIFICA NECESSARIA (pairing con conferma già implementato 2026-03-24)
 
@@ -93,9 +44,10 @@ rollout reale su dominio definitivo restano attivita operative, non bloccanti
 per lo sviluppo corrente:
 
 1. definire checklist di rilascio graduale e monitoraggio errori notifiche;
-2. riprogettare la pagina debug notifiche per grandi volumi: ricerca
-   obbligatoria per nome/area, massimo 100 risultati visibili, nessuna
-   paginazione profonda;
+2. monitorare la pagina debug notifiche se il volume cresce oltre il debug
+   manuale: oggi carica utenti/subscription solo dopo filtro area o ricerca
+   nome/email, con massimo 70 utenti visibili per evitare il bug Supabase oltre
+   circa 72 risultati;
 3. confermare le variabili VAPID sull'ambiente produzione definitivo;
 4. comunicare agli utenti che Chrome ed Edge sono i browser supportati per
    installazione PWA e notifiche; Firefox resta supportato solo per navigazione
@@ -141,6 +93,8 @@ Nel drawer di assegnazione, sotto il nome di ogni utente appare la nota "lavorat
 
 ## Completato
 
+- **[2026-06-16] Denormalizzazione ultimo login chiusa** — Migration `019_users_last_login_at.sql`, endpoint `POST /api/auth/track-login` e pagina `/admin/utenti` allineati su `public.users.last_login_at`. La lista utenti non dipende piu da query Auth Admin/RPC instabili su volumi alti.
+- **[2026-06-16] Multi-area chiusa** — Schema, utenti, disponibilita, turni, month_status, import/export, email settings, viste admin/manager e selettori area sono area-aware. Admin ha visione globale, manager resta vincolato alla propria area.
 - **[2026-06-15] PWA notifiche Web Push — PWA-01..PWA-12 chiuse** — Manifest, icone, service worker, banner installazione, consenso notifiche solo in PWA installata, salvataggio/revoca subscription, invio server-side VAPID, invio automatico alla conferma definitiva del mese, pagina debug admin, test manuale notifiche, revoca dalla lista utenti admin e snapshot compatto del mese pubblicato sotto al calendario utente. La notifica apre `/user?mese=YYYY-MM`, inizializzando il calendario sul mese pubblicato. Chrome ed Edge sono il target operativo per PWA/notifiche; Firefox resta compatibile per navigazione web ma non garantito per installazione e notifiche.
 - **[2026-06-04] Flusso salvataggio e conferma mese separato** — In Disponibilita il manager usa "Salva mese" per portare il mese a `locked`, stato reversibile dal manager. In Invio turni controlla l'anteprima e usa "Conferma e pubblica" per portarlo a `confirmed`, riapribile solo dall'admin. Excel ed email sono operazioni opzionali successive e non modificano piu lo stato.
 - **[2026-03-26] Security hardening — API cross-area + RLS area-aware (migration 016)** — `DELETE /api/shifts/[id]`: query filtrata per `area_id` per i manager (admin: accesso totale). `POST /api/shifts`: verifica che `user_id` appartenga all'area del manager — 403 se cross-area. `GET /api/users/[id]/shifts`: storico visibile al manager solo per utenti della propria area — 403 se cross-area. `supabase/migrations/016_rls_area_aware.sql`: nuove funzioni `current_user_area_id()` e `is_manager()`; policy RLS riscritte per shifts, availability, month_status, users, email_settings con separazione admin/manager per area. `supabase/schema.sql`: aggiornato progressivamente con le migration applicative.
